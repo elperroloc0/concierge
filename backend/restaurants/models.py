@@ -55,16 +55,20 @@ class Restaurant(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    # retell linkage
+    retell_agent_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    retell_phone_number_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    
     
     # Validation
     def clean(self):
         errors = {}
 
-        if self.phone_mode == "existing" and not self.existing_phone_number:
-            errors["existing_phone_number"] = "Required when phone_mode is 'existing'."
+        if self.phone_mode == "existing" and not self.existing_ph_numb:
+            errors["existing_ph_numb"] = "Required when phone_mode is 'existing'."
 
-        if self.notify_via_whatsapp and not self.notify_whatsapp_number:
-            errors["notify_whatsapp_number"] = "Required if WhatsApp notifications are enabled."
+        if self.notify_via_ws and not self.notify_ws_numb:
+            errors["notify_ws_numb"] = "Required if WhatsApp notifications are enabled."
 
         # If email notifications enabled, require at least one email
         if self.notify_via_email and not (self.notify_email or self.contact_email):
