@@ -59,7 +59,7 @@ class Restaurant(models.Model):
     retell_api_key = models.CharField(max_length=128, blank=True, default="")
     retell_agent_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
     retell_phone_number_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
-    
+    retell_llm_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
     
     # Validation
     def clean(self):
