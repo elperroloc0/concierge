@@ -4,6 +4,8 @@ from .models import Restaurant
 # Register your models here.
 @admin.register(Restaurant)
 class RestaurantAdmin(admin.ModelAdmin):
+    exclude = ("retell_api_key",)
+    
     list_display = (
         "name", "slug", "is_active", "phone_mode",
         "retell_agent_id", "retell_phone_number_id", 

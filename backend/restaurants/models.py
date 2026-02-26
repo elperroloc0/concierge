@@ -55,7 +55,8 @@ class Restaurant(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
-    # retell linkage
+    # retell
+    retell_api_key = models.CharField(max_length=128, blank=True, default="")
     retell_agent_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
     retell_phone_number_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
     
