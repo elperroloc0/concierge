@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.forms import ValidationError
 from django.utils.text import slugify
@@ -5,6 +7,7 @@ from django.utils.text import slugify
 # Create your models here.
 class Restaurant(models.Model):
     # identity
+    public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     name = models.CharField(max_length=255) 
     slug = models.SlugField(unique=True)
     
@@ -97,3 +100,10 @@ class Restaurant(models.Model):
 
     def __str__(self):
         return self.name
+    
+    
+class CallEvent(models.Model):
+    restaurant = models.ForeignKey("restaurants.Restaurant", on_delete=models.CASCADE, related_name="call_events")
+    event_type = models.CharField(max_length=64, db_index=True)
+    payload = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)

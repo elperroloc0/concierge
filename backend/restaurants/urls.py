@@ -5,5 +5,6 @@ from . import views
 
 urlpatterns = [
     path("", views.index, name="index"),
-    path("account", views.account, name="account")
+    path("account", views.account, name="account"),
+    path('webhook/<str:rest_id>/', views.retell_inbound_webhook, name="retell_webhook"),
 ]

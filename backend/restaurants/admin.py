@@ -59,7 +59,7 @@ def retell_create_phone(modeladmin, request, queryset):
         phone = client.create_phone_number(area_code=786, inbound_agent_id=r.retell_agent_id)
         r.retell_phone_number = phone.phone_number
         r.save(update_fields=["retell_phone_number"])
-        messages.success(request, f"[{r.slug}] OK: Phone {r.retell_phone_numer} successfully created.")     
+        messages.success(request, f"[{r.slug}] OK: Phone {r.retell_phone_numer} successfully purchased.")     
 
 
 @admin.register(Restaurant)
@@ -68,14 +68,14 @@ class RestaurantAdmin(admin.ModelAdmin):
     list_display = (
         "name", "slug", "is_active",
         "retell_agent_id", "retell_phone_number", 
-        "contact_email", "created_at",
+        "contact_email", "created_at", "public_id"
     )
     list_filter = ("is_active", "phone_mode", "primary_lang", "timezone")
     search_fields = (
         "name", "slug", "retell_agent_id", "retell_phone_number", 
         "contact_email", "contact_phone", "address_full",
     )
-    readonly_fields = ("created_at", "updated_at", "retell_llm_id", "retell_agent_id")
+    readonly_fields = ("created_at", "updated_at", "retell_llm_id", "retell_agent_id", "public_id")
     prepopulated_fields = {"slug": ("name",)}
     
     actions = [retell_create_llm, retell_create_agent, retell_create_phone]
