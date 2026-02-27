@@ -33,9 +33,7 @@ class Restaurant(models.Model):
         )
     
     existing_ph_numb = models.CharField(max_length=32, blank=True, default="")
-    # twilio number that receives calls
-    twilio_pn_numb = models.CharField(max_length=32, blank=True, default="")
-    twilio_in_numb_sid = models.CharField(max_length=64, blank=True, default="", db_index=True)
+
     # if restaurant keeps existing number - did i set up forwarding to twilio?
     forwarding_enabled = models.BooleanField(default=False)
     
@@ -58,8 +56,9 @@ class Restaurant(models.Model):
     # retell
     retell_api_key = models.CharField(max_length=128, blank=True, default="")
     retell_agent_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
-    retell_phone_number_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    retell_phone_number = models.CharField(max_length=64, blank=True, default="", db_index=True)
     retell_llm_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    retell_voice_id = models.CharField(max_length=64, blank=True, default="retell-Claudia")
     
     # Validation
     def clean(self):

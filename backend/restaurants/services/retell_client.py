@@ -1,4 +1,5 @@
 from retell import Retell 
+import re 
 
 class RetellClient:
     def __init__(self, api_key: str):
@@ -11,3 +12,8 @@ class RetellClient:
     def create_agent(self, **kwargs):
         """kwargs- will recive prompt, voice_id, language, etc. """
         return self.client.agent.create(**kwargs)
+    
+    def create_phone_number(self, *, area_code: int, inbound_agent_id: str):
+        """buy a new phone number"""
+        return self.client.phone_number.create(area_code=area_code, inbound_agents=[{"agent_id": inbound_agent_id, "weight": 1.0}])
+    
