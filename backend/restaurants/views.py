@@ -1,13 +1,13 @@
 import json
 import os
 
-from django.conf import settings
 from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
-from django.shortcuts import get_object_or_404
-from django.views.decorators.csrf import csrf_exempt
+from django.shortcuts import get_object_or_404, render
 from retell import Retell
 
+from backend import settings
 from .models import CallEvent, Restaurant
+from django.views.decorators.csrf import csrf_exempt
 
 # Create your views here.
 def index(request):
@@ -20,49 +20,54 @@ def account(request):
 @csrf_exempt
 def retell_inbound_webhook(request, rest_id):
     if request.method != "POST":
-        return HttpResponseNotAllowed(["POST"])
-
-    raw_str = request.body.decode("utf-8")
+        return HttpResponse("Method not allowed", status=405)
+    
+    raw_bytes = request.body
+    raw_str = raw_bytes.decode("utf-8")
+    
     try:
         payload = json.loads(raw_str)
     except json.JSONDecodeError:
         return JsonResponse({"detail": "invalid json"}, status=400)
-
-    # ресторан выбираем по id из URL (однозначно и без поиска по номеру)
+    
+    # find restaurant by id 
     restaurant = get_object_or_404(Restaurant, id=rest_id, is_active=True)
-
-    # опционально: проверяем, что звонок пришёл на правильный номер ресторана
+    
+    # check phone number
     to_number = (payload.get("to_number") or "").strip()
-    stored_number = (getattr(restaurant, "twilio_pn_numb", "") or getattr(restaurant, "retell_phone_number", "") or "").strip()
-    if stored_number and to_number and to_number != stored_number:
-        return JsonResponse({"detail": "to_number does not match restaurant"}, status=400)
-
-    # DEV-only bypass for local testing (requires secret header)
-    if settings.DEBUG and request.headers.get("X-DEV-BYPASS") == os.environ.get("RETELL_DEV_BYPASS_SECRET", ""):
+    if not to_number or not restaurant.retell_phone_number:
+        return JsonResponse({"detail": "missing to_numbe or mismatch"}, status=400)    
+    
+    
+    if settings.DEBUG and request.headers.get("X-DEV-BYPASS") == os.environ.get("RETELL_DEV_BYPASS_SECRET",""): 
         return JsonResponse(
             {
                 "dynamic_variables": {
-                    "restaurant_name": restaurant.name,
-                    "address_full": restaurant.address_full,
-                    "website": restaurant.website,
-                    "welcome_phrase": restaurant.welcome_phrase,
-                    "primary_lang": restaurant.primary_lang,
-                    "timezone": restaurant.timezone,
+                    "restaurant_name": restaurant.name, 
+                    "address_full": restaurant.address_full, 
+                    "website": restaurant.website, 
+                    "welcome_phrase": restaurant.welcome_phrase, 
+                    "primary_lang": restaurant.primary_lang, 
+                    "timezone": restaurant.timezone
                 }
-            },
-            status=200,
+             }, status=200
         )
-
+    
+    # check retell signature
     signature = request.headers.get("x-retell-signature", "")
     if not signature:
         return JsonResponse({"detail": "missing signature"}, status=401)
-
+    
     if not restaurant.retell_api_key:
         return JsonResponse({"detail": "retell api key not set for this restaurant"}, status=500)
-
+    # find restaurant by number
+    restaurant = Restaurant.objects.filter(retell_phone_number=to_number, is_active=True).first()
+    if not restaurant:
+        return JsonResponse({"detail": "unknown number"}, status=404)
+    
     if not Retell.verify(raw_str, restaurant.retell_api_key, signature):
         return JsonResponse({"detail": "invalid signature"}, status=401)
-
+    
     return JsonResponse(
         {
             "dynamic_variables": {
