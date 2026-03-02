@@ -58,10 +58,10 @@
   <div class="col-lg-7">
     <div class="card shadow-sm p-3 h-100 d-flex flex-column justify-content-center">
       <h6 class="fw-semibold mb-3">Quick Actions</h6>
-      <a href="{% url 'portal_kb' %}" class="btn btn-outline-dark mb-2 text-start">
+      <a href="{% url 'portal_kb' restaurant.slug %}" class="btn btn-outline-dark mb-2 text-start">
         <i class="bi bi-database-fill me-2"></i>Update Knowledge Base
       </a>
-      <a href="{% url 'portal_calls' %}" class="btn btn-outline-dark text-start">
+      <a href="{% url 'portal_calls' restaurant.slug %}" class="btn btn-outline-dark text-start">
         <i class="bi bi-telephone-inbound me-2"></i>View Call History
       </a>
     </div>

@@ -61,22 +61,22 @@
   <div class="brand"><i class="bi bi-telephone-fill me-2"></i>Concierge</div>
   <ul class="nav flex-column mt-3">
     <li class="nav-item">
-      <a class="nav-link {% block nav_dashboard %}{% endblock %}" href="{% url 'portal_dashboard' %}">
+      <a class="nav-link {% block nav_dashboard %}{% endblock %}" href="{% url 'portal_dashboard' restaurant.slug %}">
         <i class="bi bi-speedometer2"></i> Dashboard
       </a>
     </li>
     <li class="nav-item">
-      <a class="nav-link {% block nav_kb %}{% endblock %}" href="{% url 'portal_kb' %}">
+      <a class="nav-link {% block nav_kb %}{% endblock %}" href="{% url 'portal_kb' restaurant.slug %}">
         <i class="bi bi-database-fill"></i> Knowledge Base
       </a>
     </li>
     <li class="nav-item">
-      <a class="nav-link {% block nav_calls %}{% endblock %}" href="{% url 'portal_calls' %}">
+      <a class="nav-link {% block nav_calls %}{% endblock %}" href="{% url 'portal_calls' restaurant.slug %}">
         <i class="bi bi-telephone-inbound-fill"></i> Call History
       </a>
     </li>
     <li class="nav-item">
-      <a class="nav-link {% block nav_billing %}{% endblock %}" href="{% url 'portal_billing' %}">
+      <a class="nav-link {% block nav_billing %}{% endblock %}" href="{% url 'portal_billing' restaurant.slug %}">
         <i class="bi bi-credit-card-fill"></i> Billing
       </a>
     </li>

@@ -56,7 +56,7 @@
         </div>
         {% endif %}
         <hr>
-        <form method="post" action="{% url 'portal_billing_portal' %}">
+        <form method="post" action="{% url 'portal_billing_portal' restaurant.slug %}">
           {% csrf_token %}
           <button type="submit" class="btn btn-outline-dark w-100">
             <i class="bi bi-gear me-1"></i> Manage Billing & Invoices
@@ -67,7 +67,7 @@
           No active subscription. Subscribe to activate your AI phone agent.
         </p>
         {% if stripe_publishable_key %}
-          <form method="post" action="{% url 'portal_billing_checkout' %}">
+          <form method="post" action="{% url 'portal_billing_checkout' restaurant.slug %}">
             {% csrf_token %}
             <button type="submit" class="btn btn-dark w-100 fw-semibold">
               <i class="bi bi-lightning-charge-fill me-1"></i> Subscribe Now

@@ -201,7 +201,10 @@ def _classify_call(payload):
 
 def portal_login(request):
     if request.user.is_authenticated:
-        return redirect("portal_dashboard")
+        try:
+            return redirect("portal_dashboard", slug=request.user.restaurant.slug)
+        except Exception:
+            pass
 
     error = None
     if request.method == "POST":
@@ -212,7 +215,10 @@ def portal_login(request):
         )
         if user is not None:
             login(request, user)
-            return redirect("portal_dashboard")
+            try:
+                return redirect("portal_dashboard", slug=user.restaurant.slug)
+            except Exception:
+                return redirect("portal_login")
         error = "Invalid username or password."
 
     return render(request, "portal/login.html", {"error": error})
@@ -224,8 +230,8 @@ def portal_logout(request):
 
 
 @login_required
-def portal_dashboard(request):
-    restaurant = get_object_or_404(Restaurant, user=request.user, is_active=True)
+def portal_dashboard(request, slug):
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
 
     thirty_days_ago = timezone.now() - timedelta(days=30)
     ended_events = CallEvent.objects.filter(
@@ -269,8 +275,8 @@ def portal_dashboard(request):
 
 
 @login_required
-def portal_knowledge_base(request):
-    restaurant = get_object_or_404(Restaurant, user=request.user, is_active=True)
+def portal_knowledge_base(request, slug):
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
     kb, _ = RestaurantKnowledgeBase.objects.get_or_create(restaurant=restaurant)
 
     if request.method == "POST":
@@ -280,7 +286,7 @@ def portal_knowledge_base(request):
             basic_form.save()
             kb_form.save()
             messages.success(request, "Knowledge base updated successfully.")
-            return redirect("portal_kb")
+            return redirect("portal_kb", slug=restaurant.slug)
     else:
         basic_form = RestaurantBasicForm(instance=restaurant)
         kb_form = KnowledgeBaseForm(instance=kb)
@@ -293,8 +299,8 @@ def portal_knowledge_base(request):
 
 
 @login_required
-def portal_calls(request):
-    restaurant = get_object_or_404(Restaurant, user=request.user, is_active=True)
+def portal_calls(request, slug):
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
 
     ended_events = CallEvent.objects.filter(
         restaurant=restaurant, event_type="call_ended"
@@ -331,8 +337,8 @@ def _get_or_create_subscription(restaurant):
 
 
 @login_required
-def portal_billing(request):
-    restaurant = get_object_or_404(Restaurant, user=request.user, is_active=True)
+def portal_billing(request, slug):
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
     sub = _get_or_create_subscription(restaurant)
     return render(request, "portal/billing.html", {
         "restaurant": restaurant,
@@ -350,11 +356,11 @@ def portal_billing(request):
 
 
 @login_required
-def portal_billing_checkout(request):
+def portal_billing_checkout(request, slug):
     if request.method != "POST":
-        return redirect("portal_billing")
+        return redirect("portal_billing", slug=slug)
 
-    restaurant = get_object_or_404(Restaurant, user=request.user, is_active=True)
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
     sub = _get_or_create_subscription(restaurant)
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -375,30 +381,30 @@ def portal_billing_checkout(request):
         payment_method_types=["card"],
         line_items=[{"price": settings.STRIPE_PRICE_ID, "quantity": 1}],
         mode="subscription",
-        success_url=f"{base_url}/portal/billing/?success=1",
-        cancel_url=f"{base_url}/portal/billing/?cancelled=1",
+        success_url=f"{base_url}/portal/{slug}/billing/?success=1",
+        cancel_url=f"{base_url}/portal/{slug}/billing/?cancelled=1",
     )
     return redirect(session.url, permanent=False)
 
 
 @login_required
-def portal_billing_portal(request):
+def portal_billing_portal(request, slug):
     if request.method != "POST":
-        return redirect("portal_billing")
+        return redirect("portal_billing", slug=slug)
 
-    restaurant = get_object_or_404(Restaurant, user=request.user, is_active=True)
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
     sub = _get_or_create_subscription(restaurant)
 
     if not sub.stripe_customer_id:
         messages.error(request, "No billing account found. Please subscribe first.")
-        return redirect("portal_billing")
+        return redirect("portal_billing", slug=slug)
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
     base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
 
     portal_session = stripe.billing_portal.Session.create(
         customer=sub.stripe_customer_id,
-        return_url=f"{base_url}/portal/billing/",
+        return_url=f"{base_url}/portal/{slug}/billing/",
     )
     return redirect(portal_session.url, permanent=False)
 
