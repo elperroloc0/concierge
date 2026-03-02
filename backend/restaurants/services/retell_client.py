@@ -16,4 +16,12 @@ class RetellClient:
     def create_phone_number(self, *, area_code: int, inbound_agent_id: str):
         """buy a new phone number"""
         return self.client.phone_number.create(area_code=area_code, inbound_agents=[{"agent_id": inbound_agent_id, "weight": 1.0}])
+
+    def update_llm(self, llm_id: str, **kwargs):
+        """update an existing retell LLM (e.g. change general_prompt)"""
+        return self.client.llm.update(llm_id, **kwargs)
+
+    def update_agent(self, agent_id: str, **kwargs):
+        """update an existing retell agent (e.g. change webhook URL or voice)"""
+        return self.client.agent.update(agent_id, **kwargs)
     

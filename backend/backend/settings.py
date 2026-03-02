@@ -27,6 +27,10 @@ load_dotenv(BASE_DIR / ".env")
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-^3n8^%=#y%w(j#e20upz2ur107e2yhf#yo5$yy1pslp-3alsqx")
 
+RETELL_WEBHOOK_BASE_URL = os.environ.get("RETELL_WEBHOOK_URL", "").rstrip("/")
+
+LOGIN_URL = "/portal/login/"
+
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
