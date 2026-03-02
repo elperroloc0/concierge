@@ -84,6 +84,40 @@ def retell_create_llm(modeladmin, request, queryset):
         messages.success(request, f"[{r.slug}] LLM created: {r.retell_llm_id}")
 
 
+@admin.action(description="Retell: 1b — Update LLM prompt (overwrites existing)")
+def retell_update_llm_prompt(modeladmin, request, queryset):
+    for r in queryset:
+        if not r.retell_api_key:
+            messages.error(request, f"[{r.slug}] API key is empty.")
+            continue
+        if not r.retell_llm_id:
+            messages.error(request, f"[{r.slug}] No LLM ID — run 'Create LLM' first.")
+            continue
+
+        client = RetellClient(api_key=r.retell_api_key)
+        client.update_llm(r.retell_llm_id, general_prompt=AGENT_SYSTEM_PROMPT)
+        messages.success(request, f"[{r.slug}] LLM prompt updated: {r.retell_llm_id}")
+
+
+@admin.action(description="Retell: 2b — Update Agent webhook URL (requires RETELL_WEBHOOK_URL in .env)")
+def retell_update_agent_webhook(modeladmin, request, queryset):
+    for r in queryset:
+        if not r.retell_api_key:
+            messages.error(request, f"[{r.slug}] API key is empty.")
+            continue
+        if not r.retell_agent_id:
+            messages.error(request, f"[{r.slug}] No Agent ID — run 'Create Agent' first.")
+            continue
+        if not settings.RETELL_WEBHOOK_BASE_URL:
+            messages.error(request, f"[{r.slug}] RETELL_WEBHOOK_URL not set in .env.")
+            continue
+
+        webhook_url = f"{settings.RETELL_WEBHOOK_BASE_URL}/api/retell/webhook/{r.pk}/"
+        client = RetellClient(api_key=r.retell_api_key)
+        client.update_agent(r.retell_agent_id, inbound_dynamic_variables_webhook_url=webhook_url)
+        messages.success(request, f"[{r.slug}] Agent webhook updated → {webhook_url}")
+
+
 @admin.action(description="Retell: 2 — Create Agent (requires LLM)")
 def retell_create_agent(modeladmin, request, queryset):
     for r in queryset:
@@ -190,4 +224,8 @@ class RestaurantAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at", "updated_at", "retell_llm_id", "retell_agent_id", "public_id")
     prepopulated_fields = {"slug": ("name",)}
     inlines = [KnowledgeBaseInline]
-    actions = [retell_create_llm, retell_create_agent, retell_create_phone]
+    actions = [
+        retell_create_llm, retell_update_llm_prompt,
+        retell_create_agent, retell_update_agent_webhook,
+        retell_create_phone,
+    ]
