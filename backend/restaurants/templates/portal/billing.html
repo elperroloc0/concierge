@@ -1,0 +1,101 @@
+{% extends "portal/base.html" %}
+{% block title %}Billing{% endblock %}
+{% block page_title %}Billing & Subscription{% endblock %}
+{% block nav_billing %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+  .plan-card { border-radius: 16px; border: 2px solid #e9ecef; }
+  .plan-card.active-plan { border-color: #4361ee; }
+  .status-badge { font-size: .8rem; padding: .35em .75em; border-radius: 20px; font-weight: 600; }
+  .status-active   { background: #d4edda; color: #155724; }
+  .status-trialing { background: #d1ecf1; color: #0c5460; }
+  .status-past_due { background: #fff3cd; color: #856404; }
+  .status-cancelled,.status-inactive { background: #f8d7da; color: #721c24; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h4 class="fw-bold mb-1">Billing & Subscription</h4>
+<p class="text-muted mb-4">Manage your Concierge AI plan for {{ restaurant.name }}.</p>
+
+{% if request.GET.success %}
+  <div class="alert alert-success alert-dismissible fade show">
+    <i class="bi bi-check-circle-fill me-2"></i>Subscription activated! Your AI agent is now live.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+{% endif %}
+{% if request.GET.cancelled %}
+  <div class="alert alert-warning alert-dismissible fade show">
+    Checkout cancelled — no charges made.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+{% endif %}
+
+<div class="row g-4">
+
+  <!-- Current plan card -->
+  <div class="col-lg-5">
+    <div class="card plan-card {% if sub.is_active %}active-plan{% endif %} p-4 h-100">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="fw-bold mb-0">Current Plan</h6>
+        <span class="status-badge status-{{ sub.status }}">
+          {{ sub.get_status_display }}
+        </span>
+      </div>
+
+      {% if sub.is_active %}
+        <div class="mb-3">
+          <p class="mb-1 text-muted small">Plan</p>
+          <p class="fw-semibold mb-0">AI Concierge — Monthly</p>
+        </div>
+        {% if sub.current_period_end %}
+        <div class="mb-3">
+          <p class="mb-1 text-muted small">Renews on</p>
+          <p class="fw-semibold mb-0">{{ sub.current_period_end|date:"M d, Y" }}</p>
+        </div>
+        {% endif %}
+        <hr>
+        <form method="post" action="{% url 'portal_billing_portal' %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline-dark w-100">
+            <i class="bi bi-gear me-1"></i> Manage Billing & Invoices
+          </button>
+        </form>
+      {% else %}
+        <p class="text-muted small mb-4">
+          No active subscription. Subscribe to activate your AI phone agent.
+        </p>
+        {% if stripe_publishable_key %}
+          <form method="post" action="{% url 'portal_billing_checkout' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-dark w-100 fw-semibold">
+              <i class="bi bi-lightning-charge-fill me-1"></i> Subscribe Now
+            </button>
+          </form>
+        {% else %}
+          <div class="alert alert-warning py-2 small mb-0">
+            Stripe is not configured yet. Add <code>STRIPE_SECRET_KEY</code> and
+            <code>STRIPE_PRICE_ID</code> to <code>.env</code>.
+          </div>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- What's included -->
+  <div class="col-lg-7">
+    <div class="card p-4 h-100" style="border-radius:16px; border:none; background:#f8f9fa;">
+      <h6 class="fw-bold mb-3">What's included</h6>
+      <ul class="list-unstyled mb-0">
+        {% for item in features %}
+        <li class="mb-2">
+          <i class="bi bi-check-circle-fill text-success me-2"></i>{{ item }}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

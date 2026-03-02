@@ -17,9 +17,11 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 
+from restaurants import views as restaurant_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/retell/', include('restaurants.urls')),
+    path('api/stripe/webhook/', restaurant_views.stripe_webhook, name='stripe_webhook'),
     path('portal/', include('restaurants.portal_urls')),
 ]

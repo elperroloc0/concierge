@@ -3,6 +3,7 @@ import os
 from collections import Counter, defaultdict
 from datetime import timedelta
 
+import stripe
 from backend import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
@@ -15,7 +16,7 @@ from django.views.decorators.csrf import csrf_exempt
 from retell import Retell
 
 from .forms import KnowledgeBaseForm, RestaurantBasicForm
-from .models import CallEvent, Restaurant, RestaurantKnowledgeBase
+from .models import CallEvent, Restaurant, RestaurantKnowledgeBase, Subscription
 
 
 # ─── Retell Webhook Helpers ───────────────────────────────────────────────────
@@ -320,3 +321,135 @@ def portal_calls(request):
         "restaurant": restaurant,
         "page_obj": page_obj,
     })
+
+
+# ─── Billing (Stripe) ────────────────────────────────────────────────────────
+
+def _get_or_create_subscription(restaurant):
+    sub, _ = Subscription.objects.get_or_create(restaurant=restaurant)
+    return sub
+
+
+@login_required
+def portal_billing(request):
+    restaurant = get_object_or_404(Restaurant, user=request.user, is_active=True)
+    sub = _get_or_create_subscription(restaurant)
+    return render(request, "portal/billing.html", {
+        "restaurant": restaurant,
+        "sub": sub,
+        "stripe_publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
+        "features": [
+            "AI phone agent available 24/7",
+            "Answers calls in Spanish & English",
+            "Full knowledge base (hours, menu, billing, events)",
+            "Call history & transcripts",
+            "Business analytics dashboard",
+            "Monthly call reports via email",
+        ],
+    })
+
+
+@login_required
+def portal_billing_checkout(request):
+    if request.method != "POST":
+        return redirect("portal_billing")
+
+    restaurant = get_object_or_404(Restaurant, user=request.user, is_active=True)
+    sub = _get_or_create_subscription(restaurant)
+
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
+
+    # Reuse existing Stripe customer or create a new one
+    if not sub.stripe_customer_id:
+        customer = stripe.Customer.create(
+            email=restaurant.contact_email or request.user.email,
+            name=restaurant.name,
+            metadata={"restaurant_id": str(restaurant.pk)},
+        )
+        sub.stripe_customer_id = customer.id
+        sub.save(update_fields=["stripe_customer_id"])
+
+    session = stripe.checkout.Session.create(
+        customer=sub.stripe_customer_id,
+        payment_method_types=["card"],
+        line_items=[{"price": settings.STRIPE_PRICE_ID, "quantity": 1}],
+        mode="subscription",
+        success_url=f"{base_url}/portal/billing/?success=1",
+        cancel_url=f"{base_url}/portal/billing/?cancelled=1",
+    )
+    return redirect(session.url, permanent=False)
+
+
+@login_required
+def portal_billing_portal(request):
+    if request.method != "POST":
+        return redirect("portal_billing")
+
+    restaurant = get_object_or_404(Restaurant, user=request.user, is_active=True)
+    sub = _get_or_create_subscription(restaurant)
+
+    if not sub.stripe_customer_id:
+        messages.error(request, "No billing account found. Please subscribe first.")
+        return redirect("portal_billing")
+
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
+
+    portal_session = stripe.billing_portal.Session.create(
+        customer=sub.stripe_customer_id,
+        return_url=f"{base_url}/portal/billing/",
+    )
+    return redirect(portal_session.url, permanent=False)
+
+
+@csrf_exempt
+def stripe_webhook(request):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    payload = request.body
+    sig = request.headers.get("stripe-signature", "")
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig, settings.STRIPE_WEBHOOK_SECRET
+        )
+    except stripe.errors.SignatureVerificationError:
+        return JsonResponse({"detail": "invalid signature"}, status=400)
+    except Exception:
+        return JsonResponse({"detail": "invalid payload"}, status=400)
+
+    data = event["data"]["object"]
+
+    if event["type"] == "checkout.session.completed":
+        customer_id = data.get("customer")
+        subscription_id = data.get("subscription")
+        sub = Subscription.objects.filter(stripe_customer_id=customer_id).first()
+        if sub and subscription_id:
+            sub.stripe_subscription_id = subscription_id
+            sub.status = "active"
+            sub.save(update_fields=["stripe_subscription_id", "status"])
+
+    elif event["type"] in ("customer.subscription.updated", "customer.subscription.created"):
+        customer_id = data.get("customer")
+        sub = Subscription.objects.filter(stripe_customer_id=customer_id).first()
+        if sub:
+            sub.stripe_subscription_id = data["id"]
+            sub.status = data["status"]  # active / trialing / past_due / etc.
+            period_end = data.get("current_period_end")
+            if period_end:
+                from django.utils.timezone import datetime as tz_datetime
+                sub.current_period_end = tz_datetime.fromtimestamp(
+                    period_end, tz=timezone.utc
+                )
+            sub.save(update_fields=["stripe_subscription_id", "status", "current_period_end"])
+
+    elif event["type"] == "customer.subscription.deleted":
+        customer_id = data.get("customer")
+        sub = Subscription.objects.filter(stripe_customer_id=customer_id).first()
+        if sub:
+            sub.status = "cancelled"
+            sub.save(update_fields=["status"])
+
+    return JsonResponse({"status": "ok"})
