@@ -1,0 +1,111 @@
+{% extends "portal/base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+
+{% block content %}
+<h4 class="fw-bold mb-1">Welcome back</h4>
+<p class="text-muted mb-4">Last 30 days — {{ restaurant.name }}</p>
+
+<!-- Stat cards -->
+<div class="row g-3 mb-4">
+  <div class="col-sm-4">
+    <div class="card stat-card shadow-sm p-3 h-100">
+      <div class="text-muted small mb-1"><i class="bi bi-telephone-fill me-1"></i>Total Calls</div>
+      <div class="fs-2 fw-bold">{{ total_calls }}</div>
+    </div>
+  </div>
+  <div class="col-sm-4">
+    <div class="card stat-card shadow-sm p-3 h-100">
+      <div class="text-muted small mb-1"><i class="bi bi-people-fill me-1"></i>Unique Callers</div>
+      <div class="fs-2 fw-bold">{{ unique_callers }}</div>
+    </div>
+  </div>
+  <div class="col-sm-4">
+    <div class="card stat-card shadow-sm p-3 h-100">
+      <div class="text-muted small mb-1"><i class="bi bi-arrow-repeat me-1"></i>Repeat Callers</div>
+      <div class="fs-2 fw-bold">{{ repeat_callers }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- Charts row -->
+<div class="row g-3 mb-4">
+  <!-- Calls per day -->
+  <div class="col-lg-7">
+    <div class="card shadow-sm p-3 h-100">
+      <h6 class="fw-semibold mb-3">Calls per Day</h6>
+      <canvas id="callsChart" height="120"></canvas>
+    </div>
+  </div>
+  <!-- Topic breakdown -->
+  <div class="col-lg-5">
+    <div class="card shadow-sm p-3 h-100">
+      <h6 class="fw-semibold mb-3">Topics</h6>
+      <canvas id="topicsChart" height="120"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Outcome breakdown -->
+<div class="row g-3">
+  <div class="col-lg-5">
+    <div class="card shadow-sm p-3">
+      <h6 class="fw-semibold mb-3">Call Outcomes</h6>
+      <canvas id="outcomeChart" height="120"></canvas>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card shadow-sm p-3 h-100 d-flex flex-column justify-content-center">
+      <h6 class="fw-semibold mb-3">Quick Actions</h6>
+      <a href="{% url 'portal_kb' %}" class="btn btn-outline-dark mb-2 text-start">
+        <i class="bi bi-database-fill me-2"></i>Update Knowledge Base
+      </a>
+      <a href="{% url 'portal_calls' %}" class="btn btn-outline-dark text-start">
+        <i class="bi bi-telephone-inbound me-2"></i>View Call History
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CHART_COLORS = ["#4361ee","#3f37c9","#7209b7","#f72585","#4cc9f0","#e2b96f","#2dc653"];
+
+// Calls per day
+new Chart(document.getElementById("callsChart"), {
+  type: "bar",
+  data: {
+    labels: {{ calls_by_day_labels|safe }},
+    datasets: [{
+      label: "Calls",
+      data: {{ calls_by_day_data|safe }},
+      backgroundColor: "#4361ee",
+      borderRadius: 4,
+    }]
+  },
+  options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+});
+
+// Topics donut
+new Chart(document.getElementById("topicsChart"), {
+  type: "doughnut",
+  data: {
+    labels: {{ topic_labels|safe }},
+    datasets: [{ data: {{ topic_data|safe }}, backgroundColor: CHART_COLORS }]
+  },
+  options: { plugins: { legend: { position: "right" } }, cutout: "60%" }
+});
+
+// Outcomes donut
+new Chart(document.getElementById("outcomeChart"), {
+  type: "doughnut",
+  data: {
+    labels: {{ outcome_labels|safe }},
+    datasets: [{ data: {{ outcome_data|safe }}, backgroundColor: ["#2dc653","#f72585","#e2b96f"] }]
+  },
+  options: { plugins: { legend: { position: "right" } }, cutout: "60%" }
+});
+</script>
+{% endblock %}

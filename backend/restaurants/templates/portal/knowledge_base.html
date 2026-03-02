@@ -1,0 +1,315 @@
+{% extends "portal/base.html" %}
+{% block title %}Knowledge Base{% endblock %}
+{% block page_title %}Knowledge Base{% endblock %}
+{% block nav_kb %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+  .form-label { font-weight: 600; font-size: .875rem; }
+  .nav-tabs .nav-link { color: #495057; }
+  .nav-tabs .nav-link.active { font-weight: 600; }
+  .section-hint { font-size: .8rem; color: #6c757d; margin-bottom: 1.25rem; }
+  .form-control, .form-select { font-size: .9rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h4 class="fw-bold mb-0">Knowledge Base</h4>
+    <p class="text-muted small mb-0">This information is used by the AI agent to answer caller questions.</p>
+  </div>
+  <button form="kb-form" type="submit" class="btn btn-dark fw-semibold px-4">
+    <i class="bi bi-floppy-fill me-1"></i> Save Changes
+  </button>
+</div>
+
+<form id="kb-form" method="post" novalidate>
+  {% csrf_token %}
+
+  <ul class="nav nav-tabs mb-3" id="kbTabs" role="tablist">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-basic">Restaurant</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-hours">Hours</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-menu">Menu</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-billing">Billing</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-reservations">Reservations</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-events">Events</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-ambience">Ambience</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-facilities">Facilities</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-agent">Agent</button></li>
+  </ul>
+
+  <div class="tab-content">
+
+    <!-- RESTAURANT BASICS -->
+    <div class="tab-pane fade show active" id="tab-basic">
+      <div class="card shadow-sm p-4">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">{{ basic_form.name.label }}</label>
+            {{ basic_form.name }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">{{ basic_form.website.label }}</label>
+            {{ basic_form.website }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">{{ basic_form.address_full.label }}</label>
+            {{ basic_form.address_full }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">{{ basic_form.location_reference.label }}</label>
+            {{ basic_form.location_reference }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">{{ basic_form.timezone.label }}</label>
+            {{ basic_form.timezone }}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">{{ basic_form.primary_lang.label }}</label>
+            {{ basic_form.primary_lang }}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">{{ basic_form.conversation_tone.label }}</label>
+            {{ basic_form.conversation_tone }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">{{ basic_form.welcome_phrase.label }}</label>
+            {{ basic_form.welcome_phrase }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">{{ basic_form.contact_phone.label }}</label>
+            {{ basic_form.contact_phone }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">{{ basic_form.contact_email.label }}</label>
+            {{ basic_form.contact_email }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HOURS -->
+    <div class="tab-pane fade" id="tab-hours">
+      <div class="card shadow-sm p-4">
+        <p class="section-hint">The AI uses these to answer "are you open?" and similar questions.</p>
+        <div class="mb-3">
+          <label class="form-label">{{ kb_form.hours_of_operation.label }}</label>
+          {{ kb_form.hours_of_operation }}
+        </div>
+        <div class="mb-3">
+          <label class="form-label">{{ kb_form.kitchen_closing_time.label }}</label>
+          {{ kb_form.kitchen_closing_time }}
+        </div>
+        <div class="mb-3 form-check">
+          {{ kb_form.closes_on_holidays }}
+          <label class="form-check-label">{{ kb_form.closes_on_holidays.label }}</label>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">{{ kb_form.holiday_closure_notes.label }}</label>
+          {{ kb_form.holiday_closure_notes }}
+        </div>
+        <div class="mb-3">
+          <label class="form-label">{{ kb_form.private_event_closures.label }}</label>
+          {{ kb_form.private_event_closures }}
+        </div>
+      </div>
+    </div>
+
+    <!-- MENU -->
+    <div class="tab-pane fade" id="tab-menu">
+      <div class="card shadow-sm p-4">
+        <p class="section-hint">Paste a curated ~300-word summary of your best sellers. The AI uses this on every call — keep it current.</p>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">{{ kb_form.food_menu_url.label }}</label>
+            {{ kb_form.food_menu_url }}
+            <div class="form-text">{{ kb_form.food_menu_url.help_text }}</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">{{ kb_form.bar_menu_url.label }}</label>
+            {{ kb_form.bar_menu_url }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">{{ kb_form.food_menu_summary.label }}</label>
+            {{ kb_form.food_menu_summary }}
+            <div class="form-text">{{ kb_form.food_menu_summary.help_text }}</div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">{{ kb_form.bar_menu_summary.label }}</label>
+            {{ kb_form.bar_menu_summary }}
+            <div class="form-text">{{ kb_form.bar_menu_summary.help_text }}</div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">{{ kb_form.happy_hour_details.label }}</label>
+            {{ kb_form.happy_hour_details }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">{{ kb_form.dietary_options.label }}</label>
+            {{ kb_form.dietary_options }}
+            <div class="form-text">{{ kb_form.dietary_options.help_text }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BILLING -->
+    <div class="tab-pane fade" id="tab-billing">
+      <div class="card shadow-sm p-4">
+        <div class="row g-3">
+          <div class="col-auto">
+            <div class="form-check mt-2">
+              {{ kb_form.auto_gratuity }}
+              <label class="form-check-label">{{ kb_form.auto_gratuity.label }}</label>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">{{ kb_form.service_charge_pct.label }}</label>
+            {{ kb_form.service_charge_pct }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">{{ kb_form.service_charge_scope.label }}</label>
+            {{ kb_form.service_charge_scope }}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">{{ kb_form.max_cards_to_split.label }}</label>
+            {{ kb_form.max_cards_to_split }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RESERVATIONS -->
+    <div class="tab-pane fade" id="tab-reservations">
+      <div class="card shadow-sm p-4">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">{{ kb_form.reservation_grace_min.label }}</label>
+            {{ kb_form.reservation_grace_min }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">{{ kb_form.no_show_fee.label }}</label>
+            {{ kb_form.no_show_fee }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">{{ kb_form.large_party_min_guests.label }}</label>
+            {{ kb_form.large_party_min_guests }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRIVATE EVENTS -->
+    <div class="tab-pane fade" id="tab-events">
+      <div class="card shadow-sm p-4">
+        <div class="row g-3">
+          <div class="col-auto">
+            <div class="form-check mt-2">
+              {{ kb_form.has_private_dining }}
+              <label class="form-check-label">{{ kb_form.has_private_dining.label }}</label>
+            </div>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label">{{ kb_form.private_dining_min_spend.label }}</label>
+            {{ kb_form.private_dining_min_spend }}
+          </div>
+          <div class="col-auto">
+            <div class="form-check mt-2">
+              {{ kb_form.allows_decorations }}
+              <label class="form-check-label">{{ kb_form.allows_decorations.label }}</label>
+            </div>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label">{{ kb_form.decoration_cleaning_fee.label }}</label>
+            {{ kb_form.decoration_cleaning_fee }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">{{ kb_form.press_contact.label }}</label>
+            {{ kb_form.press_contact }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AMBIENCE -->
+    <div class="tab-pane fade" id="tab-ambience">
+      <div class="card shadow-sm p-4">
+        <div class="row g-3">
+          <div class="col-auto">
+            <div class="form-check mt-2">
+              {{ kb_form.has_live_music }}
+              <label class="form-check-label">{{ kb_form.has_live_music.label }}</label>
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">{{ kb_form.live_music_details.label }}</label>
+            {{ kb_form.live_music_details }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">{{ kb_form.party_vibe_start_time.label }}</label>
+            {{ kb_form.party_vibe_start_time }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">{{ kb_form.noise_level.label }}</label>
+            {{ kb_form.noise_level }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">{{ kb_form.dress_code.label }}</label>
+            {{ kb_form.dress_code }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">{{ kb_form.cover_charge.label }}</label>
+            {{ kb_form.cover_charge }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FACILITIES -->
+    <div class="tab-pane fade" id="tab-facilities">
+      <div class="card shadow-sm p-4">
+        <div class="row g-3">
+          <div class="col-auto">
+            <div class="form-check mt-2">{{ kb_form.has_terrace }}<label class="form-check-label">{{ kb_form.has_terrace.label }}</label></div>
+          </div>
+          <div class="col-auto">
+            <div class="form-check mt-2">{{ kb_form.stroller_friendly }}<label class="form-check-label">{{ kb_form.stroller_friendly.label }}</label></div>
+          </div>
+          <div class="col-auto">
+            <div class="form-check mt-2">{{ kb_form.has_valet }}<label class="form-check-label">{{ kb_form.has_valet.label }}</label></div>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">{{ kb_form.ac_intensity.label }}</label>
+            {{ kb_form.ac_intensity }}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">{{ kb_form.valet_cost.label }}</label>
+            {{ kb_form.valet_cost }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">{{ kb_form.free_parking_info.label }}</label>
+            {{ kb_form.free_parking_info }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AGENT BEHAVIOR -->
+    <div class="tab-pane fade" id="tab-agent">
+      <div class="card shadow-sm p-4">
+        <p class="section-hint">Controls what the AI collects from the caller during the conversation.</p>
+        <div class="mb-3 form-check">
+          {{ kb_form.collect_guest_info }}
+          <label class="form-check-label">{{ kb_form.collect_guest_info.label }}</label>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">{{ kb_form.guest_info_to_collect.label }}</label>
+          {{ kb_form.guest_info_to_collect }}
+          <div class="form-text">{{ kb_form.guest_info_to_collect.help_text }}</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.tab-content -->
+</form>
+{% endblock %}
