@@ -107,6 +107,33 @@ class Restaurant(models.Model):
         return self.name
     
     
+class Subscription(models.Model):
+    STATUS_CHOICES = [
+        ("active",    "Active"),
+        ("trialing",  "Trialing"),
+        ("past_due",  "Past Due"),
+        ("cancelled", "Cancelled"),
+        ("inactive",  "Inactive"),
+    ]
+
+    restaurant             = models.OneToOneField(
+        "restaurants.Restaurant", on_delete=models.CASCADE, related_name="subscription"
+    )
+    stripe_customer_id     = models.CharField(max_length=64, blank=True, default="")
+    stripe_subscription_id = models.CharField(max_length=64, blank=True, default="")
+    status                 = models.CharField(max_length=16, default="inactive", choices=STATUS_CHOICES, db_index=True)
+    current_period_end     = models.DateTimeField(null=True, blank=True)
+    created_at             = models.DateTimeField(auto_now_add=True)
+    updated_at             = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Sub[{self.restaurant.name}]: {self.status}"
+
+    @property
+    def is_active(self):
+        return self.status in ("active", "trialing")
+
+
 class CallEvent(models.Model):
     restaurant = models.ForeignKey("restaurants.Restaurant", on_delete=models.CASCADE, related_name="call_events")
     event_type = models.CharField(max_length=64, db_index=True)

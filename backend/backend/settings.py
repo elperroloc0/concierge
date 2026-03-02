@@ -31,6 +31,12 @@ RETELL_WEBHOOK_BASE_URL = os.environ.get("RETELL_WEBHOOK_URL", "").rstrip("/")
 
 LOGIN_URL = "/portal/login/"
 
+# Stripe
+STRIPE_SECRET_KEY      = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
+STRIPE_WEBHOOK_SECRET  = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+STRIPE_PRICE_ID        = os.environ.get("STRIPE_PRICE_ID", "")  # price_xxx from Stripe dashboard
+
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
