@@ -21,7 +21,7 @@ from django.views.decorators.csrf import csrf_exempt
 from retell import Retell
 
 from .forms import KnowledgeBaseForm, RestaurantBasicForm
-from .models import CallDetail, CallEvent, Restaurant, RestaurantKnowledgeBase, Subscription
+from .models import CallDetail, CallEvent, Restaurant, RestaurantKnowledgeBase, SmsLog, Subscription
 
 
 # ─── Retell Webhook Helpers ───────────────────────────────────────────────────
@@ -335,6 +335,59 @@ def retell_events_webhook(request):
             logger.exception("Failed to build CallDetail for CallEvent pk=%s", call_event.pk)
 
     return JsonResponse({"status": "ok"}, status=200)
+
+
+@csrf_exempt
+def retell_tool_send_sms(request):
+    """Retell custom tool webhook — sends an SMS to the caller via Twilio."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"result": "error: invalid json"}, status=400)
+
+    call      = data.get("call", {})
+    to_number = call.get("from_number", "").strip()   # caller's number → SMS destination
+    to_retell = call.get("to_number", "").strip()     # our Retell number → identify restaurant
+    message   = data.get("args", {}).get("message", "").strip()
+
+    if not to_number or not message:
+        return JsonResponse({"result": "error: missing to_number or message"})
+
+    restaurant = Restaurant.objects.filter(retell_phone_number=to_retell, is_active=True).first()
+    call_id    = call.get("call_id")
+    call_event = (
+        CallEvent.objects.filter(payload__call__call_id=call_id).first()
+        if call_id else None
+    )
+
+    log = SmsLog(
+        restaurant=restaurant,
+        call_event=call_event,
+        to_number=to_number,
+        message=message,
+    )
+
+    try:
+        from twilio.rest import Client as TwilioClient
+        twilio_client = TwilioClient(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+        msg = twilio_client.messages.create(
+            body=message,
+            from_=settings.TWILIO_FROM_NUMBER,
+            to=to_number,
+        )
+        log.status     = "sent"
+        log.twilio_sid = msg.sid
+        log.save()
+        return JsonResponse({"result": f"SMS sent successfully to {to_number}"})
+    except Exception as e:
+        log.status        = "failed"
+        log.error_message = str(e)
+        log.save()
+        logger.exception("SMS send failed to %s", to_number)
+        return JsonResponse({"result": f"SMS could not be sent: {e}"})
 
 
 # ─── Portal Analytics Helpers ─────────────────────────────────────────────────

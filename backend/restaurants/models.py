@@ -190,6 +190,27 @@ class CallDetail(models.Model):
         return f"Detail[{self.caller_name or self.caller_phone or 'Unknown'}]"
 
 
+class SmsLog(models.Model):
+    restaurant    = models.ForeignKey(
+        "restaurants.Restaurant", on_delete=models.CASCADE, related_name="sms_logs"
+    )
+    call_event    = models.ForeignKey(
+        "restaurants.CallEvent", on_delete=models.SET_NULL, null=True, blank=True, related_name="sms_logs"
+    )
+    to_number     = models.CharField(max_length=32)
+    message       = models.TextField()
+    status        = models.CharField(max_length=16, default="pending")  # sent | failed
+    twilio_sid    = models.CharField(max_length=64, blank=True)
+    error_message = models.TextField(blank=True)
+    created_at    = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"SMS→{self.to_number} [{self.status}]"
+
+
 class RestaurantKnowledgeBase(models.Model):
     restaurant = models.OneToOneField(
         "restaurants.Restaurant", on_delete=models.CASCADE, related_name="knowledge_base"

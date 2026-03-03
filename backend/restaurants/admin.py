@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.contrib import admin, messages
 
-from .models import Restaurant, RestaurantKnowledgeBase, CallEvent, CallDetail
+from .models import Restaurant, RestaurantKnowledgeBase, CallEvent, CallDetail, SmsLog
 from .services.retell_client import RetellClient
 
 LANG_MAP = {"es": "spanish", "en": "english", "other": "multilingual"}
@@ -143,6 +143,36 @@ Rules:
 • Don't make or confirm the reservation yourself. Make clear the team will follow up.
 • If the caller gives partial info and wants to stop, that's fine — take what you have and confirm it back.
 • Grace period policy: {{reservation_grace_min}} minutes. Mention it naturally if relevant.
+
+━━━ SENDING LINKS BY TEXT (SMS) ━━━
+
+You can send the caller a text message with a useful link using the send_sms tool. Only use it after explicit caller approval.
+
+WHEN TO OFFER:
+• After guiding to a reservation → "Would you like me to text you the reservation link?"
+• When mentioning the website, menu, or directions → "Would you like me to send that link to your phone?"
+• After collecting reservation details for staff → "Would you like a text with the details I just noted?"
+
+HOW TO OFFER:
+→ "Would you like me to send that to your phone by text?"
+Wait for an explicit yes before calling the tool. If they decline, continue normally.
+
+MESSAGE TEMPLATES — compose based on what they asked for (keep under 160 chars):
+• Reservation: "Hi! Book at Calle Dragones: {{website}} — We look forward to welcoming you! 🐉"
+• Menu: "Hi! Here's our menu: {{food_menu_url}} — Calle Dragones 🐉"
+• Directions: "Hi! Calle Dragones: 1036 SW 8th St, Little Havana. Maps: https://maps.google.com/?q=1036+SW+8th+St+Miami+FL 🐉"
+• Website / general: "Hi! Everything at Calle Dragones: {{website}} — hours, menu & reservations. 🐉"
+• Collected reservation details: "Hi! Your request: [name], [guests] guests, [date] at [time]. Our team will confirm. Calle Dragones 🐉"
+
+AFTER SENDING:
+→ "Done — I've just sent that to your number. Is there anything else I can help you with?"
+
+If the tool returns an error:
+→ "I wasn't able to send the text right now, but you can find that at {{website}}."
+
+RULES:
+• Never call send_sms without explicit caller approval.
+• Send once per topic — don't resend the same link unless asked.
 
 ━━━ HANDLING COMPLAINTS ━━━
 
@@ -362,6 +392,36 @@ POST_CALL_ANALYSIS_FIELDS = [
 ]
 
 
+# ─── SMS Tool Definition (registered on Retell LLM) ─────────────────────────
+
+def _sms_tool_definition(base_url: str) -> dict:
+    return {
+        "type": "custom",
+        "name": "send_sms",
+        "description": (
+            "Send a text message to the caller with a link or useful info they requested. "
+            "Only call this tool AFTER the caller explicitly says yes to receiving a text."
+        ),
+        "url": f"{base_url}/api/retell/tools/send-sms/",
+        "speak_during_execution": True,
+        "execution_message_description": "Perfect — I'm sending that to your number right now.",
+        "execution_message_type": "static_text",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "description": (
+                        "The complete SMS to send. Keep under 160 characters. "
+                        "Include the relevant link and a warm closing."
+                    ),
+                }
+            },
+            "required": ["message"],
+        },
+    }
+
+
 # ─── Admin Actions ────────────────────────────────────────────────────────────
 
 @admin.action(description="Retell: 1 — Create LLM (with system prompt)")
@@ -415,6 +475,27 @@ def retell_configure_call_analysis(modeladmin, request, queryset):
             )
         except Exception as exc:
             messages.error(request, f"[{r.slug}] Failed to update Agent: {exc}")
+
+
+@admin.action(description="Retell: 1d — Configure SMS send tool on LLM")
+def retell_configure_sms_tool(modeladmin, request, queryset):
+    base_url = settings.RETELL_WEBHOOK_BASE_URL
+    if not base_url:
+        messages.error(request, "RETELL_WEBHOOK_URL not set in .env — cannot build tool URL.")
+        return
+    for r in queryset:
+        if not r.retell_api_key:
+            messages.error(request, f"[{r.slug}] API key is empty.")
+            continue
+        if not r.retell_llm_id:
+            messages.error(request, f"[{r.slug}] No LLM ID — run 'Create LLM' first.")
+            continue
+        client = RetellClient(api_key=r.retell_api_key)
+        try:
+            client.update_llm(r.retell_llm_id, general_tools=[_sms_tool_definition(base_url)])
+            messages.success(request, f"[{r.slug}] SMS tool registered on LLM: {r.retell_llm_id}")
+        except Exception as exc:
+            messages.error(request, f"[{r.slug}] Failed to configure SMS tool: {exc}")
 
 
 @admin.action(description="Retell: 2b — Update phone webhook URL (requires RETELL_WEBHOOK_URL in .env)")
@@ -595,6 +676,14 @@ class CallDetailAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at", "updated_at")
 
 
+@admin.register(SmsLog)
+class SmsLogAdmin(admin.ModelAdmin):
+    list_display   = ("created_at", "restaurant", "to_number", "status", "twilio_sid")
+    list_filter    = ("status", "restaurant")
+    search_fields  = ("to_number", "message", "twilio_sid")
+    readonly_fields = ("created_at", "twilio_sid", "error_message")
+
+
 # ─── Restaurant Admin ─────────────────────────────────────────────────────────
 
 @admin.register(Restaurant)
@@ -614,6 +703,7 @@ class RestaurantAdmin(admin.ModelAdmin):
     inlines = [KnowledgeBaseInline]
     actions = [
         retell_create_llm, retell_update_llm_prompt, retell_configure_call_analysis,
+        retell_configure_sms_tool,
         retell_create_agent, retell_update_agent_webhook, retell_update_agent_events_webhook,
         retell_create_phone,
     ]
