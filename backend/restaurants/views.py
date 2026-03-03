@@ -372,10 +372,14 @@ def retell_tool_send_sms(request):
 
     try:
         from twilio.rest import Client as TwilioClient
-        twilio_client = TwilioClient(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+        # Use restaurant-specific credentials; fall back to platform defaults
+        account_sid = (restaurant and restaurant.twilio_account_sid) or settings.TWILIO_ACCOUNT_SID
+        auth_token  = (restaurant and restaurant.twilio_auth_token)  or settings.TWILIO_AUTH_TOKEN
+        from_number = (restaurant and restaurant.twilio_from_number) or settings.TWILIO_FROM_NUMBER
+        twilio_client = TwilioClient(account_sid, auth_token)
         msg = twilio_client.messages.create(
             body=message,
-            from_=settings.TWILIO_FROM_NUMBER,
+            from_=from_number,
             to=to_number,
         )
         log.status     = "sent"

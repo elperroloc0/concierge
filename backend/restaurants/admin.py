@@ -700,6 +700,26 @@ class RestaurantAdmin(admin.ModelAdmin):
     )
     readonly_fields = ("created_at", "updated_at", "retell_llm_id", "retell_agent_id", "public_id")
     prepopulated_fields = {"slug": ("name",)}
+    fieldsets = (
+        (None, {"fields": (
+            "name", "slug", "is_active", "public_id",
+            "primary_lang", "conversation_tone", "timezone",
+            "website", "contact_email", "contact_phone",
+            "address_full", "location_reference",
+            "welcome_phrase",
+            "phone_mode", "existing_ph_numb",
+            "notify_via_email", "notify_email",
+            "notify_via_ws", "notify_ws_numb",
+            "created_at", "updated_at",
+        )}),
+        ("Retell", {"fields": (
+            "retell_api_key", "retell_llm_id", "retell_agent_id",
+            "retell_phone_number", "retell_voice_id", "retell_area_code",
+        )}),
+        ("Twilio SMS (per-restaurant billing)", {"fields": (
+            "twilio_account_sid", "twilio_auth_token", "twilio_from_number",
+        ), "description": "Leave blank to use the platform-level Twilio credentials from .env."}),
+    )
     inlines = [KnowledgeBaseInline]
     actions = [
         retell_create_llm, retell_update_llm_prompt, retell_configure_call_analysis,

@@ -71,6 +71,20 @@ class Restaurant(models.Model):
         null=True, blank=True,
         help_text="Area code for purchasing a Retell phone number (e.g. 786 for Miami)."
     )
+
+    # twilio (per-restaurant — each restaurant is billed separately)
+    twilio_account_sid = models.CharField(
+        max_length=64, blank=True, default="",
+        help_text="Twilio Account SID for this restaurant. Leave blank to use the platform default."
+    )
+    twilio_auth_token = models.CharField(
+        max_length=64, blank=True, default="",
+        help_text="Twilio Auth Token for this restaurant."
+    )
+    twilio_from_number = models.CharField(
+        max_length=32, blank=True, default="",
+        help_text="Twilio phone number to send SMS from (E.164 format, e.g. +17865550000)."
+    )
     
     # Validation
     def clean(self):
