@@ -10,6 +10,24 @@
   .nav-tabs .nav-link.active { font-weight: 600; }
   .section-hint { font-size: .8rem; color: #6c757d; margin-bottom: 1.25rem; }
   .form-control, .form-select { font-size: .9rem; }
+  .tab-dot {
+    display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; margin-left: 5px; vertical-align: middle;
+  }
+  .tab-dot-error   { background: #dc3545; }
+  .tab-dot-warning { background: #ffc107; }
+  .voice-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: .7rem; font-weight: 600; color: #0dcaf0;
+    background: rgba(13,202,240,.12); border-radius: 4px;
+    padding: 1px 6px; margin-left: 6px; vertical-align: middle;
+  }
+  .char-counter {
+    font-size: .75rem; float: right; margin-top: 2px;
+  }
+  .char-counter.ok     { color: #198754; }
+  .char-counter.warn   { color: #fd7e14; }
+  .char-counter.danger { color: #dc3545; font-weight: 600; }
 </style>
 {% endblock %}
 
@@ -24,20 +42,68 @@
   </button>
 </div>
 
+{% if lint.errors %}
+<div class="alert alert-danger d-flex gap-2 align-items-start mb-3" role="alert">
+  <i class="bi bi-exclamation-circle-fill fs-5 mt-1 flex-shrink-0"></i>
+  <div>
+    <strong>Required fields missing — the agent may not function correctly:</strong>
+    <ul class="mb-0 mt-1">
+      {% for msg in lint.errors %}<li>{{ msg }}</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+{% if lint.warnings %}
+<div class="alert alert-warning d-flex gap-2 align-items-start mb-3" role="alert">
+  <i class="bi bi-exclamation-triangle-fill fs-5 mt-1 flex-shrink-0"></i>
+  <div>
+    <strong>Optimization suggestions:</strong>
+    <ul class="mb-0 mt-1">
+      {% for msg in lint.warnings %}<li>{{ msg }}</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+
 <form id="kb-form" method="post" novalidate>
   {% csrf_token %}
 
   <ul class="nav nav-tabs mb-3" id="kbTabs" role="tablist">
-    <li class="nav-item"><button type="button" class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-basic">Restaurant</button></li>
-    <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-hours">Hours</button></li>
-    <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-menu">Menu</button></li>
+    <li class="nav-item">
+      <button type="button" class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-basic">
+        Restaurant
+        {% if "basic" in lint.error_tabs %}<span class="tab-dot tab-dot-error"></span>{% elif "basic" in lint.warning_tabs %}<span class="tab-dot tab-dot-warning"></span>{% endif %}
+      </button>
+    </li>
+    <li class="nav-item">
+      <button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-hours">
+        Hours
+        {% if "hours" in lint.error_tabs %}<span class="tab-dot tab-dot-error"></span>{% elif "hours" in lint.warning_tabs %}<span class="tab-dot tab-dot-warning"></span>{% endif %}
+      </button>
+    </li>
+    <li class="nav-item">
+      <button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-menu">
+        Menu
+        {% if "menu" in lint.error_tabs %}<span class="tab-dot tab-dot-error"></span>{% elif "menu" in lint.warning_tabs %}<span class="tab-dot tab-dot-warning"></span>{% endif %}
+      </button>
+    </li>
     <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-billing">Billing</button></li>
     <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-reservations">Reservations</button></li>
     <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-events">Events</button></li>
     <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-ambience">Ambience</button></li>
     <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-facilities">Facilities</button></li>
-    <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-agent">Agent</button></li>
-    <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-other">Other</button></li>
+    <li class="nav-item">
+      <button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-agent">
+        Agent
+        {% if "agent" in lint.error_tabs %}<span class="tab-dot tab-dot-error"></span>{% elif "agent" in lint.warning_tabs %}<span class="tab-dot tab-dot-warning"></span>{% endif %}
+      </button>
+    </li>
+    <li class="nav-item">
+      <button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-other">
+        Other
+        {% if "other" in lint.error_tabs %}<span class="tab-dot tab-dot-error"></span>{% elif "other" in lint.warning_tabs %}<span class="tab-dot tab-dot-warning"></span>{% endif %}
+      </button>
+    </li>
   </ul>
 
   <div class="tab-content">
@@ -75,7 +141,10 @@
             {{ basic_form.conversation_tone }}
           </div>
           <div class="col-12">
-            <label class="form-label">{{ basic_form.welcome_phrase.label }}</label>
+            <label class="form-label">
+              {{ basic_form.welcome_phrase.label }}
+              <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
+            </label>
             {{ basic_form.welcome_phrase }}
           </div>
           <div class="col-md-6">
@@ -95,7 +164,11 @@
       <div class="card shadow-sm p-4">
         <p class="section-hint">The AI uses these to answer "are you open?" and similar questions.</p>
         <div class="mb-3">
-          <label class="form-label">{{ kb_form.hours_of_operation.label }}</label>
+          <label class="form-label">
+            {{ kb_form.hours_of_operation.label }}
+            <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
+          </label>
+          <div class="char-counter" id="ctr-hours_of_operation"></div>
           {{ kb_form.hours_of_operation }}
         </div>
         <div class="mb-3">
@@ -132,17 +205,29 @@
             {{ kb_form.bar_menu_url }}
           </div>
           <div class="col-12">
-            <label class="form-label">{{ kb_form.food_menu_summary.label }}</label>
+            <label class="form-label">
+              {{ kb_form.food_menu_summary.label }}
+              <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
+            </label>
+            <div class="char-counter" id="ctr-food_menu_summary"></div>
             {{ kb_form.food_menu_summary }}
             <div class="form-text">{{ kb_form.food_menu_summary.help_text }}</div>
           </div>
           <div class="col-12">
-            <label class="form-label">{{ kb_form.bar_menu_summary.label }}</label>
+            <label class="form-label">
+              {{ kb_form.bar_menu_summary.label }}
+              <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
+            </label>
+            <div class="char-counter" id="ctr-bar_menu_summary"></div>
             {{ kb_form.bar_menu_summary }}
             <div class="form-text">{{ kb_form.bar_menu_summary.help_text }}</div>
           </div>
           <div class="col-12">
-            <label class="form-label">{{ kb_form.happy_hour_details.label }}</label>
+            <label class="form-label">
+              {{ kb_form.happy_hour_details.label }}
+              <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
+            </label>
+            <div class="char-counter" id="ctr-happy_hour_details"></div>
             {{ kb_form.happy_hour_details }}
           </div>
           <div class="col-12">
@@ -229,8 +314,12 @@
             {{ kb_form.press_contact }}
           </div>
           <div class="col-12">
-            <label class="form-label">{{ kb_form.special_events_info.label }}</label>
+            <label class="form-label">
+              {{ kb_form.special_events_info.label }}
+              <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
+            </label>
             <small class="text-muted d-block mb-1">{{ kb_form.special_events_info.field.help_text }}</small>
+            <div class="char-counter" id="ctr-special_events_info"></div>
             {{ kb_form.special_events_info }}
           </div>
         </div>
@@ -249,6 +338,7 @@
           </div>
           <div class="col-12">
             <label class="form-label">{{ kb_form.live_music_details.label }}</label>
+            <div class="char-counter" id="ctr-live_music_details"></div>
             {{ kb_form.live_music_details }}
           </div>
           <div class="col-md-4">
@@ -329,7 +419,16 @@
           <div class="form-text">{{ kb_form.guest_info_to_collect.help_text }}</div>
         </div>
         <div class="mb-3">
-          <label class="form-label">{{ kb_form.brand_voice_notes.label }}</label>
+          <label class="form-label">{{ kb_form.affiliated_restaurants.label }}</label>
+          {{ kb_form.affiliated_restaurants }}
+          <div class="form-text">{{ kb_form.affiliated_restaurants.help_text }}</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">
+            {{ kb_form.brand_voice_notes.label }}
+            <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
+          </label>
+          <div class="char-counter" id="ctr-brand_voice_notes"></div>
           {{ kb_form.brand_voice_notes }}
           <div class="form-text">{{ kb_form.brand_voice_notes.help_text }}</div>
         </div>
@@ -342,6 +441,7 @@
         <p class="section-hint">Use this space for anything the AI should know that isn't covered in the other sections — special policies, promotions, FAQs, seasonal notes, or unique details about your restaurant.</p>
         <div class="mb-3">
           <label class="form-label">{{ kb_form.additional_info.label }}</label>
+          <div class="char-counter" id="ctr-additional_info"></div>
           {{ kb_form.additional_info }}
           <div class="form-text">{{ kb_form.additional_info.help_text }}</div>
         </div>
@@ -350,4 +450,37 @@
 
   </div><!-- /.tab-content -->
 </form>
+
+<script>
+// ── Character counter helper ─────────────────────────────────────────────────
+const COUNTERS = [
+  { id: "id_food_menu_summary",   ctr: "ctr-food_menu_summary",   limit: 500, warn: 400 },
+  { id: "id_bar_menu_summary",    ctr: "ctr-bar_menu_summary",    limit: 500, warn: 400 },
+  { id: "id_happy_hour_details",  ctr: "ctr-happy_hour_details",  limit: 400, warn: 300 },
+  { id: "id_special_events_info", ctr: "ctr-special_events_info", limit: 400, warn: 300 },
+  { id: "id_live_music_details",  ctr: "ctr-live_music_details",  limit: 400, warn: 300 },
+  { id: "id_brand_voice_notes",   ctr: "ctr-brand_voice_notes",   limit: 800, warn: 600 },
+  { id: "id_additional_info",     ctr: "ctr-additional_info",     limit: 1500, warn: 1200 },
+  { id: "id_hours_of_operation",  ctr: "ctr-hours_of_operation",  limit: 400, warn: 300 },
+];
+
+function updateCounter(cfg) {
+  const el  = document.getElementById(cfg.id);
+  const ctr = document.getElementById(cfg.ctr);
+  if (!el || !ctr) return;
+  const len = el.value.length;
+  ctr.textContent = `${len} / ${cfg.limit}`;
+  ctr.className = "char-counter";
+  if (len > cfg.limit)    ctr.classList.add("danger");
+  else if (len > cfg.warn) ctr.classList.add("warn");
+  else                    ctr.classList.add("ok");
+}
+
+COUNTERS.forEach(cfg => {
+  const el = document.getElementById(cfg.id);
+  if (!el) return;
+  updateCounter(cfg);
+  el.addEventListener("input", () => updateCounter(cfg));
+});
+</script>
 {% endblock %}

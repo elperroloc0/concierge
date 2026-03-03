@@ -27,7 +27,7 @@ class RestaurantBasicForm(forms.ModelForm):
             "timezone":           forms.TextInput(attrs=_TEXT),
             "primary_lang":       forms.Select(attrs=_SEL),
             "conversation_tone":  forms.Select(attrs=_SEL),
-            "welcome_phrase":     forms.Textarea(attrs=_ta(2)),
+            "welcome_phrase":     forms.Textarea(attrs={**_ta(2), "placeholder": "Thank you for calling [Restaurant Name], how can I help you today?"}),
             "contact_phone":      forms.TextInput(attrs=_TEXT),
             "contact_email":      forms.EmailInput(attrs=_TEXT),
         }
@@ -39,17 +39,17 @@ class KnowledgeBaseForm(forms.ModelForm):
         exclude = ["restaurant"]
         widgets = {
             # Hours
-            "hours_of_operation":     forms.Textarea(attrs=_ta(4)),
+            "hours_of_operation":     forms.Textarea(attrs={**_ta(4), "placeholder": "Mon–Thu 12pm–midnight, Fri–Sat 12pm–2am, Sun 12pm–11pm"}),
             "kitchen_closing_time":   forms.TextInput(attrs=_TEXT),
             "closes_on_holidays":     forms.CheckboxInput(attrs=_CHECK),
             "holiday_closure_notes":  forms.Textarea(attrs=_ta(2)),
             "private_event_closures": forms.Textarea(attrs=_ta(2)),
             # Menu
             "food_menu_url":          forms.URLInput(attrs=_TEXT),
-            "food_menu_summary":      forms.Textarea(attrs=_ta(6)),
+            "food_menu_summary":      forms.Textarea(attrs={**_ta(6), "placeholder": "We specialize in Latin-Asian fusion. Best sellers: ceviche tostada ($18), short rib tacos ($24). Most dishes between $15–$35."}),
             "bar_menu_url":           forms.URLInput(attrs=_TEXT),
             "bar_menu_summary":       forms.Textarea(attrs=_ta(6)),
-            "happy_hour_details":     forms.Textarea(attrs=_ta(4)),
+            "happy_hour_details":     forms.Textarea(attrs={**_ta(4), "placeholder": "Mon–Fri 4–7pm. 50% off all cocktails and select beers. Available at bar and lounge seating only."}),
             "dietary_options":        forms.Textarea(attrs=_ta(4)),
             # Billing
             "auto_gratuity":          forms.CheckboxInput(attrs=_CHECK),
@@ -86,9 +86,10 @@ class KnowledgeBaseForm(forms.ModelForm):
             "cigar_policy":           forms.TextInput(attrs=_TEXT),
             "show_charge_policy":     forms.TextInput(attrs=_TEXT),
             # Agent
+            "affiliated_restaurants": forms.Textarea(attrs={**_ta(2), "placeholder": "Cuba Ocho, Calle Dragones Colombia"}),
             "collect_guest_info":     forms.CheckboxInput(attrs=_CHECK),
             "guest_info_to_collect":  forms.Textarea(attrs=_ta(2)),
-            "brand_voice_notes":      forms.Textarea(attrs=_ta(6)),
+            "brand_voice_notes":      forms.Textarea(attrs={**_ta(6), "placeholder": "Use a warm, casual tone. Avoid formal greetings..."}),
             # Other
             "additional_info":        forms.Textarea(attrs=_ta(8)),
         }

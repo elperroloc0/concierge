@@ -312,6 +312,14 @@ class RestaurantKnowledgeBase(models.Model):
     free_parking_info = models.TextField(blank=True, default="")
 
     # ── Agent Behavior ────────────────────────────────────────────────────
+    affiliated_restaurants = models.TextField(
+        blank=True, default="",
+        help_text=(
+            "Comma-separated restaurant names the agent may confirm affiliation with. "
+            "Example: Cuba Ocho, Calle Dragones Colombia. "
+            "Leave blank to disable affiliation confirmation."
+        )
+    )
     collect_guest_info    = models.BooleanField(default=True)
     guest_info_to_collect = models.TextField(
         blank=True, default="name, party size, date, time, phone number"

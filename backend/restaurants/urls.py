@@ -9,4 +9,5 @@ urlpatterns = [
     path("webhook/<str:rest_id>/", views.retell_inbound_webhook, name="retell_webhook"),
     path("events/", views.retell_events_webhook, name="retell_events"),
     path("tools/send-sms/", views.retell_tool_send_sms, name="retell_tool_send_sms"),
+    path("tools/save-caller-info/", views.retell_tool_save_caller_info, name="retell_tool_save_caller_info"),
 ]
