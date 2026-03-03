@@ -351,7 +351,7 @@ def retell_tool_send_sms(request):
     call      = data.get("call", {})
     to_number = call.get("from_number", "").strip()   # caller's number → SMS destination
     to_retell = call.get("to_number", "").strip()     # our Retell number → identify restaurant
-    message   = data.get("args", {}).get("message", "").strip()
+    message   = data.get("args", {}).get("message", "").strip()[:320]  # hard cap at 2 segments
 
     if not to_number or not message:
         return JsonResponse({"result": "error: missing to_number or message"})
