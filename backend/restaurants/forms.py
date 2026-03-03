@@ -66,6 +66,7 @@ class KnowledgeBaseForm(forms.ModelForm):
             "allows_decorations":       forms.CheckboxInput(attrs=_CHECK),
             "decoration_cleaning_fee":  forms.TextInput(attrs=_TEXT),
             "press_contact":            forms.TextInput(attrs=_TEXT),
+            "special_events_info":      forms.Textarea(attrs=_ta(5)),
             # Ambience
             "has_live_music":         forms.CheckboxInput(attrs=_CHECK),
             "live_music_details":     forms.Textarea(attrs=_ta(3)),
@@ -80,7 +81,14 @@ class KnowledgeBaseForm(forms.ModelForm):
             "has_valet":              forms.CheckboxInput(attrs=_CHECK),
             "valet_cost":             forms.TextInput(attrs=_TEXT),
             "free_parking_info":      forms.Textarea(attrs=_ta(2)),
+            # Ambience (additional)
+            "art_gallery_info":       forms.Textarea(attrs=_ta(3)),
+            "cigar_policy":           forms.TextInput(attrs=_TEXT),
+            "show_charge_policy":     forms.TextInput(attrs=_TEXT),
             # Agent
             "collect_guest_info":     forms.CheckboxInput(attrs=_CHECK),
             "guest_info_to_collect":  forms.Textarea(attrs=_ta(2)),
+            "brand_voice_notes":      forms.Textarea(attrs=_ta(6)),
+            # Other
+            "additional_info":        forms.Textarea(attrs=_ta(8)),
         }

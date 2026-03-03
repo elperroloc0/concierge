@@ -76,6 +76,11 @@
       </a>
     </li>
     <li class="nav-item">
+      <a class="nav-link {% block nav_guests %}{% endblock %}" href="{% url 'portal_guests' restaurant.slug %}">
+        <i class="bi bi-people-fill"></i> Guests
+      </a>
+    </li>
+    <li class="nav-item">
       <a class="nav-link {% block nav_billing %}{% endblock %}" href="{% url 'portal_billing' restaurant.slug %}">
         <i class="bi bi-credit-card-fill"></i> Billing
       </a>

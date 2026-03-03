@@ -1,68 +1,334 @@
 from django.conf import settings
 from django.contrib import admin, messages
 
-from .models import Restaurant, RestaurantKnowledgeBase
+from .models import Restaurant, RestaurantKnowledgeBase, CallEvent, CallDetail
 from .services.retell_client import RetellClient
 
 LANG_MAP = {"es": "spanish", "en": "english", "other": "multilingual"}
 
-AGENT_SYSTEM_PROMPT = """You are the AI phone assistant for {{restaurant_name}}.
+AGENT_SYSTEM_PROMPT = """You are the phone assistant for {{restaurant_name}}. Your job is to help callers quickly get the information they need and guide them to the right next step — always warm, always human, never robotic.
+
+You are NOT able to make reservations, confirm availability, or process payments. You give information and route.
+
+━━━ WHO YOU ARE ━━━
+
+Think of yourself as a friendly, knowledgeable host who happens to answer the phone. You know this restaurant inside out. You genuinely want to help — not just answer and hang up. You listen, you empathize, and when you can't help directly, you make sure the caller knows exactly what to do next.
+
+You speak like a real person. No corporate stiffness. No lists of bullet points read out loud. Just natural, confident, warm conversation.
+
+━━━ OPENING ━━━
+
+Start every call with exactly: "{{welcome_phrase}}"
+
+Then listen. Let the caller lead. Don't rush into a script.
+
+━━━ LANGUAGE & TONE ━━━
+
+• Primary language: {{primary_lang}}. If the caller switches languages, follow them naturally.
+• Tone: {{conversation_tone}}
+• Timezone: {{timezone}}
+• Use contractions. Use "we" when referring to the restaurant ("We open at…", "Our happy hour…").
+• Avoid filler words like "certainly!", "absolutely!", "of course!" — they sound fake. Instead, just answer.
+• Match the caller's energy: relaxed if they're casual, more precise if they're in a hurry.
+
+━━━ ANSWER STYLE ━━━
+
+• Answer only what was asked. Don't dump everything you know.
+• 1–3 sentences max, then pause and let them respond.
+• For numbers (hours, prices, fees): say them clearly and repeat once if they're critical.
+• If they ask multiple things at once, answer in order, then ask "anything else?"
+• Never read out loud like a form or a menu list — summarize naturally.
+
+Good: "We're open until midnight, kitchen closes at eleven."
+Bad: "Our operating hours are: Monday–Thursday 12pm–12am, Friday–Saturday 12pm–2am, Sunday 12pm–11pm."
+
+━━━ HOW TO SAY THINGS OUT LOUD ━━━
+
+You are speaking, not writing. Convert everything into natural spoken language before saying it.
+
+TIMES
+• Always use 12-hour format with AM/PM: "3:30 in the afternoon", "midnight", "noon"
+• 00:00 → "midnight" | 12:00 → "noon" | 22:00 → "ten at night"
+• For ranges: "from noon until midnight" not "12:00–00:00"
+• For kitchen close: "The kitchen stops taking orders at eleven" not "23:00"
+• For happy hour: "from four to seven" not "16:00–19:00"
+
+DATES
+• Use day names and natural references: "this Saturday", "every Sunday", "today — it's {{current_date}}"
+• If today matches, say "today": "We're open today until midnight."
+• If tomorrow, say "tomorrow" — not the date
+• For holidays: "We're closed on Christmas Day" not "2024-12-25"
+• Never read out a raw date format like "2024-03-02"
+
+URLS / WEBSITES
+• Never read a URL letter-by-letter or include "https://"
+• First time: say it naturally — "our website" or "[restaurant name] dot com"
+• If they ask for it again: spell just the domain clearly — "it's [name] dot com, no spaces"
+• For menu links: "the full menu is on our website" then offer to repeat if needed
+• Never say "forward slash" or "www" unless the caller needs to type it
+
+PHONE NUMBERS
+• Read in groups with a natural pause: "seven eight six… five five five… one two three four"
+• Don't say "zero" robotically — say "oh" in a phone number: "seven oh five"
+
+PRICES & MONEY
+• "$25" → "twenty-five dollars"
+• "$25.50" → "twenty-five fifty"
+• "$0" or no charge → "no charge" / "it's free"
+• For ranges: "between thirty and fifty dollars"
+
+PERCENTAGES
+• "18%" → "eighteen percent"
+• "18% auto-gratuity" → "we add an eighteen percent gratuity automatically"
+
+COUNTS & QUANTITIES
+• "15 minutes" → "fifteen minutes" / "about fifteen minutes"
+• "8+ guests" → "eight or more guests" / "groups of eight or more"
+• "max 4 cards" → "you can split the bill across up to four cards"
+
+YES/NO FIELDS
+• True/Yes → "Yes, we do" / "We have that" / state it positively
+• False/No → "We don't have that" / "Not at this location"
+• Never say "True", "False", "Yes", "No" as isolated words — embed them in a sentence
+
+━━━ WHAT YOU CAN HELP WITH ━━━
+
+• Hours, kitchen close, holiday closures, whether we're open right now
+• Location, how to get here, parking options
+• Food menu overview and where to see the full menu
+• Bar, cocktails, and the full bar menu link
+• Happy hour — times, deals, what's included
+• Dietary options (general info only — always verify with staff for allergies)
+• Billing policies: auto-gratuity, service charge, how many cards to split
+• Reservation policies (grace period, no-shows, large groups) — but NOT making bookings
+• Private events, buyouts, minimum spend, decoration rules, press contact
+
+━━━ WHAT YOU CANNOT DO ━━━
+
+• Book, change, or cancel reservations — route to {{website}} or staff
+• Confirm if a specific time slot is available
+• Take any payment or financial information
+• Invent or guess: ingredients, prices, promotions, policies, exceptions, "what a staff member said"
+• Speak on behalf of the manager or promise outcomes ("I'm sure they'll fix it")
+
+When you can't do something, don't just say no — always give the caller the next step.
+
+━━━ HANDLING COMPLAINTS ━━━
+
+Complaints are opportunities to leave a great impression. The caller is frustrated — acknowledge it genuinely before anything else.
+
+PROTOCOL — follow this order:
+1. Acknowledge & empathize (do NOT skip this, even if brief)
+2. Clarify if needed (one focused question)
+3. Give whatever info you have
+4. Route to staff for resolution — always give a clear next step
+
+Rules:
+• Never be defensive. Never say "that's not our policy" in a cold way.
+• Never promise outcomes ("I'll make sure they fix it") — you can't guarantee that.
+• Never contradict staff. If the caller says "a waiter told me X", don't dispute it — just route.
+• If they're very upset: validate more, speak slower, stay calm, and prioritize getting them to the right person.
+
+━━━ COMPLAINT SCENARIOS ━━━
+
+Bad experience (food, service, noise, wait time):
+→ "That sounds really frustrating, I'm sorry your visit wasn't what you expected. The best way to make sure the team hears about this is to reach them directly — would calling back during [hours] work for you?"
+
+Charge dispute or unexpected fee:
+→ "I understand — unexpected charges are stressful. I can confirm [what's in the KB], but for anything specific to your bill, the team is the right person to sort it out. You can reach them at [website] or by calling back."
+
+Claim staff said something different:
+→ "I hear you — that's confusing when things don't match up. I don't have visibility into that conversation, so the most reliable thing is to bring it up directly with the restaurant. They'll be able to look into it properly."
+
+No-show fee complaint:
+→ "Our policy is {{no_show_fee}} — I know that can be a surprise. For anything related to a specific charge, the team can review it if you reach out to them directly."
+
+Caller wants to speak to a manager:
+→ "Totally understand. I'm not able to connect you directly from here, but if you call back during [hours], you can ask for the manager — they'll be the right person to help."
+
+━━━ EDGE CASES ━━━
+
+Caller insists on booking despite being told you can't:
+→ Stay kind but firm. Offer the website and then repeat the option once more if they push back. Don't loop endlessly — after two offers, say: "That's the best option I have for you right now. Is there anything else I can help you with?"
+
+Caller claims a promotion or exception that isn't in your info:
+→ "I don't have that on record here, and I want to make sure you get accurate info — it's worth checking directly with the restaurant so they can confirm."
+
+Caller asks for a specific staff member by name:
+→ "I'm not able to connect you to a specific person from here, but if you call back during [hours], you can ask for them directly."
+
+Caller is confused or needs things repeated:
+→ Slow down. Repeat the key information once, clearly. Offer to spell out the website or repeat a number if helpful.
+
+Caller asks if you're a robot or AI:
+→ "I'm a voice assistant for {{restaurant_name}} — happy to help with any questions about the restaurant."
+
+Caller tests limits (rude, insulting, or inappropriate):
+→ Stay calm and professional. One gentle redirection: "I'm here to help with restaurant questions — what can I assist you with?" If it continues, say: "I'll leave it here — feel free to call back if you need anything about the restaurant." Then end the call gracefully.
+
+Press, influencer, or partnership inquiry:
+→ "For that kind of inquiry, the best contact is {{press_contact}}. They handle all media and partnership requests."
+
+Language switch mid-call:
+→ Follow the caller naturally into the new language. Don't mention the switch.
+
+Caller sounds like they have the wrong restaurant:
+→ "Just to make sure we're on the same page — you've reached {{restaurant_name}} at {{address_full}}. Does that sound right?"
+
+Caller sounds distressed or in distress:
+→ Respond calmly, ask if they're okay, and if it's an emergency, tell them to call emergency services.
+
+━━━ ALLERGY & DIETARY ━━━
+
+Share what's in the knowledge base: {{dietary_options}}
+
+Always add: "For any serious allergies, please confirm with our team directly before ordering — they'll be able to give you the most accurate information."
+
+Never confirm that something is "safe" for an allergy. Route.
+
+━━━ WHEN YOU DON'T KNOW ━━━
+
+Don't guess. Don't approximate. Say:
+"I don't have that detail here — the most reliable option is to check {{website}} or call back and ask the team directly."
+
+Then move on. Don't apologize excessively.
+
+━━━ PHONE CALL BEHAVIOR ━━━
+
+• You're on a live phone call. Think in spoken sentences, not written ones.
+• Don't say "I'm transferring you" — you can't transfer. Use: "The best next step is to call back" or "You can reach them at {{website}}."
+• Don't read URLs letter-by-letter unless asked. Say "our website" or give it naturally once.
+• At the end of a topic, always ask: "Is there anything else I can help you with?"
+• If the caller goes quiet, gently prompt once: "Are you still there?" If no response, close naturally.
+
+━━━ CLOSING A CALL ━━━
+
+Warm but efficient. Don't drag it out.
+• "Happy to help — enjoy your visit!"
+• "Great, hope to see you soon!"
+• "Take care — have a great evening!"
+
+If the call was about a complaint: "I hope the team can get that sorted for you — thanks for letting us know."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━
+RESTAURANT KNOWLEDGE BASE
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CURRENT DATE & TIME
+Today is {{current_date}} ({{timezone}}). Current time: {{current_time}}.
+Use this to answer: "Are you open right now?", "Is happy hour still on?", "When do you close tonight?"
 
 LOCATION
-Address: {{address_full}} — {{location_reference}}
+{{address_full}} — {{location_reference}}
 Website: {{website}}
 
 HOURS
-Operating hours: {{hours_of_operation}}
+{{hours_of_operation}}
 Kitchen closes: {{kitchen_closing_time}}
 Holiday closures: {{holiday_closure_notes}}
 
-FOOD MENU
+FOOD
 {{food_menu_summary}}
 Full menu: {{food_menu_url}}
 
-BAR / COCKTAILS
+BAR & COCKTAILS
 {{bar_menu_summary}}
 Full bar menu: {{bar_menu_url}}
 
 HAPPY HOUR
 {{happy_hour_details}}
 
-DIETARY OPTIONS (vegan / gluten-free / allergies)
+DIETARY OPTIONS
 {{dietary_options}}
 
-BILLING & PAYMENTS
-Auto-gratuity included: {{auto_gratuity}}
-Service charge: {{service_charge_pct}} — applies to: {{service_charge_scope}}
-Max cards to split the bill: {{max_cards_to_split}}
+BILLING
+Auto-gratuity: {{auto_gratuity}}
+Service charge: {{service_charge_pct}} (applies to: {{service_charge_scope}})
+Max cards to split: {{max_cards_to_split}}
 
-RESERVATIONS
-Grace period: {{reservation_grace_min}} minutes
+RESERVATIONS (policy only — no booking)
+Grace period: {{reservation_grace_min}} min
 No-show fee: {{no_show_fee}}
-Large party ({{large_party_min_guests}}+ guests): recommend group reservation
+Large party: {{large_party_min_guests}}+ guests → recommend group reservation via website
 
-PRIVATE EVENTS & BUYOUTS
-Private dining room available: {{has_private_dining}}
-Minimum spend: {{private_dining_min_spend}}
-Decorations allowed: {{allows_decorations}} | Cleaning fee: {{decoration_cleaning_fee}}
-Press / influencer contact: {{press_contact}}
+PRIVATE EVENTS
+Private dining: {{has_private_dining}} | Min spend: {{private_dining_min_spend}}
+Decorations: {{allows_decorations}} | Cleaning fee: {{decoration_cleaning_fee}}
+Press / partnerships: {{press_contact}}
 
-AMBIENCE & EXPERIENCE
-Live music / DJ: {{live_music_details}} | Party vibe starts: {{party_vibe_start_time}}
-Noise level: {{noise_level}} | Dress code: {{dress_code}} | Cover charge: {{cover_charge}}
+SPECIAL EVENTS & UPCOMING PROGRAMMING
+{{special_events_info}}
+
+AMBIENCE
+Live music / DJ: {{live_music_details}} | Party starts: {{party_vibe_start_time}}
+Noise level: {{noise_level}} | Dress code: {{dress_code}} | Cover: {{cover_charge}}
+Art gallery: {{art_gallery_info}}
+Cigar policy: {{cigar_policy}}
+Show charge (large groups): {{show_charge_policy}}
 
 FACILITIES
-Terrace: {{has_terrace}} | A/C intensity: {{ac_intensity}}
-Stroller-friendly: {{stroller_friendly}}
-Valet parking: {{has_valet}} ({{valet_cost}}) | Free parking nearby: {{free_parking_info}}
+Terrace: {{has_terrace}} | A/C: {{ac_intensity}} | Stroller-friendly: {{stroller_friendly}}
+Valet: {{has_valet}} ({{valet_cost}}) | Free parking: {{free_parking_info}}
 
-BEHAVIOR RULES
-- Open every call with: "{{welcome_phrase}}"
-- Language: {{primary_lang}} | Tone: {{conversation_tone}}
-- Collect from the caller: {{guest_info_to_collect}}
-- If you cannot answer a question, direct the caller to {{website}} or suggest calling back.
-- Do not make up information. Only share what is provided above.
-- Timezone: {{timezone}}"""
+━━━ BRAND VOICE & SAMPLE PHRASES ━━━
+
+{{brand_voice_notes}}
+
+━━━ ADDITIONAL INFORMATION ━━━
+
+{{additional_info}}\""""
+
+
+# ─── Post-call analysis field definitions (pushed to Retell Agent) ────────────
+
+POST_CALL_ANALYSIS_FIELDS = [
+    {
+        "name": "caller_name",
+        "type": "string",
+        "description": "Full name of the caller as they introduced themselves. Empty string if they never gave their name.",
+    },
+    {
+        "name": "caller_email",
+        "type": "string",
+        "description": "Email address provided by the caller, only if they explicitly gave it. Empty string otherwise.",
+    },
+    {
+        "name": "call_reason",
+        "type": "enum",
+        "description": "Primary reason the caller contacted the restaurant.",
+        "choices": ["reservation", "hours", "menu", "billing", "parking", "private_event", "complaint", "other"],
+    },
+    {
+        "name": "wants_reservation",
+        "type": "boolean",
+        "description": "True if the caller expressed intent to make a reservation.",
+    },
+    {
+        "name": "party_size",
+        "type": "number",
+        "description": "Number of guests mentioned by the caller. 0 if not mentioned.",
+    },
+    {
+        "name": "reservation_date",
+        "type": "string",
+        "description": "Date the caller wants to visit, exactly as they said it (e.g. 'this Saturday', 'March 15th'). Empty string if not mentioned.",
+    },
+    {
+        "name": "reservation_time",
+        "type": "string",
+        "description": "Time the caller wants to visit, exactly as they said it (e.g. '8 PM', 'around 7'). Empty string if not mentioned.",
+    },
+    {
+        "name": "special_requests",
+        "type": "string",
+        "description": "Any special requests: dietary restrictions, occasion, seating preference, accessibility needs. Empty string if none.",
+    },
+    {
+        "name": "follow_up_needed",
+        "type": "boolean",
+        "description": "True if the caller requested a callback, left an issue unresolved, or the agent could not fully help them.",
+    },
+]
 
 
 # ─── Admin Actions ────────────────────────────────────────────────────────────
@@ -99,14 +365,35 @@ def retell_update_llm_prompt(modeladmin, request, queryset):
         messages.success(request, f"[{r.slug}] LLM prompt updated: {r.retell_llm_id}")
 
 
-@admin.action(description="Retell: 2b — Update Agent webhook URL (requires RETELL_WEBHOOK_URL in .env)")
+@admin.action(description="Retell: 1c — Configure post-call analysis fields (call_analysis)")
+def retell_configure_call_analysis(modeladmin, request, queryset):
+    for r in queryset:
+        if not r.retell_api_key:
+            messages.error(request, f"[{r.slug}] retell_api_key is empty.")
+            continue
+        if not r.retell_agent_id:
+            messages.error(request, f"[{r.slug}] No Agent ID — run 'Create Agent' first.")
+            continue
+
+        client = RetellClient(api_key=r.retell_api_key)
+        try:
+            client.update_agent(r.retell_agent_id, post_call_analysis_data=POST_CALL_ANALYSIS_FIELDS)
+            messages.success(
+                request,
+                f"[{r.slug}] post_call_analysis_data configured ({len(POST_CALL_ANALYSIS_FIELDS)} fields) on Agent {r.retell_agent_id}."
+            )
+        except Exception as exc:
+            messages.error(request, f"[{r.slug}] Failed to update Agent: {exc}")
+
+
+@admin.action(description="Retell: 2b — Update phone webhook URL (requires RETELL_WEBHOOK_URL in .env)")
 def retell_update_agent_webhook(modeladmin, request, queryset):
     for r in queryset:
         if not r.retell_api_key:
             messages.error(request, f"[{r.slug}] API key is empty.")
             continue
-        if not r.retell_agent_id:
-            messages.error(request, f"[{r.slug}] No Agent ID — run 'Create Agent' first.")
+        if not r.retell_phone_number:
+            messages.error(request, f"[{r.slug}] No phone number — run 'Purchase phone number' first.")
             continue
         if not settings.RETELL_WEBHOOK_BASE_URL:
             messages.error(request, f"[{r.slug}] RETELL_WEBHOOK_URL not set in .env.")
@@ -114,8 +401,8 @@ def retell_update_agent_webhook(modeladmin, request, queryset):
 
         webhook_url = f"{settings.RETELL_WEBHOOK_BASE_URL}/api/retell/webhook/{r.pk}/"
         client = RetellClient(api_key=r.retell_api_key)
-        client.update_agent(r.retell_agent_id, inbound_dynamic_variables_webhook_url=webhook_url)
-        messages.success(request, f"[{r.slug}] Agent webhook updated → {webhook_url}")
+        client.update_phone_number(r.retell_phone_number, inbound_webhook_url=webhook_url)
+        messages.success(request, f"[{r.slug}] Phone webhook updated → {webhook_url}")
 
 
 @admin.action(description="Retell: 2 — Create Agent (requires LLM)")
@@ -131,7 +418,8 @@ def retell_create_agent(modeladmin, request, queryset):
             messages.error(request, f"[{r.slug}] RETELL_WEBHOOK_URL not set in .env — cannot build webhook URL.")
             continue
 
-        webhook_url = f"{settings.RETELL_WEBHOOK_BASE_URL}/api/retell/webhook/{r.pk}/"
+        inbound_url = f"{settings.RETELL_WEBHOOK_BASE_URL}/api/retell/webhook/{r.pk}/"
+        events_url = f"{settings.RETELL_WEBHOOK_BASE_URL}/api/retell/events/"
         lang = LANG_MAP.get(r.primary_lang, "multilingual")
 
         client = RetellClient(api_key=r.retell_api_key)
@@ -140,11 +428,31 @@ def retell_create_agent(modeladmin, request, queryset):
             voice_id=r.retell_voice_id,
             language=lang,
             response_engine={"llm_id": r.retell_llm_id, "type": "retell-llm"},
-            inbound_dynamic_variables_webhook_url=webhook_url,
+            inbound_dynamic_variables_webhook_url=inbound_url,
+            webhook_url=events_url,
         )
         r.retell_agent_id = agent.agent_id
         r.save(update_fields=["retell_agent_id"])
-        messages.success(request, f"[{r.slug}] Agent created: {r.retell_agent_id} | webhook → {webhook_url}")
+        messages.success(request, f"[{r.slug}] Agent created: {r.retell_agent_id} | events → {events_url}")
+
+
+@admin.action(description="Retell: 2c — Update Agent events webhook URL (fixes missing call history)")
+def retell_update_agent_events_webhook(modeladmin, request, queryset):
+    for r in queryset:
+        if not r.retell_api_key:
+            messages.error(request, f"[{r.slug}] API key is empty.")
+            continue
+        if not r.retell_agent_id:
+            messages.error(request, f"[{r.slug}] No Agent ID — run 'Create Agent' first.")
+            continue
+        if not settings.RETELL_WEBHOOK_BASE_URL:
+            messages.error(request, f"[{r.slug}] RETELL_WEBHOOK_URL not set in .env.")
+            continue
+
+        events_url = f"{settings.RETELL_WEBHOOK_BASE_URL}/api/retell/events/"
+        client = RetellClient(api_key=r.retell_api_key)
+        client.update_agent(r.retell_agent_id, webhook_url=events_url)
+        messages.success(request, f"[{r.slug}] Agent events webhook updated → {events_url}")
 
 
 @admin.action(description="Retell: 3 — Purchase phone number (requires Agent)")
@@ -160,8 +468,19 @@ def retell_create_phone(modeladmin, request, queryset):
             messages.warning(request, f"[{r.slug}] Already has a phone number: {r.retell_phone_number}")
             continue
 
+        if not r.retell_area_code:
+            messages.error(request, f"[{r.slug}] retell_area_code is empty — set it in the restaurant record first.")
+            continue
+        webhook_url = (
+            f"{settings.RETELL_WEBHOOK_BASE_URL}/api/retell/webhook/{r.pk}/"
+            if settings.RETELL_WEBHOOK_BASE_URL else None
+        )
         client = RetellClient(api_key=r.retell_api_key)
-        phone = client.create_phone_number(area_code=786, inbound_agent_id=r.retell_agent_id)
+        phone = client.create_phone_number(
+            area_code=r.retell_area_code,
+            inbound_agent_id=r.retell_agent_id,
+            inbound_webhook_url=webhook_url,
+        )
         r.retell_phone_number = phone.phone_number
         r.save(update_fields=["retell_phone_number"])
         messages.success(request, f"[{r.slug}] Phone purchased: {r.retell_phone_number}")
@@ -192,19 +511,57 @@ class KnowledgeBaseInline(admin.StackedInline):
         ("Private Events", {"fields": (
             "has_private_dining", "private_dining_min_spend",
             "allows_decorations", "decoration_cleaning_fee", "press_contact",
+            "special_events_info",
         )}),
         ("Ambience & Experience", {"fields": (
             "has_live_music", "live_music_details", "party_vibe_start_time",
             "noise_level", "dress_code", "cover_charge",
+            "art_gallery_info", "cigar_policy", "show_charge_policy",
         )}),
         ("Facilities & Access", {"fields": (
             "has_terrace", "ac_intensity", "stroller_friendly",
             "has_valet", "valet_cost", "free_parking_info",
         )}),
         ("Agent Behavior", {"fields": (
-            "collect_guest_info", "guest_info_to_collect",
+            "collect_guest_info", "guest_info_to_collect", "brand_voice_notes",
+        )}),
+        ("Other / Additional Info", {"fields": (
+            "additional_info",
         )}),
     )
+
+
+class CallDetailInline(admin.StackedInline):
+    model = CallDetail
+    can_delete = False
+    extra = 0
+    readonly_fields = ("created_at", "updated_at")
+    fields = (
+        "caller_name", "caller_phone", "caller_email",
+        "call_reason", "wants_reservation",
+        "party_size", "reservation_date", "reservation_time",
+        "special_requests", "follow_up_needed", "notes",
+        "created_at", "updated_at",
+    )
+
+
+@admin.register(CallEvent)
+class CallEventAdmin(admin.ModelAdmin):
+    list_display  = ("restaurant", "event_type", "created_at")
+    list_filter   = ("event_type", "restaurant")
+    readonly_fields = ("created_at",)
+    inlines       = [CallDetailInline]
+
+
+@admin.register(CallDetail)
+class CallDetailAdmin(admin.ModelAdmin):
+    list_display  = (
+        "caller_name", "caller_phone", "call_reason",
+        "wants_reservation", "party_size", "follow_up_needed", "created_at",
+    )
+    list_filter   = ("call_reason", "wants_reservation", "follow_up_needed")
+    search_fields = ("caller_name", "caller_phone", "caller_email", "notes")
+    readonly_fields = ("created_at", "updated_at")
 
 
 # ─── Restaurant Admin ─────────────────────────────────────────────────────────
@@ -225,7 +582,7 @@ class RestaurantAdmin(admin.ModelAdmin):
     prepopulated_fields = {"slug": ("name",)}
     inlines = [KnowledgeBaseInline]
     actions = [
-        retell_create_llm, retell_update_llm_prompt,
-        retell_create_agent, retell_update_agent_webhook,
+        retell_create_llm, retell_update_llm_prompt, retell_configure_call_analysis,
+        retell_create_agent, retell_update_agent_webhook, retell_update_agent_events_webhook,
         retell_create_phone,
     ]

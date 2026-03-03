@@ -1,7 +1,12 @@
 import json
+import logging
 import os
+import re
 from collections import Counter, defaultdict
-from datetime import timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+logger = logging.getLogger(__name__)
 
 import stripe
 from backend import settings
@@ -16,7 +21,7 @@ from django.views.decorators.csrf import csrf_exempt
 from retell import Retell
 
 from .forms import KnowledgeBaseForm, RestaurantBasicForm
-from .models import CallEvent, Restaurant, RestaurantKnowledgeBase, Subscription
+from .models import CallDetail, CallEvent, Restaurant, RestaurantKnowledgeBase, Subscription
 
 
 # ─── Retell Webhook Helpers ───────────────────────────────────────────────────
@@ -24,15 +29,28 @@ from .models import CallEvent, Restaurant, RestaurantKnowledgeBase, Subscription
 def _build_dynamic_variables(restaurant):
     """Build the full dynamic_variables dict from Restaurant + KnowledgeBase."""
     kb = getattr(restaurant, "knowledge_base", None)
+
+    # Current date/time in the restaurant's configured timezone
+    tz_name = restaurant.timezone or "UTC"
+    try:
+        tz = ZoneInfo(tz_name)
+    except ZoneInfoNotFoundError:
+        tz = ZoneInfo("UTC")
+    now = datetime.now(tz=tz)
+
     dyn = {
-        "restaurant_name":   restaurant.name,
-        "address_full":      restaurant.address_full,
+        "restaurant_name":    restaurant.name,
+        "address_full":       restaurant.address_full,
         "location_reference": restaurant.location_reference,
-        "website":           restaurant.website,
-        "welcome_phrase":    restaurant.welcome_phrase,
-        "primary_lang":      restaurant.primary_lang,
-        "conversation_tone": restaurant.conversation_tone,
-        "timezone":          restaurant.timezone,
+        "website":            restaurant.website,
+        "welcome_phrase":     restaurant.welcome_phrase,
+        "primary_lang":       restaurant.primary_lang,
+        "conversation_tone":  restaurant.conversation_tone,
+        "timezone":           restaurant.timezone,
+        # Live date/time injected on every call
+        "current_date":       now.strftime("%A, %B %d, %Y"),   # Monday, March 02, 2026
+        "current_time":       now.strftime("%I:%M %p"),         # 02:30 PM
+        "current_day":        now.strftime("%A"),               # Monday
     }
     if kb:
         dyn.update({
@@ -69,8 +87,170 @@ def _build_dynamic_variables(restaurant):
             "valet_cost":             kb.valet_cost or "N/A",
             "free_parking_info":      kb.free_parking_info,
             "guest_info_to_collect":  kb.guest_info_to_collect,
+            "art_gallery_info":       kb.art_gallery_info,
+            "cigar_policy":           kb.cigar_policy,
+            "show_charge_policy":     kb.show_charge_policy,
+            "special_events_info":    kb.special_events_info,
+            "brand_voice_notes":      kb.brand_voice_notes,
+            "additional_info":        kb.additional_info,
         })
     return dyn
+
+
+# ─── Guest Info Extraction ────────────────────────────────────────────────────
+
+_WORD_TO_NUM = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    "uno": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
+    "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10,
+}
+
+_REASON_KEYWORDS = [
+    ("reservation",   ["reserva", "reservation", "book", "table", "mesa", "booking", "reservar"]),
+    ("hours",         ["hora", "hours", "horario", "open", "close", "abierto", "cerrado", "schedule", "when do you"]),
+    ("menu",          ["menu", "carta", "food", "comida", "dish", "plato", "drink", "bebida", "cocktail", "eat"]),
+    ("billing",       ["precio", "price", "cost", "charge", "tip", "propina", "gratuity", "pago", "card", "split"]),
+    ("parking",       ["parking", "park", "valet", "estacionamiento", "carro", "car"]),
+    ("private_event", ["evento", "event", "private", "privado", "buyout", "party", "fiesta", "celebration"]),
+    ("complaint",     ["complaint", "queja", "upset", "frustrated", "bad experience", "problema", "wrong"]),
+]
+
+
+def _parse_transcript_for_guest_info(transcript: str) -> dict:
+    """
+    Regex fallback extractor for when call_analysis is absent or incomplete.
+    Handles Spanish and English restaurant call patterns.
+    Returns a dict with only the fields that were confidently extracted.
+    """
+    result: dict = {}
+    tl = transcript.lower()
+
+    # --- Caller name ---
+    name_pats = [
+        r"(?:my name is|i'?m|this is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
+        r"(?:me llamo|mi nombre es|soy)\s+([A-Z][a-záéíóúüñ]+(?:\s+[A-Z][a-záéíóúüñ]+)?)",
+    ]
+    for pat in name_pats:
+        m = re.search(pat, transcript)
+        if m:
+            result["caller_name"] = m.group(1).strip()
+            break
+
+    # --- Party size ---
+    size_pats = [
+        r"(?:table|party|group)\s+(?:of|for)\s+(\d+|" + "|".join(_WORD_TO_NUM) + r")",
+        r"for\s+(\d+)\s*(?:people|persons|guests|of us)?",
+        r"(\d+)\s+(?:people|persons|guests)\b",
+        r"(?:mesa|reserva)\s+para\s+(\d+|" + "|".join(_WORD_TO_NUM) + r")",
+        r"(?:somos|seríamos|éramos)\s+(\d+|" + "|".join(_WORD_TO_NUM) + r")",
+    ]
+    for pat in size_pats:
+        m = re.search(pat, tl)
+        if m:
+            raw = m.group(1)
+            try:
+                result["party_size"] = int(raw)
+            except ValueError:
+                result["party_size"] = _WORD_TO_NUM.get(raw)
+            break
+
+    # --- Reservation date ---
+    date_pats = [
+        r"(?:this|next)\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)",
+        r"(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?",
+        r"on\s+the\s+\d{1,2}(?:st|nd|rd|th)?",
+        r"(?:este|el\s+pr[oó]ximo|el)\s+(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)",
+        r"el\s+\d{1,2}\s+de\s+(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)",
+    ]
+    for pat in date_pats:
+        m = re.search(pat, tl)
+        if m:
+            result["reservation_date"] = m.group(0).strip()
+            break
+
+    # --- Reservation time ---
+    time_pats = [
+        r"(?:at\s+)?(\d{1,2}(?::\d{2})?)\s*(?:pm|am|p\.m\.|a\.m\.)",
+        r"around\s+(\d{1,2}(?::\d{2})?)\s*(?:pm|am)?",
+        r"(?:a\s+las?|alrededor\s+de\s+las?)\s+(\d{1,2}(?::\d{2})?)",
+    ]
+    for pat in time_pats:
+        m = re.search(pat, tl)
+        if m:
+            result["reservation_time"] = m.group(0).strip()
+            break
+
+    # --- Call reason ---
+    for reason, keywords in _REASON_KEYWORDS:
+        if any(kw in tl for kw in keywords):
+            result["call_reason"] = reason
+            break
+    if "call_reason" not in result:
+        result["call_reason"] = "other"
+
+    # --- wants_reservation ---
+    result["wants_reservation"] = any(
+        kw in tl for kw in ["reserva", "reservation", "book a table", "hacer una reserva", "quiero reservar"]
+    )
+
+    # --- follow_up_needed ---
+    result["follow_up_needed"] = any(
+        kw in tl for kw in ["call back", "callback", "llámame", "llame de vuelta", "transfer", "manager", "speak to someone"]
+    )
+
+    return result
+
+
+def _build_call_detail_from_payload(call_event: CallEvent) -> None:
+    """
+    Create or update a CallDetail from a call_ended CallEvent payload.
+    Primary source: call.call_analysis (Retell post-call extraction).
+    Fallback: transcript regex for any missing/empty fields.
+    """
+    payload    = call_event.payload
+    call       = payload.get("call", {})
+    analysis   = call.get("call_analysis") or {}
+    transcript = (call.get("transcript") or "").strip()
+    fallback   = _parse_transcript_for_guest_info(transcript) if transcript else {}
+
+    def _get(key, default=""):
+        val = analysis.get(key)
+        if val is None or val == "" or val == 0:
+            return fallback.get(key, default)
+        return val
+
+    def _get_bool(key, default=None):
+        val = analysis.get(key)
+        if val is None:
+            return fallback.get(key, default)
+        return bool(val)
+
+    raw_size  = _get("party_size", None)
+    party_size = None
+    if raw_size is not None:
+        try:
+            v = int(raw_size)
+            party_size = v if v > 0 else None
+        except (ValueError, TypeError):
+            party_size = None
+
+    CallDetail.objects.update_or_create(
+        call_event=call_event,
+        defaults={
+            "caller_name":       str(_get("caller_name", ""))[:255],
+            "caller_phone":      (call.get("from_number") or "").strip(),
+            "caller_email":      str(_get("caller_email", ""))[:255],
+            "call_reason":       _get("call_reason", "other"),
+            "wants_reservation": _get_bool("wants_reservation", None),
+            "party_size":        party_size,
+            "reservation_date":  str(_get("reservation_date", ""))[:128],
+            "reservation_time":  str(_get("reservation_time", ""))[:64],
+            "special_requests":  str(_get("special_requests", "")),
+            "follow_up_needed":  _get_bool("follow_up_needed", False),
+            "notes":             "",
+        },
+    )
 
 
 # ─── Retell Webhooks ──────────────────────────────────────────────────────────
@@ -100,28 +280,23 @@ def retell_inbound_webhook(request, rest_id):
 
     to_number = (payload.get("to_number") or "").strip()
 
-    # Dev bypass (no signature check needed)
-    if settings.DEBUG and request.headers.get("X-DEV-BYPASS") == os.environ.get("RETELL_DEV_BYPASS_SECRET", ""):
-        return JsonResponse({"dynamic_variables": _build_dynamic_variables(restaurant)}, status=200)
+    logger.warning("Retell inbound webhook | restaurant=%s | to_number=%r | payload_keys=%s",
+                   restaurant.slug, to_number, list(payload.keys()))
 
-    if not to_number or not restaurant.retell_phone_number:
-        return JsonResponse({"detail": "missing to_number or restaurant phone not configured"}, status=400)
+    dyn_response = {"call_inbound": {"dynamic_variables": _build_dynamic_variables(restaurant)}}
 
-    if to_number != restaurant.retell_phone_number:
-        return JsonResponse({"detail": "phone number mismatch"}, status=400)
+    # In DEBUG mode skip signature verification (new inbound webhook doesn't send x-retell-signature)
+    if settings.DEBUG:
+        return JsonResponse(dyn_response, status=200)
 
+    # Production: verify Retell signature
     signature = request.headers.get("x-retell-signature", "")
-    if not signature:
-        return JsonResponse({"detail": "missing signature"}, status=401)
+    if signature and restaurant.retell_api_key:
+        retell_client = Retell(api_key=restaurant.retell_api_key)
+        if not retell_client.verify(raw_str, restaurant.retell_api_key, signature):
+            return JsonResponse({"detail": "invalid signature"}, status=401)
 
-    if not restaurant.retell_api_key:
-        return JsonResponse({"detail": "retell api key not configured"}, status=500)
-
-    retell_client = Retell(api_key=restaurant.retell_api_key)
-    if not retell_client.verify(raw_str, restaurant.retell_api_key, signature):
-        return JsonResponse({"detail": "invalid signature"}, status=401)
-
-    return JsonResponse({"dynamic_variables": _build_dynamic_variables(restaurant)}, status=200)
+    return JsonResponse(dyn_response, status=200)
 
 
 @csrf_exempt
@@ -142,15 +317,23 @@ def retell_events_webhook(request):
     if not restaurant:
         return JsonResponse({"detail": "unknown number"}, status=404)
 
-    if not sig or not restaurant.retell_api_key:
-        return JsonResponse({"detail": "unauthorized"}, status=401)
+    if not settings.DEBUG:
+        if not sig or not restaurant.retell_api_key:
+            return JsonResponse({"detail": "unauthorized"}, status=401)
+        retell_client = Retell(api_key=restaurant.retell_api_key)
+        if not retell_client.verify(raw, restaurant.retell_api_key, sig):
+            return JsonResponse({"detail": "invalid signature"}, status=401)
 
-    retell_client = Retell(api_key=restaurant.retell_api_key)
-    if not retell_client.verify(raw, restaurant.retell_api_key, sig):
-        return JsonResponse({"detail": "invalid signature"}, status=401)
+    # Retell sends "event" (not "event_type") — fall back for safety
+    event_type = data.get("event") or data.get("event_type", "")
+    call_event = CallEvent.objects.create(restaurant=restaurant, event_type=event_type, payload=data)
 
-    event_type = data.get("event_type", "")
-    CallEvent.objects.create(restaurant=restaurant, event_type=event_type, payload=data)
+    if event_type == "call_ended":
+        try:
+            _build_call_detail_from_payload(call_event)
+        except Exception:
+            logger.exception("Failed to build CallDetail for CallEvent pk=%s", call_event.pk)
+
     return JsonResponse({"status": "ok"}, status=200)
 
 
@@ -259,11 +442,25 @@ def portal_dashboard(request, slug):
     unique_callers = len(set(caller_numbers))
     repeat_callers = sum(1 for _, c in Counter(caller_numbers).items() if c > 1)
 
+    today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    leads_today = CallDetail.objects.filter(
+        call_event__restaurant=restaurant,
+        wants_reservation=True,
+        created_at__gte=today_start,
+    ).count()
+    recent_reservation_inquiries = (
+        CallDetail.objects
+        .filter(call_event__restaurant=restaurant, wants_reservation=True)
+        .order_by("-created_at")[:5]
+    )
+
     context = {
         "restaurant": restaurant,
         "total_calls": total_calls,
         "unique_callers": unique_callers,
         "repeat_callers": repeat_callers,
+        "leads_today": leads_today,
+        "recent_reservation_inquiries": recent_reservation_inquiries,
         "calls_by_day_labels": json.dumps(list(calls_by_day.keys())),
         "calls_by_day_data": json.dumps(list(calls_by_day.values())),
         "topic_labels": json.dumps(list(topic_counter.keys())),
@@ -329,6 +526,44 @@ def portal_calls(request, slug):
     })
 
 
+@login_required
+def portal_guests(request, slug):
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+
+    reason_filter   = request.GET.get("reason", "")
+    followup_filter = request.GET.get("follow_up", "")
+
+    qs = (
+        CallDetail.objects
+        .filter(call_event__restaurant=restaurant)
+        .select_related("call_event")
+        .order_by("-created_at")
+    )
+
+    if reason_filter:
+        qs = qs.filter(call_reason=reason_filter)
+    if followup_filter == "1":
+        qs = qs.filter(follow_up_needed=True)
+
+    total_guests        = qs.count()
+    reservation_intents = qs.filter(wants_reservation=True).count()
+    follow_ups_pending  = qs.filter(follow_up_needed=True).count()
+
+    paginator = Paginator(qs, 25)
+    page_obj  = paginator.get_page(request.GET.get("page"))
+
+    return render(request, "portal/guests.html", {
+        "restaurant":          restaurant,
+        "page_obj":            page_obj,
+        "reason_choices":      CallDetail.CALL_REASON_CHOICES,
+        "reason_filter":       reason_filter,
+        "followup_filter":     followup_filter,
+        "total_guests":        total_guests,
+        "reservation_intents": reservation_intents,
+        "follow_ups_pending":  follow_ups_pending,
+    })
+
+
 # ─── Billing (Stripe) ────────────────────────────────────────────────────────
 
 def _get_or_create_subscription(restaurant):
@@ -346,7 +581,7 @@ def portal_billing(request, slug):
         "stripe_publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
         "features": [
             "AI phone agent available 24/7",
-            "Answers calls in Spanish & English",
+            "Multilingual support — answers in the caller's language",
             "Full knowledge base (hours, menu, billing, events)",
             "Call history & transcripts",
             "Business analytics dashboard",

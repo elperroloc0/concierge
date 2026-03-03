@@ -67,6 +67,10 @@ class Restaurant(models.Model):
     retell_phone_number = models.CharField(max_length=64, blank=True, default="", db_index=True)
     retell_llm_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
     retell_voice_id = models.CharField(max_length=64, blank=True, default="retell-Claudia")
+    retell_area_code = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        help_text="Area code for purchasing a Retell phone number (e.g. 786 for Miami)."
+    )
     
     # Validation
     def clean(self):
@@ -141,6 +145,51 @@ class CallEvent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class CallDetail(models.Model):
+    CALL_REASON_CHOICES = [
+        ("reservation",   "Reservation"),
+        ("hours",         "Hours / Schedule"),
+        ("menu",          "Menu / Food"),
+        ("billing",       "Billing / Payment"),
+        ("parking",       "Parking / Valet"),
+        ("private_event", "Private Event"),
+        ("complaint",     "Complaint"),
+        ("other",         "Other / General"),
+    ]
+
+    call_event = models.OneToOneField(
+        "restaurants.CallEvent", on_delete=models.CASCADE, related_name="detail"
+    )
+
+    # Caller identity
+    caller_name  = models.CharField(max_length=255, blank=True, default="")
+    caller_phone = models.CharField(max_length=32,  blank=True, default="")
+    caller_email = models.CharField(max_length=255, blank=True, default="")
+
+    # Intent
+    call_reason       = models.CharField(max_length=32, blank=True, default="other", choices=CALL_REASON_CHOICES)
+    wants_reservation = models.BooleanField(null=True, blank=True)
+
+    # Reservation details (stored as strings — AI returns natural language like "this Saturday")
+    party_size       = models.PositiveSmallIntegerField(null=True, blank=True)
+    reservation_date = models.CharField(max_length=128, blank=True, default="")
+    reservation_time = models.CharField(max_length=64,  blank=True, default="")
+    special_requests = models.TextField(blank=True, default="")
+
+    # Follow-up
+    follow_up_needed = models.BooleanField(default=False)
+    notes            = models.TextField(blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Detail[{self.caller_name or self.caller_phone or 'Unknown'}]"
+
+
 class RestaurantKnowledgeBase(models.Model):
     restaurant = models.OneToOneField(
         "restaurants.Restaurant", on_delete=models.CASCADE, related_name="knowledge_base"
@@ -190,6 +239,14 @@ class RestaurantKnowledgeBase(models.Model):
     allows_decorations       = models.BooleanField(default=False)
     decoration_cleaning_fee  = models.CharField(max_length=128, blank=True, default="")
     press_contact            = models.CharField(max_length=255, blank=True, default="")
+    special_events_info      = models.TextField(
+        blank=True, default="",
+        help_text=(
+            "Upcoming or recurring special events at the restaurant "
+            "(e.g. themed nights, holiday dinners, live shows, pop-ups). "
+            "The AI agent will use this to inform callers about what's coming up."
+        )
+    )
 
     # ── Ambience & Experience ─────────────────────────────────────────────
     has_live_music        = models.BooleanField(default=False)
@@ -201,6 +258,12 @@ class RestaurantKnowledgeBase(models.Model):
     )
     dress_code   = models.CharField(max_length=255, blank=True, default="")
     cover_charge = models.CharField(max_length=128, blank=True, default="")
+    art_gallery_info   = models.TextField(blank=True, default="",
+        help_text="Art gallery description and how to inquire about artwork or collaborations.")
+    cigar_policy       = models.CharField(max_length=255, blank=True, default="",
+        help_text="Where cigars are allowed and any special cigar promotions.")
+    show_charge_policy = models.CharField(max_length=255, blank=True, default="",
+        help_text="Show/entertainment charge for large groups (e.g. 15+ guests).")
 
     # ── Facilities & Access ───────────────────────────────────────────────
     has_terrace       = models.BooleanField(default=False)
@@ -217,6 +280,23 @@ class RestaurantKnowledgeBase(models.Model):
     collect_guest_info    = models.BooleanField(default=True)
     guest_info_to_collect = models.TextField(
         blank=True, default="name, party size, date, time, phone number"
+    )
+    brand_voice_notes = models.TextField(
+        blank=True, default="",
+        help_text=(
+            "Restaurant-specific style, sample phrases, and language notes for the AI agent. "
+            "Include example responses in the restaurant's preferred language, key brand phrases, "
+            "and any custom routing instructions unique to this restaurant."
+        )
+    )
+
+    # ── Other / Free-form ─────────────────────────────────────────────────
+    additional_info = models.TextField(
+        blank=True, default="",
+        help_text=(
+            "Any additional information the AI agent should know that isn't covered by the fields above. "
+            "Use this for special policies, FAQs, promotions, or anything unique to your restaurant."
+        )
     )
 
     def __str__(self):

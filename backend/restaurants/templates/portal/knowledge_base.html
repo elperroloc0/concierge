@@ -37,6 +37,7 @@
     <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-ambience">Ambience</button></li>
     <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-facilities">Facilities</button></li>
     <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-agent">Agent</button></li>
+    <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-other">Other</button></li>
   </ul>
 
   <div class="tab-content">
@@ -227,6 +228,11 @@
             <label class="form-label">{{ kb_form.press_contact.label }}</label>
             {{ kb_form.press_contact }}
           </div>
+          <div class="col-12">
+            <label class="form-label">{{ kb_form.special_events_info.label }}</label>
+            <small class="text-muted d-block mb-1">{{ kb_form.special_events_info.field.help_text }}</small>
+            {{ kb_form.special_events_info }}
+          </div>
         </div>
       </div>
     </div>
@@ -260,6 +266,21 @@
           <div class="col-md-4">
             <label class="form-label">{{ kb_form.cover_charge.label }}</label>
             {{ kb_form.cover_charge }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">{{ kb_form.art_gallery_info.label }}</label>
+            {{ kb_form.art_gallery_info }}
+            <div class="form-text">{{ kb_form.art_gallery_info.help_text }}</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">{{ kb_form.cigar_policy.label }}</label>
+            {{ kb_form.cigar_policy }}
+            <div class="form-text">{{ kb_form.cigar_policy.help_text }}</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">{{ kb_form.show_charge_policy.label }}</label>
+            {{ kb_form.show_charge_policy }}
+            <div class="form-text">{{ kb_form.show_charge_policy.help_text }}</div>
           </div>
         </div>
       </div>
@@ -297,7 +318,7 @@
     <!-- AGENT BEHAVIOR -->
     <div class="tab-pane fade" id="tab-agent">
       <div class="card shadow-sm p-4">
-        <p class="section-hint">Controls what the AI collects from the caller during the conversation.</p>
+        <p class="section-hint">Controls what the AI collects from the caller and how it speaks about your brand.</p>
         <div class="mb-3 form-check">
           {{ kb_form.collect_guest_info }}
           <label class="form-check-label">{{ kb_form.collect_guest_info.label }}</label>
@@ -306,6 +327,23 @@
           <label class="form-label">{{ kb_form.guest_info_to_collect.label }}</label>
           {{ kb_form.guest_info_to_collect }}
           <div class="form-text">{{ kb_form.guest_info_to_collect.help_text }}</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">{{ kb_form.brand_voice_notes.label }}</label>
+          {{ kb_form.brand_voice_notes }}
+          <div class="form-text">{{ kb_form.brand_voice_notes.help_text }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OTHER -->
+    <div class="tab-pane fade" id="tab-other">
+      <div class="card shadow-sm p-4">
+        <p class="section-hint">Use this space for anything the AI should know that isn't covered in the other sections — special policies, promotions, FAQs, seasonal notes, or unique details about your restaurant.</p>
+        <div class="mb-3">
+          <label class="form-label">{{ kb_form.additional_info.label }}</label>
+          {{ kb_form.additional_info }}
+          <div class="form-text">{{ kb_form.additional_info.help_text }}</div>
         </div>
       </div>
     </div>
