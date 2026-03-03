@@ -10,21 +10,50 @@
   .nav-tabs .nav-link.active { font-weight: 600; }
   .section-hint { font-size: .8rem; color: #6c757d; margin-bottom: 1.25rem; }
   .form-control, .form-select { font-size: .9rem; }
+
+  /* Empty field state */
+  .field-empty {
+    border-color: #dee2e6 !important;
+    border-style: dashed !important;
+    background: #fafafa !important;
+  }
+
+  /* Example hint row */
+  .example-hint {
+    display: flex; align-items: baseline; gap: 6px;
+    flex-wrap: wrap; margin-top: 4px;
+  }
+  .example-hint em { color: #6c757d; font-size: .75rem; font-style: normal; }
+  .example-hint .use-btn {
+    font-size: .72rem; color: #0d6efd; background: none; border: none;
+    padding: 0; cursor: pointer; white-space: nowrap;
+  }
+  .example-hint .use-btn:hover { text-decoration: underline; }
+
+  /* Tab completion badge */
+  .tab-count {
+    font-size: .65rem; padding: 2px 5px;
+    border-radius: 10px; margin-left: 5px; vertical-align: middle;
+  }
+
+  /* Dot indicators (lint errors/warnings) */
   .tab-dot {
-    display: inline-block; width: 8px; height: 8px;
-    border-radius: 50%; margin-left: 5px; vertical-align: middle;
+    display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; margin-left: 4px; vertical-align: middle;
   }
   .tab-dot-error   { background: #dc3545; }
   .tab-dot-warning { background: #ffc107; }
+
+  /* Voice badge */
   .voice-badge {
     display: inline-flex; align-items: center; gap: 3px;
     font-size: .7rem; font-weight: 600; color: #0dcaf0;
     background: rgba(13,202,240,.12); border-radius: 4px;
     padding: 1px 6px; margin-left: 6px; vertical-align: middle;
   }
-  .char-counter {
-    font-size: .75rem; float: right; margin-top: 2px;
-  }
+
+  /* Char counter */
+  .char-counter { font-size: .75rem; float: right; margin-top: 2px; }
   .char-counter.ok     { color: #198754; }
   .char-counter.warn   { color: #fd7e14; }
   .char-counter.danger { color: #dc3545; font-weight: 600; }
@@ -438,7 +467,10 @@
     <!-- OTHER -->
     <div class="tab-pane fade" id="tab-other">
       <div class="card shadow-sm p-4">
-        <p class="section-hint">Use this space for anything the AI should know that isn't covered in the other sections — special policies, promotions, FAQs, seasonal notes, or unique details about your restaurant.</p>
+        <p class="section-hint">
+          Add one fact per line using <strong>Label: Value</strong> format. The agent reads each label to find answers — keep values short and direct.
+          <br>Example: <code>Gift cards: Yes, available at the bar or online &nbsp;|&nbsp; Wi-Fi password: Dragones2025 &nbsp;|&nbsp; Corkage fee: $25 per bottle</code>
+        </p>
         <div class="mb-3">
           <label class="form-label">{{ kb_form.additional_info.label }}</label>
           <div class="char-counter" id="ctr-additional_info"></div>
@@ -452,7 +484,69 @@
 </form>
 
 <script>
-// ── Character counter helper ─────────────────────────────────────────────────
+// ── Example content per field ─────────────────────────────────────────────────
+const EXAMPLES = {
+  "id_address_full":         "123 SW 8th Street, Miami, FL 33130",
+  "id_location_reference":   "In the heart of Little Havana, on Calle Ocho between SW 15th and 16th Avenue.",
+  "id_welcome_phrase":       "Thank you for calling [Restaurant Name]! How can I help you today?",
+  "id_contact_phone":        "+1 (305) 555-0100",
+  "id_contact_email":        "info@yourrestaurant.com",
+
+  "id_hours_of_operation":   "Mon–Thu 12pm–midnight, Fri–Sat 12pm–2am, Sun 12pm–11pm",
+  "id_kitchen_closing_time": "30 minutes before closing",
+  "id_holiday_closure_notes":"Closed Thanksgiving and Christmas Day. Open all other holidays.",
+  "id_private_event_closures":"Occasionally closed for private buyouts — check the website for updates.",
+
+  "id_food_menu_summary":    "Latin-Asian fusion cuisine. Best sellers: ceviche tostada ($18), short rib tacos ($24), wagyu sliders ($22). Most dishes $15–$35. Shareable plates and à la carte available.",
+  "id_bar_menu_summary":     "Craft cocktails are our specialty. Signature mojito ($16), house sangria ($14). Full wine, beer, and spirits selection. Bottle service available on weekends.",
+  "id_happy_hour_details":   "Mon–Fri 4–7pm. 50% off all cocktails and select draft beers. Available at bar and lounge only, not dining tables.",
+  "id_dietary_options":      "Vegan and gluten-free options available on request. Please notify your server of any allergies — our kitchen can accommodate most dietary needs.",
+
+  "id_service_charge_pct":   "18%",
+  "id_max_cards_to_split":   "4",
+
+  "id_reservation_grace_min":"15",
+  "id_no_show_fee":          "$50 per person for parties of 6 or more",
+  "id_large_party_min_guests":"8",
+
+  "id_private_dining_min_spend":   "$2,000 minimum food and beverage spend",
+  "id_decoration_cleaning_fee":    "$150 cleaning fee for balloon or confetti setups",
+  "id_press_contact":              "events@yourrestaurant.com",
+  "id_special_events_info":        "Live DJ every Friday and Saturday from 11pm. Latin Night every Thursday. Salsa dancing lessons last Sunday of the month — see our website for schedule.",
+
+  "id_live_music_details":   "Live DJ every Fri–Sat from 11pm. Latin jazz trio on Thursdays 8–11pm.",
+  "id_party_vibe_start_time":"10:30pm",
+  "id_dress_code":           "Smart casual. No athletic wear or flip-flops after 9pm.",
+  "id_cover_charge":         "$20 cover after 10pm on Fridays and Saturdays",
+  "id_art_gallery_info":     "Rotating exhibits from local Miami artists. Artwork available for purchase — ask the host for details.",
+  "id_cigar_policy":         "Cigars permitted on the terrace only. Not allowed indoors.",
+  "id_show_charge_policy":   "$10 per person entertainment fee for groups of 15+ on weekends",
+
+  "id_valet_cost":           "$20 valet parking",
+  "id_free_parking_info":    "Free street parking on SW 8th St after 6pm. Municipal lot 2 blocks east, $5 flat rate evenings.",
+
+  "id_guest_info_to_collect":"name, party size, date, time, phone number",
+  "id_affiliated_restaurants":"Sister Restaurant Name, Another Location Name",
+  "id_brand_voice_notes":    "Warm, welcoming tone. Key phrases: 'We'd love to have you' for reservations, 'Let me check on that' when unsure. Mention the website for menus and bookings. Switch to Spanish if caller speaks Spanish first.",
+
+  "id_additional_info":      "Gift cards: Yes, available at the bar and online\nWi-Fi: Free — password is Dragones2025\nBirthday policy: Complimentary dessert with 24h advance notice\nCorkage fee: $25 per bottle, max 2 bottles per table\nMinimum age: 21+ after 10pm on weekends",
+};
+
+// ── Tab → field IDs map (for completion counters) ────────────────────────────
+const TAB_FIELDS = {
+  "tab-basic":        ["id_name","id_website","id_address_full","id_location_reference","id_welcome_phrase","id_contact_phone","id_contact_email"],
+  "tab-hours":        ["id_hours_of_operation","id_kitchen_closing_time","id_holiday_closure_notes"],
+  "tab-menu":         ["id_food_menu_url","id_food_menu_summary","id_bar_menu_summary","id_happy_hour_details","id_dietary_options"],
+  "tab-billing":      ["id_service_charge_pct","id_max_cards_to_split"],
+  "tab-reservations": ["id_reservation_grace_min","id_no_show_fee","id_large_party_min_guests"],
+  "tab-events":       ["id_private_dining_min_spend","id_press_contact","id_special_events_info"],
+  "tab-ambience":     ["id_live_music_details","id_party_vibe_start_time","id_dress_code","id_cover_charge"],
+  "tab-facilities":   ["id_valet_cost","id_free_parking_info"],
+  "tab-agent":        ["id_guest_info_to_collect","id_affiliated_restaurants","id_brand_voice_notes"],
+  "tab-other":        ["id_additional_info"],
+};
+
+// ── Char counter setup ────────────────────────────────────────────────────────
 const COUNTERS = [
   { id: "id_food_menu_summary",   ctr: "ctr-food_menu_summary",   limit: 500, warn: 400 },
   { id: "id_bar_menu_summary",    ctr: "ctr-bar_menu_summary",    limit: 500, warn: 400 },
@@ -470,10 +564,7 @@ function updateCounter(cfg) {
   if (!el || !ctr) return;
   const len = el.value.length;
   ctr.textContent = `${len} / ${cfg.limit}`;
-  ctr.className = "char-counter";
-  if (len > cfg.limit)    ctr.classList.add("danger");
-  else if (len > cfg.warn) ctr.classList.add("warn");
-  else                    ctr.classList.add("ok");
+  ctr.className = "char-counter " + (len > cfg.limit ? "danger" : len > cfg.warn ? "warn" : "ok");
 }
 
 COUNTERS.forEach(cfg => {
@@ -482,5 +573,83 @@ COUNTERS.forEach(cfg => {
   updateCounter(cfg);
   el.addEventListener("input", () => updateCounter(cfg));
 });
+
+// ── Tab completion counters ───────────────────────────────────────────────────
+function updateTabCounters() {
+  Object.entries(TAB_FIELDS).forEach(([tabId, fieldIds]) => {
+    const total  = fieldIds.length;
+    const filled = fieldIds.filter(id => {
+      const el = document.getElementById(id);
+      return el && el.value.trim() !== "";
+    }).length;
+
+    const btn = document.querySelector(`[data-bs-target="#${tabId}"]`);
+    if (!btn) return;
+
+    let badge = btn.querySelector(".tab-count");
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.className = "tab-count";
+      // Insert before lint dot if present
+      const dot = btn.querySelector(".tab-dot");
+      dot ? btn.insertBefore(badge, dot) : btn.appendChild(badge);
+    }
+
+    const cls = filled === total ? "bg-success" : filled > 0 ? "bg-warning text-dark" : "bg-secondary";
+    badge.className = `tab-count badge ${cls}`;
+    badge.textContent = `${filled}/${total}`;
+  });
+}
+
+// ── Empty field hints ("Use example →") ──────────────────────────────────────
+function buildExampleHints() {
+  Object.entries(EXAMPLES).forEach(([fieldId, example]) => {
+    const el = document.getElementById(fieldId);
+    if (!el || el.value.trim()) return;  // skip already-filled fields
+
+    el.classList.add("field-empty");
+
+    const preview = example.replace(/\n/g, " · ").slice(0, 90) + (example.length > 90 ? "…" : "");
+
+    const hint = document.createElement("div");
+    hint.className = "example-hint";
+    hint.dataset.for = fieldId;
+    hint.innerHTML =
+      `<em>${preview}</em>` +
+      `<button type="button" class="use-btn">Use example &rarr;</button>`;
+
+    hint.querySelector(".use-btn").addEventListener("click", () => {
+      el.value = example;
+      el.classList.remove("field-empty");
+      hint.remove();
+      // Trigger dependent updates
+      el.dispatchEvent(new Event("input"));
+      updateTabCounters();
+    });
+
+    el.insertAdjacentElement("afterend", hint);
+  });
+}
+
+// ── Live empty-state tracking as user types ───────────────────────────────────
+document.getElementById("kb-form").addEventListener("input", e => {
+  const el = e.target;
+  if (!el.id) return;
+
+  if (el.value.trim()) {
+    el.classList.remove("field-empty");
+    // Remove hint if still present (user typed instead of clicking)
+    const hint = document.querySelector(`.example-hint[data-for="${el.id}"]`);
+    if (hint) hint.remove();
+  } else if (EXAMPLES[el.id]) {
+    el.classList.add("field-empty");
+  }
+
+  updateTabCounters();
+});
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+buildExampleHints();
+updateTabCounters();
 </script>
 {% endblock %}
