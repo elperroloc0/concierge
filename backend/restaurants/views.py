@@ -276,6 +276,14 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
         },
     )
 
+    # Delete any mid-call placeholder CallEvents for the same call_id now that
+    # we have the complete call_ended record. Keeps the DB clean.
+    if call_id:
+        CallEvent.objects.filter(
+            event_type="call_in_progress",
+            payload__call__call_id=call_id,
+        ).exclude(pk=call_event.pk).delete()
+
 
 # ─── Retell Webhooks ──────────────────────────────────────────────────────────
 
@@ -342,9 +350,16 @@ def _send_post_call_sms(call_event: CallEvent, restaurant: Restaurant) -> None:
     if already_sent:
         return
 
-    account_sid = restaurant.twilio_account_sid or settings.TWILIO_ACCOUNT_SID
-    auth_token  = restaurant.twilio_auth_token  or settings.TWILIO_AUTH_TOKEN
-    from_number = restaurant.twilio_from_number or settings.TWILIO_FROM_NUMBER
+    # Only use restaurant credentials if ALL three are present — mixing accounts
+    # causes "Mismatch between From number and account" errors.
+    if restaurant.twilio_account_sid and restaurant.twilio_auth_token and restaurant.twilio_from_number:
+        account_sid = restaurant.twilio_account_sid
+        auth_token  = restaurant.twilio_auth_token
+        from_number = restaurant.twilio_from_number
+    else:
+        account_sid = settings.TWILIO_ACCOUNT_SID
+        auth_token  = settings.TWILIO_AUTH_TOKEN
+        from_number = settings.TWILIO_FROM_NUMBER
 
     if not (account_sid and auth_token and from_number):
         return
@@ -472,9 +487,16 @@ def retell_tool_send_sms(request):
     try:
         from twilio.rest import Client as TwilioClient
         # Use restaurant-specific credentials; fall back to platform defaults
-        account_sid = (restaurant and restaurant.twilio_account_sid) or settings.TWILIO_ACCOUNT_SID
-        auth_token  = (restaurant and restaurant.twilio_auth_token)  or settings.TWILIO_AUTH_TOKEN
-        from_number = (restaurant and restaurant.twilio_from_number) or settings.TWILIO_FROM_NUMBER
+        # Only use restaurant credentials if ALL three are present — mixing accounts
+        # causes "Mismatch between From number and account" errors.
+        if restaurant and restaurant.twilio_account_sid and restaurant.twilio_auth_token and restaurant.twilio_from_number:
+            account_sid = restaurant.twilio_account_sid
+            auth_token  = restaurant.twilio_auth_token
+            from_number = restaurant.twilio_from_number
+        else:
+            account_sid = settings.TWILIO_ACCOUNT_SID
+            auth_token  = settings.TWILIO_AUTH_TOKEN
+            from_number = settings.TWILIO_FROM_NUMBER
         twilio_client = TwilioClient(account_sid, auth_token)
         msg = twilio_client.messages.create(
             body=message,
@@ -865,6 +887,7 @@ def portal_guests(request, slug):
     qs = (
         CallDetail.objects
         .filter(call_event__restaurant=restaurant)
+        .exclude(call_event__event_type="call_in_progress")  # skip mid-call placeholders
         .select_related("call_event")
         .order_by("-created_at")
     )
