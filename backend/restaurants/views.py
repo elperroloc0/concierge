@@ -373,6 +373,8 @@ def _send_post_call_sms(call_event: CallEvent, restaurant: Restaurant) -> None:
     name     = (detail.caller_name if detail else "").strip()
     greeting = f"Hi {name}!" if name else "Hi!"
 
+    # Only send post-call SMS for calls with an actionable reason.
+    # A generic "thanks for calling" blast to every caller is spam.
     if detail and detail.wants_reservation:
         website = restaurant.website or ""
         parts = []
@@ -388,8 +390,8 @@ def _send_post_call_sms(call_event: CallEvent, restaurant: Restaurant) -> None:
         menu_url = (kb.food_menu_url if kb else "") or restaurant.website or ""
         message  = f"{greeting} Here's the {restaurant.name} menu: {menu_url}"
     else:
-        website = restaurant.website or ""
-        message = f"{greeting} Thanks for calling {restaurant.name}! Hours, menu & reservations: {website}"
+        # No actionable reason — skip the post-call SMS entirely.
+        return
 
     message = message[:320]
 
