@@ -342,5 +342,20 @@ class RestaurantKnowledgeBase(models.Model):
         )
     )
 
+    # ── Human Escalation ──────────────────────────────────────────────────
+    escalation_enabled = models.BooleanField(
+        default=False,
+        help_text="Allow the agent to transfer the call to a human when escalation conditions are met."
+    )
+    escalation_conditions = models.TextField(
+        blank=True,
+        default="If the caller is physically at or outside the restaurant and it is currently outside working hours.",
+        help_text="Describe when the agent should escalate. The agent monitors for these conditions on every call."
+    )
+    escalation_transfer_number = models.CharField(
+        max_length=30, blank=True, default="",
+        help_text="Phone number to transfer to (E.164 format, e.g. +17865551234). Leave blank to take a message instead of transferring."
+    )
+
     def __str__(self):
         return f"KB: {self.restaurant.name}"

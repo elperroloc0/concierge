@@ -10,4 +10,5 @@ urlpatterns = [
     path("events/", views.retell_events_webhook, name="retell_events"),
     path("tools/send-sms/", views.retell_tool_send_sms, name="retell_tool_send_sms"),
     path("tools/save-caller-info/", views.retell_tool_save_caller_info, name="retell_tool_save_caller_info"),
+    path("tools/get-info/", views.retell_tool_get_info, name="retell_tool_get_info"),
 ]

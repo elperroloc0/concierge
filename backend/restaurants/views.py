@@ -36,6 +36,26 @@ def _friendly_url(url: str) -> str:
     )
 
 
+def _spoken_email(email: str, lang: str = "en") -> str:
+    """Convert an email address to a naturally spoken form.
+    Spanish: 'info@calledragones.com' → 'info arroba calledragones punto com'
+    English: 'info@calledragones.com' → 'info at calledragones dot com'
+    """
+    if not email:
+        return ""
+    at_word  = "arroba" if lang == "es" else "at"
+    dot_word = "punto"  if lang == "es" else "dot"
+    return email.replace("@", f" {at_word} ").replace(".", f" {dot_word} ")
+
+
+def _spoken_domain(domain: str, lang: str = "en") -> str:
+    """Convert a domain to spoken form: 'calledragones.com' → 'calledragones punto com'"""
+    if not domain:
+        return ""
+    dot_word = "punto" if lang == "es" else "dot"
+    return domain.replace(".", f" {dot_word} ")
+
+
 def _build_dynamic_variables(restaurant):
     """Build the full dynamic_variables dict from Restaurant + KnowledgeBase."""
     kb = getattr(restaurant, "knowledge_base", None)
@@ -48,65 +68,44 @@ def _build_dynamic_variables(restaurant):
         tz = ZoneInfo("UTC")
     now = datetime.now(tz=tz)
 
+    lang   = restaurant.primary_lang  # "es" | "en" | "other"
+    domain = _friendly_url(restaurant.website)
+
     dyn = {
-        "restaurant_name":    restaurant.name,
-        "address_full":       restaurant.address_full,
-        "location_reference": restaurant.location_reference,
-        "website":            restaurant.website,
-        "website_domain":     _friendly_url(restaurant.website),
-        "welcome_phrase":     restaurant.welcome_phrase,
-        "primary_lang":       restaurant.primary_lang,
-        "conversation_tone":  restaurant.conversation_tone,
-        "timezone":           restaurant.timezone,
+        "restaurant_name":       restaurant.name,
+        "address_full":          restaurant.address_full,
+        "location_reference":    restaurant.location_reference,
+        "website":               restaurant.website,
+        "website_domain":        domain,
+        "website_domain_spoken": _spoken_domain(domain, lang),
+        "contact_email":         restaurant.contact_email or "",
+        "contact_email_spoken":  _spoken_email(restaurant.contact_email or "", lang),
+        "welcome_phrase":        restaurant.welcome_phrase,
+        "primary_lang":          restaurant.primary_lang,
+        "conversation_tone":     restaurant.conversation_tone,
+        "timezone":              restaurant.timezone,
         # Live date/time injected on every call
-        "current_date":       now.strftime("%A, %B %d, %Y"),   # Monday, March 02, 2026
-        "current_time":       now.strftime("%I:%M %p"),         # 02:30 PM
-        "current_day":        now.strftime("%A"),               # Monday
+        "current_date":          now.strftime("%A, %B %d, %Y"),   # Monday, March 02, 2026
+        "current_time":          now.strftime("%I:%M %p"),         # 02:30 PM
+        "current_day":           now.strftime("%A"),               # Monday
     }
+    # KB fields that the agent needs at call-start (reservation routing + escalation).
+    # All other KB data is fetched on demand via the get_info tool.
     if kb:
         dyn.update({
-            "hours_of_operation":     kb.hours_of_operation,
-            "kitchen_closing_time":   kb.kitchen_closing_time,
-            "holiday_closure_notes":  kb.holiday_closure_notes or ("Closed on major holidays" if kb.closes_on_holidays else "Open on holidays"),
-            "food_menu_url":          kb.food_menu_url,
-            "food_menu_domain":       _friendly_url(kb.food_menu_url),
-            "food_menu_summary":      kb.food_menu_summary,
-            "bar_menu_url":           kb.bar_menu_url,
-            "bar_menu_domain":        _friendly_url(kb.bar_menu_url),
-            "bar_menu_summary":       kb.bar_menu_summary,
-            "happy_hour_details":     kb.happy_hour_details,
-            "dietary_options":        kb.dietary_options,
-            "auto_gratuity":          "Yes" if kb.auto_gratuity else "No",
-            "service_charge_pct":     kb.service_charge_pct or "N/A",
-            "service_charge_scope":   kb.get_service_charge_scope_display(),
-            "max_cards_to_split":     str(kb.max_cards_to_split) if kb.max_cards_to_split else "N/A",
-            "reservation_grace_min":  str(kb.reservation_grace_min) if kb.reservation_grace_min else "N/A",
-            "no_show_fee":            kb.no_show_fee or "None",
-            "large_party_min_guests": str(kb.large_party_min_guests) if kb.large_party_min_guests else "N/A",
-            "has_private_dining":     "Yes" if kb.has_private_dining else "No",
-            "private_dining_min_spend": kb.private_dining_min_spend,
-            "allows_decorations":     "Yes" if kb.allows_decorations else "No",
-            "decoration_cleaning_fee": kb.decoration_cleaning_fee or "None",
-            "press_contact":          kb.press_contact,
-            "live_music_details":     kb.live_music_details,
-            "party_vibe_start_time":  kb.party_vibe_start_time,
-            "noise_level":            kb.get_noise_level_display() if kb.noise_level else "N/A",
-            "dress_code":             kb.dress_code or "Casual",
-            "cover_charge":           kb.cover_charge or "None",
-            "has_terrace":            "Yes" if kb.has_terrace else "No",
-            "ac_intensity":           kb.get_ac_intensity_display() if kb.ac_intensity else "N/A",
-            "stroller_friendly":      "Yes" if kb.stroller_friendly else "No",
-            "has_valet":              "Yes" if kb.has_valet else "No",
-            "valet_cost":             kb.valet_cost or "N/A",
-            "free_parking_info":      kb.free_parking_info,
-            "guest_info_to_collect":  kb.guest_info_to_collect,
-            "art_gallery_info":       kb.art_gallery_info,
-            "cigar_policy":           kb.cigar_policy,
-            "show_charge_policy":     kb.show_charge_policy,
-            "special_events_info":    kb.special_events_info,
             "affiliated_restaurants": kb.affiliated_restaurants,
-            "brand_voice_notes":      kb.brand_voice_notes,
-            "additional_info":        kb.additional_info,
+            "reservation_grace_min":  str(kb.reservation_grace_min) if kb.reservation_grace_min else "N/A",
+            "large_party_min_guests": str(kb.large_party_min_guests) if kb.large_party_min_guests else "N/A",
+            "escalation_enabled":     "yes" if kb.escalation_enabled else "no",
+            "escalation_conditions":  kb.escalation_conditions or "",
+        })
+    else:
+        dyn.update({
+            "affiliated_restaurants": "",
+            "reservation_grace_min":  "N/A",
+            "large_party_min_guests": "N/A",
+            "escalation_enabled":     "no",
+            "escalation_conditions":  "",
         })
     return dyn
 
@@ -207,6 +206,28 @@ def _parse_transcript_for_guest_info(transcript: str) -> dict:
     result["wants_reservation"] = any(
         kw in tl for kw in ["reserva", "reservation", "book a table", "hacer una reserva", "quiero reservar"]
     )
+
+    # --- Special requests (keyword hints — primary source is call_analysis) ---
+    special_hits = []
+    special_pats = [
+        (r"cumplea[ñn]os?|birthday",                  "birthday"),
+        (r"aniversario|anniversary",                   "anniversary"),
+        (r"sorpresa|surprise",                         "surprise"),
+        (r"vegano?|vegan\b",                           "vegan"),
+        (r"vegetariano?|vegetarian",                   "vegetarian"),
+        (r"sin gluten|gluten.free|cel[ií]aco",         "gluten-free"),
+        (r"alergi\w+|allerg\w+",                       "allergy"),
+        (r"terraza|terrace|exterior|outdoor",          "terrace/outdoor"),
+        (r"silla\s+de\s+ruedas|wheelchair|accesib\w+", "accessibility"),
+        (r"high\s*chair|silla\s+de\s+beb[eé]|ni[ñn]o", "high chair"),
+        (r"privado?|private\s+room",                   "private area"),
+        (r"oc[ae]si[oó]n especial|special occasion",   "special occasion"),
+    ]
+    for pat, label in special_pats:
+        if re.search(pat, tl, re.IGNORECASE):
+            special_hits.append(label)
+    if special_hits:
+        result["special_requests"] = ", ".join(special_hits)
 
     # --- follow_up_needed ---
     result["follow_up_needed"] = any(
@@ -451,6 +472,122 @@ def retell_events_webhook(request):
             logger.exception("Failed to send post-call SMS for CallEvent pk=%s", call_event.pk)
 
     return JsonResponse({"status": "ok"}, status=200)
+
+
+# ─── get_info Tool ────────────────────────────────────────────────────────────
+
+def _format_kb_topic(kb, topic: str) -> str:
+    """Return a clean text block for a given KB topic. Empty fields are omitted."""
+    lines = []
+
+    def add(label, value):
+        v = str(value).strip() if value is not None else ""
+        if v and v not in ("N/A", "None", "0", "False", ""):
+            lines.append(f"{label}: {v}")
+
+    if topic == "hours":
+        add("Hours of operation", kb.hours_of_operation)
+        add("Kitchen closes", kb.kitchen_closing_time)
+        add("Holiday closures", kb.holiday_closure_notes or ("Closed on major holidays" if kb.closes_on_holidays else ""))
+        add("Private event closures", kb.private_event_closures)
+        # Include upcoming events so agent sees schedule changes / closures before confirming hours
+        add("Upcoming events & schedule changes", kb.special_events_info)
+
+    elif topic == "menu":
+        add("Food menu", kb.food_menu_summary)
+        if kb.food_menu_url:
+            lines.append(f"Menu link (SMS only — never read aloud): {kb.food_menu_url}")
+
+    elif topic == "bar_menu":
+        add("Bar & cocktails", kb.bar_menu_summary)
+        if kb.bar_menu_url:
+            lines.append(f"Bar menu link (SMS only — never read aloud): {kb.bar_menu_url}")
+
+    elif topic == "happy_hour":
+        add("Happy hour", kb.happy_hour_details)
+
+    elif topic == "dietary":
+        add("Dietary options", kb.dietary_options)
+
+    elif topic == "parking":
+        add("Free parking", kb.free_parking_info)
+        if kb.has_valet:
+            add("Valet", kb.valet_cost or "Available")
+        else:
+            lines.append("Valet: Not available")
+
+    elif topic == "billing":
+        if kb.auto_gratuity:
+            lines.append("Auto-gratuity: Yes")
+        add("Service charge", f"{kb.service_charge_pct} ({kb.get_service_charge_scope_display()})" if kb.service_charge_pct else None)
+        add("Max cards to split", str(kb.max_cards_to_split) if kb.max_cards_to_split else None)
+
+    elif topic == "reservations":
+        add("Grace period", f"{kb.reservation_grace_min} minutes" if kb.reservation_grace_min else None)
+        add("No-show fee", kb.no_show_fee)
+        add("Large party threshold", f"{kb.large_party_min_guests}+ guests" if kb.large_party_min_guests else None)
+
+    elif topic == "private_events":
+        lines.append(f"Private dining: {'Available' if kb.has_private_dining else 'Not available'}")
+        add("Minimum spend", kb.private_dining_min_spend)
+        lines.append(f"Decorations: {'Allowed' if kb.allows_decorations else 'Not allowed'}")
+        add("Cleaning fee", kb.decoration_cleaning_fee)
+        add("Press / partnerships", kb.press_contact)
+
+    elif topic == "ambience":
+        if kb.has_live_music:
+            add("Live music", kb.live_music_details)
+            add("Party vibe starts", kb.party_vibe_start_time)
+        add("Noise level", kb.get_noise_level_display() if kb.noise_level else None)
+        add("Dress code", kb.dress_code)
+        add("Cover charge", kb.cover_charge)
+        add("Art gallery", kb.art_gallery_info)
+        add("Cigar policy", kb.cigar_policy)
+        add("Show charge", kb.show_charge_policy)
+
+    elif topic == "facilities":
+        lines.append(f"Terrace: {'Yes' if kb.has_terrace else 'No'}")
+        add("Air conditioning", kb.get_ac_intensity_display() if kb.ac_intensity else None)
+        lines.append(f"Stroller-friendly: {'Yes' if kb.stroller_friendly else 'No'}")
+
+    elif topic == "special_events":
+        add("Special events", kb.special_events_info)
+
+    elif topic == "additional":
+        add("Additional info", kb.additional_info)
+        add("Brand voice notes", kb.brand_voice_notes)
+
+    else:
+        return "Unknown topic. Use one of: hours, menu, bar_menu, happy_hour, dietary, parking, billing, reservations, private_events, ambience, facilities, special_events, additional."
+
+    return "\n".join(lines) if lines else "No information available for this topic."
+
+
+@csrf_exempt
+def retell_tool_get_info(request):
+    """Retell custom tool — fetches a specific KB section on demand."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"result": "error: invalid json"}, status=400)
+
+    call      = data.get("call", {})
+    to_number = call.get("to_number", "").strip()
+    topic     = data.get("args", {}).get("topic", "").strip().lower()
+
+    restaurant = Restaurant.objects.filter(retell_phone_number=to_number, is_active=True).first()
+    if not restaurant:
+        return JsonResponse({"result": "Restaurant info not available."})
+
+    kb = getattr(restaurant, "knowledge_base", None)
+    if not kb:
+        return JsonResponse({"result": "No information configured for this topic yet."})
+
+    result = _format_kb_topic(kb, topic)
+    logger.info("get_info: restaurant=%s topic=%r → %d chars", restaurant.slug, topic, len(result))
+    return JsonResponse({"result": result})
 
 
 @csrf_exempt
@@ -852,70 +989,86 @@ def portal_knowledge_base(request, slug):
 def portal_calls(request, slug):
     restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
 
-    ended_events = CallEvent.objects.filter(
-        restaurant=restaurant, event_type="call_ended"
-    ).order_by("-created_at")
+    # ── Filters from GET params ────────────────────────────────────────────────
+    reason_filter      = request.GET.get("reason", "")
+    followup_filter    = request.GET.get("follow_up", "")
+    reservation_filter = request.GET.get("reservation", "")
+    date_from          = request.GET.get("date_from", "")
+    date_to            = request.GET.get("date_to", "")
 
+    # Base queryset — all ended calls, joined with CallDetail + SmsLog
+    base_qs = (
+        CallEvent.objects
+        .filter(restaurant=restaurant, event_type="call_ended")
+        .select_related("detail")
+        .prefetch_related("sms_logs")
+        .order_by("-created_at")
+    )
+
+    # ── Unfiltered stats (always reflect totals, not current filter) ───────────
+    total_calls         = base_qs.count()
+    reservation_intents = base_qs.filter(detail__wants_reservation=True).count()
+    follow_ups_pending  = base_qs.filter(detail__follow_up_needed=True).count()
+    sms_sent            = SmsLog.objects.filter(
+        call_event__restaurant=restaurant, status="sent"
+    ).count()
+
+    # ── Apply filters to paginated queryset ───────────────────────────────────
+    qs = base_qs
+    if reason_filter:
+        qs = qs.filter(detail__call_reason=reason_filter)
+    if followup_filter == "1":
+        qs = qs.filter(detail__follow_up_needed=True)
+    if reservation_filter == "1":
+        qs = qs.filter(detail__wants_reservation=True)
+    if date_from:
+        qs = qs.filter(created_at__date__gte=date_from)
+    if date_to:
+        qs = qs.filter(created_at__date__lte=date_to)
+
+    paginator = Paginator(qs, 20)
+    page_qs   = paginator.get_page(request.GET.get("page"))
+
+    # ── Enrich only the current page (avoids loading all events) ──────────────
     enriched = []
-    for event in ended_events:
+    for event in page_qs.object_list:
         call_data = event.payload.get("call", {})
-        topics, outcome, duration = _classify_call(event.payload)
+        _, outcome, duration = _classify_call(event.payload)
+        detail    = getattr(event, "detail", None)
         enriched.append({
-            "date": event.created_at,
-            "from_number": call_data.get("from_number", "Unknown"),
+            "event":       event,
+            "date":        event.created_at,
+            "from_number": call_data.get("from_number", ""),
             "duration_sec": duration,
-            "topics": ", ".join(topics),
-            "outcome": outcome,
-            "transcript": call_data.get("transcript", ""),
-            "pk": event.pk,
+            "outcome":     outcome,
+            "transcript":  call_data.get("transcript", ""),
+            "detail":      detail,
+            "sms_logs":    list(event.sms_logs.all()),
         })
 
-    paginator = Paginator(enriched, 20)
-    page_obj = paginator.get_page(request.GET.get("page"))
-
     return render(request, "portal/calls.html", {
-        "restaurant": restaurant,
-        "page_obj": page_obj,
+        "restaurant":          restaurant,
+        "page_obj":            page_qs,
+        "enriched":            enriched,
+        "reason_choices":      CallDetail.CALL_REASON_CHOICES,
+        # filters (to repopulate form)
+        "reason_filter":       reason_filter,
+        "followup_filter":     followup_filter,
+        "reservation_filter":  reservation_filter,
+        "date_from":           date_from,
+        "date_to":             date_to,
+        # stats
+        "total_calls":         total_calls,
+        "reservation_intents": reservation_intents,
+        "follow_ups_pending":  follow_ups_pending,
+        "sms_sent":            sms_sent,
     })
 
 
 @login_required
 def portal_guests(request, slug):
-    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
-
-    reason_filter   = request.GET.get("reason", "")
-    followup_filter = request.GET.get("follow_up", "")
-
-    qs = (
-        CallDetail.objects
-        .filter(call_event__restaurant=restaurant)
-        .exclude(call_event__event_type="call_in_progress")  # skip mid-call placeholders
-        .select_related("call_event")
-        .order_by("-created_at")
-    )
-
-    if reason_filter:
-        qs = qs.filter(call_reason=reason_filter)
-    if followup_filter == "1":
-        qs = qs.filter(follow_up_needed=True)
-
-    total_guests        = qs.count()
-    reservation_intents = qs.filter(wants_reservation=True).count()
-    follow_ups_pending  = qs.filter(follow_up_needed=True).count()
-
-    paginator = Paginator(qs, 25)
-    page_obj  = paginator.get_page(request.GET.get("page"))
-
-    return render(request, "portal/guests.html", {
-        "restaurant":          restaurant,
-        "page_obj":            page_obj,
-        "reason_choices":      CallDetail.CALL_REASON_CHOICES,
-        "reason_filter":       reason_filter,
-        "followup_filter":     followup_filter,
-        "total_guests":        total_guests,
-        "reservation_intents": reservation_intents,
-        "follow_ups_pending":  follow_ups_pending,
-    })
+    """Redirect to unified Call Log — kept for backwards-compat with bookmarks."""
+    return redirect("portal_calls", slug=slug)
 
 
 # ─── Billing (Stripe) ────────────────────────────────────────────────────────

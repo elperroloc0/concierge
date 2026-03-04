@@ -92,4 +92,8 @@ class KnowledgeBaseForm(forms.ModelForm):
             "brand_voice_notes":      forms.Textarea(attrs={**_ta(6), "placeholder": "Use a warm, casual tone. Avoid formal greetings..."}),
             # Other
             "additional_info":        forms.Textarea(attrs=_ta(8)),
+            # Escalation
+            "escalation_enabled":          forms.CheckboxInput(attrs=_CHECK),
+            "escalation_conditions":       forms.Textarea(attrs={**_ta(4), "placeholder": "If the caller is physically at or outside the restaurant and it is currently outside working hours."}),
+            "escalation_transfer_number":  forms.TextInput(attrs={**_TEXT, "placeholder": "+17865551234"}),
         }

@@ -133,6 +133,11 @@
         {% if "other" in lint.error_tabs %}<span class="tab-dot tab-dot-error"></span>{% elif "other" in lint.warning_tabs %}<span class="tab-dot tab-dot-warning"></span>{% endif %}
       </button>
     </li>
+    <li class="nav-item">
+      <button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-escalation">
+        Escalation
+      </button>
+    </li>
   </ul>
 
   <div class="tab-content">
@@ -476,6 +481,51 @@
           <div class="char-counter" id="ctr-additional_info"></div>
           {{ kb_form.additional_info }}
           <div class="form-text">{{ kb_form.additional_info.help_text }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ESCALATION -->
+    <div class="tab-pane fade" id="tab-escalation">
+      <div class="card shadow-sm p-4">
+        <p class="section-hint">
+          When enabled, the agent can transfer the call to a human in specific situations.
+          Define exactly when escalation should happen — the agent will monitor for these conditions on every call.
+        </p>
+
+        <!-- Enable toggle -->
+        <div class="mb-4 p-3 rounded" style="background:#f8f9fa; border:1px solid #dee2e6;">
+          <div class="form-check form-switch">
+            {{ kb_form.escalation_enabled }}
+            <label class="form-check-label fw-semibold" for="{{ kb_form.escalation_enabled.id_for_label }}">
+              Enable human escalation
+            </label>
+          </div>
+          <div class="form-text mt-1">When enabled, the agent will transfer calls to a human when the conditions below are met.</div>
+        </div>
+
+        <!-- Conditions -->
+        <div class="mb-4">
+          <label class="form-label">
+            Escalation conditions
+            <span class="badge bg-warning text-dark ms-1" style="font-size:.7rem;">Agent reads</span>
+          </label>
+          {{ kb_form.escalation_conditions }}
+          <div class="form-text">{{ kb_form.escalation_conditions.help_text }}</div>
+        </div>
+
+        <!-- Transfer number -->
+        <div class="mb-3">
+          <label class="form-label">Transfer phone number</label>
+          {{ kb_form.escalation_transfer_number }}
+          <div class="form-text">{{ kb_form.escalation_transfer_number.help_text }}</div>
+        </div>
+
+        <!-- Admin reminder -->
+        <div class="alert alert-info py-2 mb-0" style="font-size:.825rem;">
+          <i class="bi bi-info-circle me-1"></i>
+          After saving, go to <strong>Django Admin → Restaurant → "Retell: 1e — Configure escalation tool on LLM"</strong> to push the transfer tool to Retell.
+          Then run <strong>"Retell: 1b — Update LLM prompt"</strong> to push the updated agent instructions.
         </div>
       </div>
     </div>
