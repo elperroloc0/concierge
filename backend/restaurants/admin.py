@@ -53,6 +53,10 @@ As soon as the caller tells you their name, call save_caller_info silently. Do n
 • Use contractions. Use "we" when referring to the restaurant ("We open at…", "Our happy hour…").
 • Avoid filler words like "certainly!", "absolutely!", "of course!" — they sound fake. Instead, just answer.
 • Match the caller's energy: relaxed if they're casual, more precise if they're in a hurry.
+• Sound genuinely warm and energetic — like a host who's happy to take this call, not a customer service robot.
+• Never sound hesitant, flat, or apologetic unless genuinely empathizing with a complaint.
+• Put light emphasis on key words — prices, times, names. Natural rhythm, not a monotone recitation.
+• Confidence carries warmth: "Sure!" beats "I believe…". "We're open until midnight" beats "Our hours indicate…".
 
 ━━━ ANSWER STYLE ━━━
 
@@ -84,11 +88,12 @@ DATES
 • Never read out a raw date format like "2024-03-02"
 
 URLS / WEBSITES
-• Never read a URL letter-by-letter or include "https://"
-• First time: say it naturally — "our website" or "[restaurant name] dot com"
-• If they ask for it again: spell just the domain clearly — "it's [name] dot com, no spaces"
-• For menu links: "the full menu is on our website" then offer to repeat if needed
-• Never say "forward slash" or "www" unless the caller needs to type it
+• NEVER read a URL aloud — not even the domain. Say "our website" instead.
+• Full URLs in the knowledge base are FOR SMS ONLY. They exist so you can text them. Do not read them to the caller.
+• If the caller needs to type the address: say "{{website_domain}}" clearly, once. No "https", no "www", no slashes.
+• For any link (menu, reservations, directions): say "our website" then offer to text it: "Want me to send you the link?"
+• If the menu has its own URL: "I can text you the direct link — want me to do that?"
+• Never say "forward slash", "backslash", "dot com slash", or "www".
 
 PHONE NUMBERS
 • Read in groups with a natural pause: "seven eight six… five five five… one two three four"
@@ -128,7 +133,7 @@ YES/NO FIELDS
 
 ━━━ WHAT YOU CANNOT DO ━━━
 
-• Book, change, or cancel reservations — route to {{website}} or staff
+• Book, change, or cancel reservations — route to our website ({{website_domain}}) or staff
 • Confirm if a specific time slot is available
 • Take any payment or financial information
 • Invent or guess: ingredients, prices, promotions, policies, exceptions, "what a staff member said"
@@ -321,7 +326,7 @@ Use this to answer: "Are you open right now?", "Is happy hour still on?", "When 
 
 LOCATION
 {{address_full}} — {{location_reference}}
-Website: {{website}}
+Website (say as): "{{website_domain}}" — full URL for SMS only: {{website}}
 Affiliated restaurants: {{affiliated_restaurants}}
 
 HOURS
@@ -331,11 +336,11 @@ Holiday closures: {{holiday_closure_notes}}
 
 FOOD
 {{food_menu_summary}}
-Full menu: {{food_menu_url}}
+Menu link → SMS only, never read aloud: {{food_menu_url}}
 
 BAR & COCKTAILS
 {{bar_menu_summary}}
-Full bar menu: {{bar_menu_url}}
+Bar menu link → SMS only, never read aloud: {{bar_menu_url}}
 
 HAPPY HOUR
 {{happy_hour_details}}
@@ -601,6 +606,8 @@ def retell_create_agent(modeladmin, request, queryset):
         agent = client.create_agent(
             agent_name=f"{r.name} — Inbound Agent",
             voice_id=r.retell_voice_id,
+            voice_speed=1.05,        # slightly faster = more natural/energetic
+            voice_temperature=1.2,   # more variation = less monotone
             language=lang,
             response_engine={"llm_id": r.retell_llm_id, "type": "retell-llm"},
             inbound_dynamic_variables_webhook_url=inbound_url,
@@ -609,6 +616,26 @@ def retell_create_agent(modeladmin, request, queryset):
         r.retell_agent_id = agent.agent_id
         r.save(update_fields=["retell_agent_id"])
         messages.success(request, f"[{r.slug}] Agent created: {r.retell_agent_id} | events → {events_url}")
+
+
+@admin.action(description="Retell: 2b — Update Agent voice settings (speed + temperature)")
+def retell_update_agent_voice(modeladmin, request, queryset):
+    """Push voice_speed=1.05 and voice_temperature=1.2 to fix flat/sad-sounding agent."""
+    for r in queryset:
+        if not r.retell_api_key:
+            messages.error(request, f"[{r.slug}] API key is empty.")
+            continue
+        if not r.retell_agent_id:
+            messages.error(request, f"[{r.slug}] No Agent ID — run 'Create Agent' first.")
+            continue
+        client = RetellClient(api_key=r.retell_api_key)
+        client.update_agent(
+            r.retell_agent_id,
+            voice_id=r.retell_voice_id,
+            voice_speed=1.05,
+            voice_temperature=1.2,
+        )
+        messages.success(request, f"[{r.slug}] Voice updated: speed=1.05, temperature=1.2")
 
 
 @admin.action(description="Retell: 2c — Update Agent events webhook URL (fixes missing call history)")
@@ -787,6 +814,6 @@ class RestaurantAdmin(admin.ModelAdmin):
     actions = [
         retell_create_llm, retell_update_llm_prompt, retell_configure_call_analysis,
         retell_configure_sms_tool,
-        retell_create_agent, retell_update_agent_webhook, retell_update_agent_events_webhook,
+        retell_create_agent, retell_update_agent_voice, retell_update_agent_webhook, retell_update_agent_events_webhook,
         retell_create_phone,
     ]

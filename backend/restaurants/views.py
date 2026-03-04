@@ -26,6 +26,16 @@ from .models import CallDetail, CallEvent, Restaurant, RestaurantKnowledgeBase, 
 
 # ─── Retell Webhook Helpers ───────────────────────────────────────────────────
 
+def _friendly_url(url: str) -> str:
+    """Return just the domain for spoken use: 'https://foo.com/menu' → 'foo.com'"""
+    if not url:
+        return ""
+    return (
+        url.replace("https://", "").replace("http://", "").replace("www.", "")
+        .split("/")[0].strip()
+    )
+
+
 def _build_dynamic_variables(restaurant):
     """Build the full dynamic_variables dict from Restaurant + KnowledgeBase."""
     kb = getattr(restaurant, "knowledge_base", None)
@@ -43,6 +53,7 @@ def _build_dynamic_variables(restaurant):
         "address_full":       restaurant.address_full,
         "location_reference": restaurant.location_reference,
         "website":            restaurant.website,
+        "website_domain":     _friendly_url(restaurant.website),
         "welcome_phrase":     restaurant.welcome_phrase,
         "primary_lang":       restaurant.primary_lang,
         "conversation_tone":  restaurant.conversation_tone,
@@ -58,8 +69,10 @@ def _build_dynamic_variables(restaurant):
             "kitchen_closing_time":   kb.kitchen_closing_time,
             "holiday_closure_notes":  kb.holiday_closure_notes or ("Closed on major holidays" if kb.closes_on_holidays else "Open on holidays"),
             "food_menu_url":          kb.food_menu_url,
+            "food_menu_domain":       _friendly_url(kb.food_menu_url),
             "food_menu_summary":      kb.food_menu_summary,
             "bar_menu_url":           kb.bar_menu_url,
+            "bar_menu_domain":        _friendly_url(kb.bar_menu_url),
             "bar_menu_summary":       kb.bar_menu_summary,
             "happy_hour_details":     kb.happy_hour_details,
             "dietary_options":        kb.dietary_options,
