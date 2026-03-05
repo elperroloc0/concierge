@@ -532,7 +532,6 @@ class KnowledgeBaseInline(admin.StackedInline):
         ("Ambience & Experience", {"fields": (
             "has_live_music", "live_music_details", "party_vibe_start_time",
             "noise_level", "dress_code", "cover_charge",
-            "art_gallery_info", "cigar_policy", "show_charge_policy",
         )}),
         ("Facilities & Access", {"fields": (
             "has_terrace", "ac_intensity", "stroller_friendly",
@@ -542,7 +541,7 @@ class KnowledgeBaseInline(admin.StackedInline):
             "affiliated_restaurants", "collect_guest_info", "guest_info_to_collect", "brand_voice_notes",
         )}),
         ("Other / Additional Info", {"fields": (
-            "additional_info",
+            "owner_notes", "additional_info",
         )}),
     )
 

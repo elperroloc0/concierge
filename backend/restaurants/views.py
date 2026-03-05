@@ -523,10 +523,12 @@ def retell_inbound_webhook(request, rest_id):
 
     raw_bytes = request.body
     raw_str = raw_bytes.decode("utf-8")
+    logger.info("Retell inbound webhook | Raw payload: %s", raw_str)
 
     try:
         payload = json.loads(raw_str)
     except json.JSONDecodeError:
+        logger.error("Retell inbound webhook | Invalid JSON payload")
         return JsonResponse({"detail": "invalid json"}, status=400)
 
     restaurant = get_object_or_404(Restaurant, id=rest_id, is_active=True)
@@ -547,6 +549,7 @@ def retell_inbound_webhook(request, rest_id):
     if signature and restaurant.retell_api_key:
         retell_client = Retell(api_key=restaurant.retell_api_key)
         if not retell_client.verify(raw_str, restaurant.retell_api_key, signature):
+            logger.warning("Retell inbound webhook | Invalid signature | restaurant=%s", restaurant.slug)
             return JsonResponse({"detail": "invalid signature"}, status=401)
 
     return JsonResponse(dyn_response, status=200)
@@ -638,15 +641,18 @@ def retell_events_webhook(request):
 
     raw = request.body.decode("utf-8")
     sig = request.headers.get("x-retell-signature", "")
+    logger.info("Retell events webhook | Raw payload: %s", raw)
 
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
+        logger.error("Retell events webhook | Invalid JSON payload")
         return JsonResponse({"detail": "invalid json"}, status=400)
 
     to_number = (data.get("to_number") or data.get("call", {}).get("to_number") or "").strip()
     restaurant = Restaurant.objects.filter(retell_phone_number=to_number, is_active=True).first()
     if not restaurant:
+        logger.warning("Retell events webhook | Unknown number: %r", to_number)
         return JsonResponse({"detail": "unknown number"}, status=404)
 
     if not settings.DEBUG:
@@ -654,6 +660,7 @@ def retell_events_webhook(request):
             return JsonResponse({"detail": "unauthorized"}, status=401)
         retell_client = Retell(api_key=restaurant.retell_api_key)
         if not retell_client.verify(raw, restaurant.retell_api_key, sig):
+            logger.warning("Retell events webhook | Invalid signature | restaurant=%s", restaurant.slug)
             return JsonResponse({"detail": "invalid signature"}, status=401)
 
     # Retell sends "event" (not "event_type") — fall back for safety
@@ -762,11 +769,8 @@ def _format_kb_topic(kb, topic: str) -> str:
 
     elif topic == "additional":
         add("Additional info", kb.additional_info)
-        for fact in (kb.venue_facts or []):
-            label = (fact.get("label") or "").strip()
-            value = (fact.get("value") or "").strip()
-            if label and value:
-                add(label, value)
+        if kb.owner_notes.strip():
+            lines.append(kb.owner_notes.strip())
 
     else:
         return "Unknown topic. Use one of: hours, menu, bar_menu, happy_hour, dietary, parking, billing, reservations, private_events, ambience, facilities, special_events, additional."
@@ -790,6 +794,7 @@ def retell_tool_get_info(request):
 
     restaurant = Restaurant.objects.filter(retell_phone_number=to_number, is_active=True).first()
     if not restaurant:
+        logger.warning("retell_tool_get_info | Unknown number: %r", to_number)
         return JsonResponse({"result": "Restaurant info not available."})
 
     kb = getattr(restaurant, "knowledge_base", None)
@@ -934,6 +939,7 @@ def retell_tool_resolve_date(request):
     try:
         data = json.loads(request.body)
     except json.JSONDecodeError:
+        logger.error("Retell tool resolve_date | Invalid JSON payload")
         return JsonResponse({"error": "invalid json"}, status=400)
 
     args      = data.get("args", {})
@@ -1023,6 +1029,13 @@ def _kb_lint(restaurant, kb):
             warnings.append(
                 f"Additional info is very long ({len(kb.additional_info)} chars). "
                 "Consider moving content to specific fields — long dumps reduce agent accuracy."
+            )
+            if "other" not in warning_tabs:
+                warning_tabs.append("other")
+        if len(kb.owner_notes) > 1500:
+            warnings.append(
+                f"Custom info is very long ({len(kb.owner_notes)} chars). "
+                "Consider trimming — long dumps reduce agent accuracy."
             )
             if "other" not in warning_tabs:
                 warning_tabs.append("other")
@@ -1252,20 +1265,6 @@ def portal_knowledge_base(request, slug):
 
             basic_form.save()
             kb_form.save()
-
-            # Parse and save venue_facts from the dynamic form rows
-            raw_facts = request.POST.get("venue_facts_json", "[]")
-            try:
-                facts = json.loads(raw_facts)
-                kb.venue_facts = [
-                    {"label": f["label"].strip(), "value": f["value"].strip()}
-                    for f in facts
-                    if f.get("label", "").strip() and f.get("value", "").strip()
-                ]
-                kb.save(update_fields=["venue_facts"])
-            except (json.JSONDecodeError, KeyError, TypeError):
-                pass
-
             kb.refresh_from_db()
 
             # Auto-push tools to Retell if escalation settings changed
@@ -1288,7 +1287,6 @@ def portal_knowledge_base(request, slug):
         "basic_form": basic_form,
         "kb_form": kb_form,
         "lint": lint,
-        "venue_facts": kb.venue_facts or [],
     })
 
 

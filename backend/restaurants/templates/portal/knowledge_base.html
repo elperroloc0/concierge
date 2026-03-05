@@ -95,13 +95,29 @@
 </div>
 {% endif %}
 {% if lint.warnings %}
-<div class="alert alert-warning d-flex gap-2 align-items-start mb-3" role="alert">
-  <i class="bi bi-exclamation-triangle-fill fs-5 mt-1 flex-shrink-0"></i>
-  <div>
-    <strong>Optimization suggestions:</strong>
-    <ul class="mb-0 mt-1">
-      {% for msg in lint.warnings %}<li>{{ msg }}</li>{% endfor %}
-    </ul>
+<button type="button"
+  class="btn btn-warning btn-sm mb-3 d-flex align-items-center gap-2"
+  data-bs-toggle="modal" data-bs-target="#lint-warnings-modal">
+  <i class="bi bi-exclamation-triangle-fill"></i>
+  Optimization suggestions
+  <span class="badge bg-dark ms-1">{{ lint.warnings|length }}</span>
+</button>
+
+<div class="modal fade" id="lint-warnings-modal" tabindex="-1" aria-labelledby="lint-warnings-label" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold" id="lint-warnings-label">
+          <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Optimization suggestions
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <ul class="mb-0 ps-3">
+          {% for msg in lint.warnings %}<li class="mb-1">{{ msg }}</li>{% endfor %}
+        </ul>
+      </div>
+    </div>
   </div>
 </div>
 {% endif %}
@@ -639,24 +655,13 @@
     <!-- OTHER -->
     <div class="tab-pane fade" id="tab-other">
       <div class="card hover-lift p-4">
-        <p class="section-hint mb-3">
-          Add any fact your agent should know that doesn't have a dedicated field — concept, affiliation, capacity, gift cards, Wi-Fi, birthday policy, and anything unique to your venue.
-          The agent uses the <strong>label</strong> to match caller questions and the <strong>value</strong> to answer them.
+        <label class="form-label" for="{{ kb_form.owner_notes.id_for_label }}">Custom Info</label>
+        <p class="section-hint mb-2">
+          Anything your agent should know that doesn't fit the other tabs —
+          gift cards, Wi-Fi password, capacity, corkage fee, birthday policy, etc.
+          One fact per line works well.
         </p>
-        <p class="section-hint mb-3">
-          <strong>Examples:</strong>
-          <code class="d-block mt-1">Concept → Cuban-Asian fusion inspired by Havana's Barrio Chino</code>
-          <code class="d-block">Affiliation → Our Bogotá and Cartagena locations are separate and unaffiliated</code>
-          <code class="d-block">Gift cards → Yes, available at the bar and online</code>
-          <code class="d-block">Corkage fee → $25 per bottle, max 2 per table</code>
-          <code class="d-block">Birthday policy → Complimentary dessert with 24h advance notice</code>
-        </p>
-        <input type="hidden" name="venue_facts_json" id="venue-facts-json" value="">
-        {{ venue_facts|json_script:"venue-facts-initial" }}
-        <div id="venue-facts-rows" class="mb-2"></div>
-        <button type="button" id="add-venue-fact" class="btn btn-sm btn-dark">
-          + Add fact
-        </button>
+        {{ kb_form.owner_notes }}
       </div>
     </div>
 
@@ -723,7 +728,7 @@ const TAB_FIELDS = {
   "tab-ambience":     ["id_live_music_details","id_party_vibe_start_time","id_dress_code","id_cover_charge"],
   "tab-facilities":   ["id_valet_cost","id_free_parking_info"],
   "tab-agent":        ["id_escalation_transfer_number","id_escalation_conditions","id_affiliated_restaurants"],
-  "tab-other":        [],
+  "tab-other":        ["id_owner_notes"],
 };
 
 // ── Char counter setup ────────────────────────────────────────────────────────
@@ -908,92 +913,17 @@ function parseDishes(group) {
 ["id_menu_best_sellers", "id_bar_signature_drinks"].forEach(id => {
   document.getElementById(id)?.closest(".d-none") || document.getElementById(id)?.classList.add("d-none");
 });
-parseDishes("food");
-parseDishes("bar");
+try { parseDishes("food"); } catch(e) { console.warn("parseDishes food:", e); }
+try { parseDishes("bar"); } catch(e) { console.warn("parseDishes bar:", e); }
 
 // Serialize before form submit
 document.getElementById("kb-form").addEventListener("submit", () => {
   try { serializeDishes("food"); } catch(e) { console.warn("dish serializer:", e); }
   try { serializeDishes("bar"); } catch(e) { console.warn("dish serializer:", e); }
-  serializeVenueFacts();
 }, { capture: true });
 
-// ── Venue facts dynamic rows ──────────────────────────────────────────────────
-const FACT_PLACEHOLDERS = [
-  ["Gift cards",      "Yes, available at the bar and online"],
-  ["Wi-Fi",           "Free — password is Dragones2025"],
-  ["Corkage fee",     "$25 per bottle, max 2 bottles per table"],
-  ["Birthday policy", "Complimentary dessert with 24h advance notice"],
-  ["Art gallery",     "Cuban art on walls — pieces available for purchase"],
-  ["Cigar policy",    "Terrace only. Not allowed indoors."],
-  ["Minimum age",     "21+ after 10pm on weekends"],
-  ["Show charge",     "$10 per person for groups 15+ on weekends"],
-];
-
-function buildFactRow(label, value) {
-  label = label || "";
-  value = value || "";
-  const idx = document.querySelectorAll(".venue-fact-row").length;
-  const [ph_label, ph_value] = FACT_PLACEHOLDERS[idx % FACT_PLACEHOLDERS.length];
-
-  const labelInput = document.createElement("input");
-  labelInput.type = "text";
-  labelInput.className = "form-control form-control-sm fact-label";
-  labelInput.placeholder = ph_label;
-  labelInput.value = label;
-
-  const valueInput = document.createElement("input");
-  valueInput.type = "text";
-  valueInput.className = "form-control form-control-sm fact-value";
-  valueInput.placeholder = ph_value;
-  valueInput.value = value;
-
-  const row = document.createElement("div");
-  row.className = "venue-fact-row row g-2 mb-2 align-items-center";
-
-  const removeBtn = document.createElement("button");
-  removeBtn.type = "button";
-  removeBtn.className = "btn btn-sm btn-outline-danger remove-fact";
-  removeBtn.title = "Remove";
-  removeBtn.textContent = "×";
-  labelInput.addEventListener("input", serializeVenueFacts);
-  valueInput.addEventListener("input", serializeVenueFacts);
-  removeBtn.addEventListener("click", () => { row.remove(); serializeVenueFacts(); });
-
-  const col1 = document.createElement("div"); col1.className = "col-md-4"; col1.appendChild(labelInput);
-  const col2 = document.createElement("div"); col2.className = "col";      col2.appendChild(valueInput);
-  const col3 = document.createElement("div"); col3.className = "col-auto"; col3.appendChild(removeBtn);
-
-  row.appendChild(col1);
-  row.appendChild(col2);
-  row.appendChild(col3);
-  return row;
-}
-
-function serializeVenueFacts() {
-  const facts = [];
-  document.querySelectorAll(".venue-fact-row").forEach(row => {
-    const label = row.querySelector(".fact-label").value.trim();
-    const value = row.querySelector(".fact-value").value.trim();
-    if (label && value) facts.push({ label, value });
-  });
-  document.getElementById("venue-facts-json").value = JSON.stringify(facts);
-}
-
-function initVenueFacts() {
-  const container = document.getElementById("venue-facts-rows");
-  const existing = JSON.parse(document.getElementById("venue-facts-initial").textContent || "[]");
-  existing.forEach(f => container.appendChild(buildFactRow(f.label, f.value)));
-  document.getElementById("add-venue-fact").addEventListener("click", () => {
-    container.appendChild(buildFactRow());
-    serializeVenueFacts();
-  });
-  serializeVenueFacts();  // prime hidden input with current facts on page load
-}
-
 // ── Init ─────────────────────────────────────────────────────────────────────
-buildExampleHints();
-updateTabCounters();
-initVenueFacts();
+try { buildExampleHints(); } catch(e) { console.error("buildExampleHints:", e); }
+try { updateTabCounters(); } catch(e) { console.error("updateTabCounters:", e); }
 </script>
 {% endblock %}

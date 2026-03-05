@@ -96,10 +96,6 @@ class Restaurant(models.Model):
         if self.notify_via_ws and not self.notify_ws_numb:
             errors["notify_ws_numb"] = "Required if WhatsApp notifications are enabled."
 
-        # If email notifications enabled, require at least one email
-        if self.notify_via_email and not (self.notify_email or self.contact_email):
-            errors["notify_email"] = "Provide notify_email or contact_email for email notifications."
-
         if errors:
             raise ValidationError(errors)
 
@@ -364,9 +360,12 @@ class RestaurantKnowledgeBase(models.Model):
     )
 
     # ── Other / Free-form ─────────────────────────────────────────────────
-    venue_facts = models.JSONField(
-        blank=True, default=list,
-        help_text="Venue-specific facts as label/value pairs (e.g. Gift cards, Wi-Fi, corkage fee)."
+    owner_notes = models.TextField(
+        blank=True, default="",
+        help_text=(
+            "Free-form notes the agent should know: gift cards, Wi-Fi password, "
+            "corkage fee, birthday policy, capacity, etc."
+        )
     )
     additional_info = models.TextField(
         blank=True, default="",

@@ -1,4 +1,5 @@
 import re
+import urllib.parse
 
 from django import forms
 
@@ -13,7 +14,24 @@ def _ta(rows=3):
     return {"class": "form-control", "rows": rows}
 
 
+def _normalize_url(value):
+    """Prepend https:// if no scheme is present, then validate the result."""
+    value = value.strip()
+    if not value:
+        return value
+    if not value.startswith(("http://", "https://")):
+        value = "https://" + value
+    parsed = urllib.parse.urlparse(value)
+    if not parsed.netloc:
+        raise forms.ValidationError("Enter a valid URL (e.g. https://example.com).")
+    return value
+
+
 class RestaurantBasicForm(forms.ModelForm):
+    # Override as CharField so Django's URLField validator doesn't block input
+    # without a scheme. Normalization and validation happen in clean_website().
+    website = forms.CharField(required=False, widget=forms.TextInput(attrs=_TEXT))
+
     class Meta:
         model = Restaurant
         fields = [
@@ -25,7 +43,6 @@ class RestaurantBasicForm(forms.ModelForm):
             "name":               forms.TextInput(attrs=_TEXT),
             "address_full":       forms.TextInput(attrs=_TEXT),
             "location_reference": forms.Textarea(attrs=_ta(2)),
-            "website":            forms.URLInput(attrs=_TEXT),
             "timezone":           forms.TextInput(attrs=_TEXT),
             "primary_lang":       forms.Select(attrs=_SEL),
             "conversation_tone":  forms.Select(attrs=_SEL),
@@ -34,8 +51,15 @@ class RestaurantBasicForm(forms.ModelForm):
             "contact_email":      forms.EmailInput(attrs=_TEXT),
         }
 
+    def clean_website(self):
+        return _normalize_url(self.cleaned_data.get("website", ""))
+
 
 class KnowledgeBaseForm(forms.ModelForm):
+    # Override URL fields as CharField so normalization runs before validation.
+    food_menu_url = forms.CharField(required=False, widget=forms.TextInput(attrs={**_TEXT, "placeholder": "https://yourwebsite.com/menu"}))
+    bar_menu_url  = forms.CharField(required=False, widget=forms.TextInput(attrs={**_TEXT, "placeholder": "https://yourwebsite.com/drinks"}))
+
     class Meta:
         model = RestaurantKnowledgeBase
         # Explicit allowlist — brand_voice_notes, collect_guest_info, guest_info_to_collect
@@ -69,6 +93,8 @@ class KnowledgeBaseForm(forms.ModelForm):
             # Agent (owner-facing: call transfer + sister locations only)
             "escalation_enabled", "escalation_conditions", "escalation_transfer_number",
             "affiliated_restaurants",
+            # Custom info
+            "owner_notes",
         ]
         widgets = {
             # Spoken overrides
@@ -83,9 +109,7 @@ class KnowledgeBaseForm(forms.ModelForm):
                 "placeholder": "March 15, 2026: closed for private event.\nApril 1, 2026: private buyout — no public dining.",
             }),
             # Menu
-            "food_menu_url":          forms.URLInput(attrs={**_TEXT, "placeholder": "https://yourwebsite.com/menu"}),
             "food_menu_summary":      forms.Textarea(attrs={**_ta(6), "placeholder": "We specialize in Latin-Asian fusion. Best sellers: ceviche tostada ($18), short rib tacos ($24). Most dishes between $15–$35."}),
-            "bar_menu_url":           forms.URLInput(attrs={**_TEXT, "placeholder": "https://yourwebsite.com/drinks"}),
             "bar_menu_summary":       forms.Textarea(attrs=_ta(6)),
             "happy_hour_details":     forms.Textarea(attrs={**_ta(4), "placeholder": "Mon–Fri 4–7pm. 50% off all cocktails and select beers. Available at bar and lounge seating only."}),
             "dietary_options":        forms.Textarea(attrs=_ta(4)),
@@ -124,7 +148,23 @@ class KnowledgeBaseForm(forms.ModelForm):
             "escalation_enabled":         forms.CheckboxInput(attrs=_CHECK),
             "escalation_conditions":      forms.Textarea(attrs={**_ta(3), "placeholder": "Caller asks to speak with a manager.\nCaller reports an emergency on-site."}),
             "escalation_transfer_number": forms.TextInput(attrs={**_TEXT, "placeholder": "+17865551234"}),
+            # Custom info
+            "owner_notes": forms.Textarea(attrs={
+                **_ta(6),
+                "placeholder": (
+                    "Gift cards: Yes, available at the bar\n"
+                    "Wi-Fi: Free — password is Dragones2025\n"
+                    "Corkage fee: $25 per bottle, max 2 per table\n"
+                    "Birthday policy: Complimentary dessert with 24h notice"
+                ),
+            }),
         }
+
+    def clean_food_menu_url(self):
+        return _normalize_url(self.cleaned_data.get("food_menu_url", ""))
+
+    def clean_bar_menu_url(self):
+        return _normalize_url(self.cleaned_data.get("bar_menu_url", ""))
 
     def clean_escalation_transfer_number(self):
         number = self.cleaned_data.get("escalation_transfer_number", "").strip()
