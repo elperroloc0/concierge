@@ -26,6 +26,18 @@ from .services.retell_client import RetellClient
 from .services.retell_tools import build_tool_list
 
 
+# ─── Global Redirects ─────────────────────────────────────────────────────────
+
+def root_redirect(request):
+    """Redirect root '/' to the portal login or dashboard."""
+    if request.user.is_authenticated:
+        # If user is logged in, try to find their restaurant
+        restaurant = Restaurant.objects.filter(user=request.user).first()
+        if restaurant:
+            return redirect("portal_dashboard", slug=restaurant.slug)
+    return redirect("portal_login")
+
+
 # ─── Retell Webhook Helpers ───────────────────────────────────────────────────
 
 def _friendly_url(url: str) -> str:
@@ -532,6 +544,17 @@ def retell_inbound_webhook(request, rest_id):
         return JsonResponse({"detail": "invalid json"}, status=400)
 
     restaurant = get_object_or_404(Restaurant, id=rest_id, is_active=True)
+    sub = getattr(restaurant, "subscription", None)
+
+    # ── Check Subscription Status & Communication Balance ─────────────────────
+    if not sub or not sub.is_active:
+        logger.warning("Retell inbound webhook | Subscription inactive | restaurant=%s", restaurant.slug)
+        return JsonResponse({"detail": "Subscription inactive. Please renew in the portal."}, status=402)
+
+    if sub.communication_balance <= 0:
+        logger.warning("Retell inbound webhook | Insufficient balance (%.2f) | restaurant=%s",
+                       sub.communication_balance, restaurant.slug)
+        return JsonResponse({"detail": "Insufficient communication balance. Please top up."}, status=402)
 
     to_number = (payload.get("to_number") or "").strip()
 
@@ -668,6 +691,22 @@ def retell_events_webhook(request):
     call_event = CallEvent.objects.create(restaurant=restaurant, event_type=event_type, payload=data)
 
     if event_type == "call_ended":
+        # ── Subtract Call Cost from Communication Balance ─────────────────────
+        call_payload = data.get("call", {})
+        combined_cost = call_payload.get("combined_cost") # in USD
+        if combined_cost is not None:
+            try:
+                from decimal import Decimal
+                sub = getattr(restaurant, "subscription", None)
+                if sub:
+                    cost_decimal = Decimal(str(combined_cost))
+                    sub.communication_balance -= cost_decimal
+                    sub.save(update_fields=["communication_balance"])
+                    logger.info("Retell call_ended | Subtracted cost: %.4f | New balance: %.4f | restaurant=%s",
+                                combined_cost, sub.communication_balance, restaurant.slug)
+            except Exception:
+                logger.exception("Failed to update communication balance for restaurant=%s", restaurant.slug)
+
         try:
             _build_call_detail_from_payload(call_event)
         except Exception:
@@ -1410,6 +1449,12 @@ def portal_billing_checkout(request, slug):
     restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
     sub = _get_or_create_subscription(restaurant)
 
+    # ── Mock logic for verification if Stripe keys are missing in DEBUG ────────
+    base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
+    if settings.DEBUG and not settings.STRIPE_SECRET_KEY:
+        logger.info("MOCK: Stripe checkout for sub triggered (no keys) | restaurant=%s", restaurant.slug)
+        return redirect(f"{base_url}/portal/{slug}/billing/?success=1", permanent=False)
+
     stripe.api_key = settings.STRIPE_SECRET_KEY
     base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
 
@@ -1430,6 +1475,45 @@ def portal_billing_checkout(request, slug):
         mode="subscription",
         success_url=f"{base_url}/portal/{slug}/billing/?success=1",
         cancel_url=f"{base_url}/portal/{slug}/billing/?cancelled=1",
+        metadata={"restaurant_id": str(restaurant.pk), "type": "subscription"},
+    )
+    return redirect(session.url, permanent=False)
+
+
+@login_required
+def portal_billing_topup(request, slug):
+    if request.method != "POST":
+        return redirect("portal_billing", slug=slug)
+
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    sub = _get_or_create_subscription(restaurant)
+
+    # ── Mock logic for verification if Stripe keys are missing in DEBUG ────────
+    base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
+    if settings.DEBUG and (not settings.STRIPE_SECRET_KEY or not settings.STRIPE_COMMUNICATION_PRICE_ID):
+        logger.info("MOCK: Stripe top-up triggered (mocking) | restaurant=%s", restaurant.slug)
+        return redirect(f"{base_url}/portal/{slug}/billing/?topup_success=1", permanent=False)
+
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
+
+    if not sub.stripe_customer_id:
+        customer = stripe.Customer.create(
+            email=restaurant.contact_email or request.user.email,
+            name=restaurant.name,
+            metadata={"restaurant_id": str(restaurant.pk)},
+        )
+        sub.stripe_customer_id = customer.id
+        sub.save(update_fields=["stripe_customer_id"])
+
+    session = stripe.checkout.Session.create(
+        customer=sub.stripe_customer_id,
+        payment_method_types=["card"],
+        line_items=[{"price": settings.STRIPE_COMMUNICATION_PRICE_ID, "quantity": 1}],
+        mode="payment",
+        success_url=f"{base_url}/portal/{slug}/billing/?topup_success=1",
+        cancel_url=f"{base_url}/portal/{slug}/billing/?cancelled=1",
+        metadata={"restaurant_id": str(restaurant.pk), "type": "topup"},
     )
     return redirect(session.url, permanent=False)
 
@@ -1478,11 +1562,30 @@ def stripe_webhook(request):
     if event["type"] == "checkout.session.completed":
         customer_id = data.get("customer")
         subscription_id = data.get("subscription")
-        sub = Subscription.objects.filter(stripe_customer_id=customer_id).first()
-        if sub and subscription_id:
-            sub.stripe_subscription_id = subscription_id
-            sub.status = "active"
-            sub.save(update_fields=["stripe_subscription_id", "status"])
+        metadata = data.get("metadata", {})
+
+        if metadata.get("type") == "topup":
+            # Handle one-time payment for communication balance
+            restaurant_id = metadata.get("restaurant_id")
+            if restaurant_id:
+                # We need to find how much was paid.
+                # For simplicity, if we have a fixed price ID, we might know the value.
+                # Or better, we can get it from the session's total_details or line items.
+                amount_total = data.get("amount_total", 0) / 100.0 # cents to USD
+                from decimal import Decimal
+                sub = Subscription.objects.filter(restaurant_id=restaurant_id).first()
+                if sub:
+                    sub.communication_balance += Decimal(str(amount_total))
+                    sub.save(update_fields=["communication_balance"])
+                    logger.info("Stripe Webhook | Top-up successful | restaurant_id=%s | amount=%.2f",
+                                restaurant_id, amount_total)
+        else:
+            # Legacy or subscription logic
+            sub = Subscription.objects.filter(stripe_customer_id=customer_id).first()
+            if sub and subscription_id:
+                sub.stripe_subscription_id = subscription_id
+                sub.status = "active"
+                sub.save(update_fields=["stripe_subscription_id", "status"])
 
     elif event["type"] in ("customer.subscription.updated", "customer.subscription.created"):
         customer_id = data.get("customer")

@@ -15,52 +15,52 @@ class Restaurant(models.Model):
         get_user_model(), null=True, blank=True,
         on_delete=models.SET_NULL, related_name="restaurant"
     )
-    
+
     # contacts
     contact_person = models.CharField(max_length=255, blank=True, default="")
     contact_email = models.EmailField(blank=True, default="")
     contact_phone = models.CharField(max_length=32, blank=True, default="")
-    
-    # location 
+
+    # location
     address_full = models.CharField(max_length=512, blank=True, default="")
     location_reference = models.TextField(blank=True, default="")
     website =  models.URLField(blank=True,default="")
     timezone = models.CharField(max_length=100, default="America/New_York")
-    
+
     # user prefs
     primary_lang =  models.CharField(max_length=16, default="es", choices=[("es", "Spanish"), ("en", "English"), ("other", "other"),])
     conversation_tone =  models.CharField(max_length=16, default="friendly", choices=[("formal", "Formal"), ("friendly", "Friendly"), ("adaptive", "Adaptive")],)
     welcome_phrase = models.TextField(blank=True, default="")
-    
-    # phone strategy 
+
+    # phone strategy
     phone_mode = models.CharField(
-        max_length=16, 
-        default="new", 
-        choices=[("new", "New number"), ("existing", "Existing number")], 
+        max_length=16,
+        default="new",
+        choices=[("new", "New number"), ("existing", "Existing number")],
         help_text="existing = keep public number and forward to Twilio; new = use Twilio number as public",
         )
-    
+
     existing_ph_numb = models.CharField(max_length=32, blank=True, default="")
 
     # if restaurant keeps existing number - did i set up forwarding to twilio?
     forwarding_enabled = models.BooleanField(default=False)
-    
+
     # notifications (summaries ans alerts)
     notify_via_email = models.BooleanField(default=True)
     notify_email = models.EmailField(blank=True, default="")
-    
+
     # whatsapp notifications
     notify_via_ws = models.BooleanField(default=False)
     notify_ws_numb = models.CharField(max_length=32, blank=True, default="")
-    
+
     notify_other = models.CharField(max_length=64, blank=True, default="")
-    
+
     # status
     is_active = models.BooleanField(default=True)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     # retell
     retell_api_key = models.CharField(max_length=128, blank=True, default="")
     retell_agent_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
@@ -85,7 +85,7 @@ class Restaurant(models.Model):
         max_length=32, blank=True, default="",
         help_text="Twilio phone number to send SMS from (E.164 format, e.g. +17865550000)."
     )
-    
+
     # Validation
     def clean(self):
         errors = {}
@@ -119,8 +119,8 @@ class Restaurant(models.Model):
 
     def __str__(self):
         return self.name
-    
-    
+
+
 class Subscription(models.Model):
     STATUS_CHOICES = [
         ("active",    "Active"),
@@ -137,6 +137,10 @@ class Subscription(models.Model):
     stripe_subscription_id = models.CharField(max_length=64, blank=True, default="")
     status                 = models.CharField(max_length=16, default="inactive", choices=STATUS_CHOICES, db_index=True)
     current_period_end     = models.DateTimeField(null=True, blank=True)
+
+    # Usage-based billing: communication expenses (synced from Retell)
+    communication_balance  = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
     created_at             = models.DateTimeField(auto_now_add=True)
     updated_at             = models.DateTimeField(auto_now=True)
 
@@ -265,7 +269,7 @@ class RestaurantKnowledgeBase(models.Model):
     )
 
     # ── Structured menu fields (columns added by migration 0022) ──────────
-    menu_cuisine_type    = models.CharField(max_length=200, blank=True, default="",
+    menu_cuisine_type    = models.TextField(blank=True, default="",
         help_text="Cuisine type & concept. e.g. 'Latin-Asian fusion, tapas-style sharing plates'.")
     menu_best_sellers    = models.TextField(blank=True, default="",
         help_text="Signature dishes with prices. One item per line.")
@@ -273,7 +277,7 @@ class RestaurantKnowledgeBase(models.Model):
         help_text="Typical price range. e.g. '$15–$35 per dish'.")
     menu_categories      = models.CharField(max_length=255, blank=True, default="",
         help_text="Menu sections. e.g. 'Starters, Dumplings, Wok & fried rice, Mains, Sides'.")
-    bar_concept          = models.CharField(max_length=200, blank=True, default="",
+    bar_concept          = models.TextField(blank=True, default="",
         help_text="Bar specialty & concept. e.g. 'Craft cocktails, extensive rum & mezcal selection'.")
     bar_signature_drinks = models.TextField(blank=True, default="",
         help_text="Signature cocktails with prices. One item per line.")

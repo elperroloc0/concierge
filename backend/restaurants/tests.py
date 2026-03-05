@@ -251,6 +251,10 @@ class InboundWebhookTest(TestCase):
             retell_api_key="secret-key",
             retell_phone_number="+13051234567",
         )
+        # Add active subscription for general tests
+        from .models import Subscription
+        self.subscription = Subscription.objects.create(restaurant=self.restaurant, status="active", communication_balance=100.00)
+
         self.url = reverse("retell_webhook", kwargs={"rest_id": self.restaurant.id})
 
         # Default valid payload matching the restaurant's phone number
@@ -401,6 +405,36 @@ class InboundWebhookTest(TestCase):
         self.assertEqual(dv["primary_lang"], "es")
         self.assertEqual(dv["timezone"], "America/New_York")
 
+    @override_settings(DEBUG=False)
+    def test_inactive_subscription_returns_402(self):
+        """If the restaurant has no active subscription, return 402."""
+        from .models import Subscription
+        sub = self.subscription
+        sub.status = "inactive"
+        sub.save()
+
+        with patch("restaurants.views.Retell") as MockRetell:
+            MockRetell.return_value.verify.return_value = True
+            response = self._post(headers={"HTTP_X_RETELL_SIGNATURE": "valid-sig"})
+
+        self.assertEqual(response.status_code, 402)
+        self.assertIn("Subscription inactive", response.json()["detail"])
+
+    @override_settings(DEBUG=False)
+    def test_insufficient_balance_returns_402(self):
+        """If communication_balance <= 0, return 402."""
+        from .models import Subscription
+        sub = self.subscription
+        sub.communication_balance = 0.00
+        sub.save()
+
+        with patch("restaurants.views.Retell") as MockRetell:
+            MockRetell.return_value.verify.return_value = True
+            response = self._post(headers={"HTTP_X_RETELL_SIGNATURE": "valid-sig"})
+
+        self.assertEqual(response.status_code, 402)
+        self.assertIn("Insufficient communication balance", response.json()["detail"])
+
     def test_valid_request_calls_verify_with_correct_arguments(self):
         """
         Beyond checking the HTTP response, assert that our code called the SDK
@@ -478,6 +512,9 @@ class EventsWebhookTest(TestCase):
             retell_phone_number="+13051234567",
             retell_api_key="events-key",
         )
+        # Add active subscription
+        from .models import Subscription
+        self.subscription = Subscription.objects.create(restaurant=self.restaurant, status="active", communication_balance=100.00)
 
     def _make_request(self, payload, signature=""):
         from restaurants.views import retell_events_webhook
@@ -536,3 +573,26 @@ class EventsWebhookTest(TestCase):
         event = CallEvent.objects.first()
         self.assertEqual(event.event_type, "call_ended")
         self.assertEqual(event.restaurant, self.restaurant)
+
+    def test_call_ended_updates_communication_balance(self):
+        """On call_ended, the combined_cost should be subtracted from the balance."""
+        from .models import Subscription
+        from decimal import Decimal
+        sub = self.subscription
+        sub.communication_balance = Decimal("10.00")
+        sub.save()
+
+        payload = {
+            "to_number": "+13051234567",
+            "event": "call_ended",
+            "call": {
+                "combined_cost": 0.50
+            }
+        }
+
+        with patch("restaurants.views.Retell") as MockRetell:
+            MockRetell.return_value.verify.return_value = True
+            self._make_request(payload, signature="valid")
+
+        sub.refresh_from_db()
+        self.assertEqual(sub.communication_balance, Decimal("9.50"))

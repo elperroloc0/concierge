@@ -3,6 +3,7 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path("", views.root_redirect),
     # ── Auth (no slug — pre-login) ─────────────────────────────────────────
     path("login/",views.portal_login,   name="portal_login"),
     path("logout/",views.portal_logout,  name="portal_logout"),
@@ -15,4 +16,5 @@ urlpatterns = [
     path("<slug:slug>/billing/",            views.portal_billing,          name="portal_billing"),
     path("<slug:slug>/billing/checkout/",   views.portal_billing_checkout, name="portal_billing_checkout"),
     path("<slug:slug>/billing/portal/",     views.portal_billing_portal,   name="portal_billing_portal"),
+    path("<slug:slug>/billing/topup/",      views.portal_billing_topup,    name="portal_billing_topup"),
 ]

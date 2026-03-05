@@ -23,5 +23,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/retell/', include('restaurants.urls')),
     path('api/stripe/webhook/', restaurant_views.stripe_webhook, name='stripe_webhook'),
+    path('', restaurant_views.root_redirect),
     path('portal/', include('restaurants.portal_urls')),
 ]
