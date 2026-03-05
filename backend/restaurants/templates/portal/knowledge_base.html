@@ -57,6 +57,18 @@
   .char-counter.ok     { color: #198754; }
   .char-counter.warn   { color: #fd7e14; }
   .char-counter.danger { color: #dc3545; font-weight: 600; }
+
+  /* Menu sub-tabs */
+  .menu-nav { margin-bottom: 1.25rem; }
+  .menu-nav .nav-link { font-size: .82rem; padding: 5px 14px; color: #495057; }
+  .menu-nav .nav-link.active { background: #0d6efd; color: #fff; border-radius: 6px; }
+
+  /* Dish row builder */
+  .dish-table th { font-size: .75rem; font-weight: 600; color: #6c757d; padding: 4px 6px; border-bottom: 1px solid #dee2e6; }
+  .dish-table td { vertical-align: middle; padding: 3px 4px; }
+  .dish-table input.form-control-sm { font-size: .82rem; }
+  .dish-star { width: 36px; text-align: center; }
+  .dish-remove { width: 36px; text-align: center; }
 </style>
 {% endblock %}
 
@@ -66,7 +78,7 @@
     <h4 class="fw-bold mb-0">Knowledge Base</h4>
     <p class="text-muted small mb-0">This information is used by the AI agent to answer caller questions.</p>
   </div>
-  <button form="kb-form" type="submit" class="btn btn-dark fw-semibold px-4">
+  <button form="kb-form" type="submit" class="btn btn-primary fw-semibold px-4" onclick="this.classList.add('btn-loading');">
     <i class="bi bi-floppy-fill me-1"></i> Save Changes
   </button>
 </div>
@@ -97,7 +109,7 @@
 <form id="kb-form" method="post" novalidate>
   {% csrf_token %}
 
-  <ul class="nav nav-tabs mb-3" id="kbTabs" role="tablist">
+  <ul class="nav nav-tabs mb-3 custom-scrollbar" id="kbTabs" role="tablist">
     <li class="nav-item">
       <button type="button" class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-basic">
         Restaurant
@@ -129,13 +141,8 @@
     </li>
     <li class="nav-item">
       <button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-other">
-        Other
+        Custom Info
         {% if "other" in lint.error_tabs %}<span class="tab-dot tab-dot-error"></span>{% elif "other" in lint.warning_tabs %}<span class="tab-dot tab-dot-warning"></span>{% endif %}
-      </button>
-    </li>
-    <li class="nav-item">
-      <button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-escalation">
-        Escalation
       </button>
     </li>
   </ul>
@@ -144,7 +151,7 @@
 
     <!-- RESTAURANT BASICS -->
     <div class="tab-pane fade show active" id="tab-basic">
-      <div class="card shadow-sm p-4">
+      <div class="card hover-lift p-4">
         <div class="row g-3">
           <div class="col-md-6">
             <label class="form-label">{{ basic_form.name.label }}</label>
@@ -189,13 +196,21 @@
             <label class="form-label">{{ basic_form.contact_email.label }}</label>
             {{ basic_form.contact_email }}
           </div>
+          <div class="col-12">
+            <label class="form-label">
+              {{ kb_form.contact_email_spoken.label }}
+              <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
+            </label>
+            <small class="text-muted d-block mb-1">{{ kb_form.contact_email_spoken.field.help_text }}</small>
+            {{ kb_form.contact_email_spoken }}
+          </div>
         </div>
       </div>
     </div>
 
     <!-- HOURS -->
     <div class="tab-pane fade" id="tab-hours">
-      <div class="card shadow-sm p-4">
+      <div class="card hover-lift p-4">
         <p class="section-hint">The AI uses these to answer "are you open?" and similar questions.</p>
         <div class="mb-3">
           <label class="form-label">
@@ -218,64 +233,214 @@
           {{ kb_form.holiday_closure_notes }}
         </div>
         <div class="mb-3">
-          <label class="form-label">{{ kb_form.private_event_closures.label }}</label>
+          <label class="form-label">
+            {{ kb_form.private_event_closures.label }}
+            <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
+          </label>
+          <div class="alert alert-warning py-1 px-2 mb-2" style="font-size:.78rem;">
+            <i class="bi bi-calendar-event"></i>
+            <strong>Date format:</strong> use <code>Month D, YYYY</code> — one entry per line.
+            Example: <em>March 15, 2026: closed for private event.</em>
+          </div>
+          <div class="char-counter" id="ctr-private_event_closures"></div>
           {{ kb_form.private_event_closures }}
+          <div class="form-text">{{ kb_form.private_event_closures.field.help_text }}</div>
         </div>
       </div>
     </div>
 
     <!-- MENU -->
     <div class="tab-pane fade" id="tab-menu">
-      <div class="card shadow-sm p-4">
-        <p class="section-hint">Paste a curated ~300-word summary of your best sellers. The AI uses this on every call — keep it current.</p>
-        <div class="row g-3">
-          <div class="col-md-6">
-            <label class="form-label">{{ kb_form.food_menu_url.label }}</label>
-            {{ kb_form.food_menu_url }}
-            <div class="form-text">{{ kb_form.food_menu_url.help_text }}</div>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">{{ kb_form.bar_menu_url.label }}</label>
-            {{ kb_form.bar_menu_url }}
-          </div>
-          <div class="col-12">
-            <label class="form-label">
-              {{ kb_form.food_menu_summary.label }}
-              <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
-            </label>
-            <div class="char-counter" id="ctr-food_menu_summary"></div>
-            {{ kb_form.food_menu_summary }}
-            <div class="form-text">{{ kb_form.food_menu_summary.help_text }}</div>
-          </div>
-          <div class="col-12">
-            <label class="form-label">
-              {{ kb_form.bar_menu_summary.label }}
-              <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
-            </label>
-            <div class="char-counter" id="ctr-bar_menu_summary"></div>
-            {{ kb_form.bar_menu_summary }}
-            <div class="form-text">{{ kb_form.bar_menu_summary.help_text }}</div>
-          </div>
-          <div class="col-12">
-            <label class="form-label">
-              {{ kb_form.happy_hour_details.label }}
-              <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
-            </label>
-            <div class="char-counter" id="ctr-happy_hour_details"></div>
-            {{ kb_form.happy_hour_details }}
-          </div>
-          <div class="col-12">
-            <label class="form-label">{{ kb_form.dietary_options.label }}</label>
-            {{ kb_form.dietary_options }}
-            <div class="form-text">{{ kb_form.dietary_options.help_text }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
+      <div class="card hover-lift p-4">
+
+        <!-- Menu sub-tab navigation -->
+        <ul class="nav nav-pills menu-nav custom-scrollbar mb-3" id="menuSubTab" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="msub-food-tab" data-bs-toggle="pill"
+                    data-bs-target="#msub-food" type="button" role="tab">
+              🍽 Food Menu
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="msub-bar-tab" data-bs-toggle="pill"
+                    data-bs-target="#msub-bar" type="button" role="tab">
+              🍹 Bar &amp; Drinks
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="msub-hh-tab" data-bs-toggle="pill"
+                    data-bs-target="#msub-hh" type="button" role="tab">
+              ⏰ Happy Hour &amp; Dietary
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content">
+
+          <!-- ── Food Menu ── -->
+          <div class="tab-pane fade show active" id="msub-food" role="tabpanel">
+            <div class="row g-3">
+
+              <div class="col-12">
+                <label class="form-label">
+                  Food menu link
+                  <span class="voice-badge" style="color:#198754;"><i class="bi bi-chat-dots-fill"></i> SMS</span>
+                </label>
+                {{ kb_form.food_menu_url }}
+                <div class="form-text">Sent via text when callers ask for the menu.</div>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label">
+                  Cuisine &amp; concept
+                  <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
+                </label>
+                {{ kb_form.menu_cuisine_type }}
+                <div class="form-text">Describe your food style in 1–2 sentences. The agent reads this when callers ask "what kind of food do you serve?"</div>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">Price range</label>
+                {{ kb_form.menu_price_range }}
+                <div class="form-text">e.g. $15–$35 per dish</div>
+              </div>
+              <div class="col-md-8">
+                <label class="form-label">Menu sections</label>
+                {{ kb_form.menu_categories }}
+                <div class="form-text">e.g. Starters, Dumplings, Wok &amp; fried rice, Mains, Sides</div>
+              </div>
+
+              <!-- Signature dish row builder -->
+              <div class="col-12">
+                <label class="form-label">
+                  Signature &amp; must-try dishes
+                  <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
+                </label>
+                <p class="section-hint mb-2">Add your top 5–8 dishes. The agent leads with these when callers ask for recommendations.</p>
+                <div class="char-counter" id="ctr-menu_best_sellers"></div>
+
+                <!-- Row builder UI -->
+                <div class="table-responsive">
+                  <table class="table table-sm dish-table mb-2" id="dish-table-food">
+                    <thead>
+                      <tr>
+                        <th style="width:28%">Dish name</th>
+                        <th style="width:40%">Description</th>
+                        <th style="width:14%">Price</th>
+                        <th class="dish-star" title="Signature / must-try">★</th>
+                        <th class="dish-remove"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="dish-tbody-food"></tbody>
+                  </table>
+                </div>
+                <button type="button" class="btn btn-sm btn-dark"
+                        onclick="addDishRow('food')">
+                  <i class="bi bi-plus-lg"></i> Add dish
+                </button>
+
+                <!-- Hidden textarea Django submits -->
+                <div class="d-none">{{ kb_form.menu_best_sellers }}</div>
+              </div>
+
+            </div>
+          </div><!-- /msub-food -->
+
+          <!-- ── Bar & Drinks ── -->
+          <div class="tab-pane fade" id="msub-bar" role="tabpanel">
+            <div class="row g-3">
+
+              <div class="col-12">
+                <label class="form-label">
+                  Bar / drinks menu link
+                  <span class="voice-badge" style="color:#198754;"><i class="bi bi-chat-dots-fill"></i> SMS</span>
+                </label>
+                {{ kb_form.bar_menu_url }}
+                <div class="form-text">Sent via text when callers ask for the drinks menu.</div>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label">
+                  Bar concept
+                  <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
+                </label>
+                {{ kb_form.bar_concept }}
+                <div class="form-text">Describe your bar style in 1 sentence. e.g. "Craft cocktails with an extensive rum &amp; mezcal selection."</div>
+              </div>
+
+              <!-- Signature drink row builder -->
+              <div class="col-12">
+                <label class="form-label">
+                  Signature cocktails
+                  <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
+                </label>
+                <p class="section-hint mb-2">Add your top cocktails. Keep it to 5–6 so the agent can describe them concisely.</p>
+                <div class="char-counter" id="ctr-bar_signature_drinks"></div>
+
+                <div class="table-responsive">
+                  <table class="table table-sm dish-table mb-2" id="dish-table-bar">
+                    <thead>
+                      <tr>
+                        <th style="width:28%">Drink name</th>
+                        <th style="width:40%">Description</th>
+                        <th style="width:14%">Price</th>
+                        <th class="dish-star" title="Signature">★</th>
+                        <th class="dish-remove"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="dish-tbody-bar"></tbody>
+                  </table>
+                </div>
+                <button type="button" class="btn btn-sm btn-dark"
+                        onclick="addDishRow('bar')">
+                  <i class="bi bi-plus-lg"></i> Add drink
+                </button>
+
+                <div class="d-none">{{ kb_form.bar_signature_drinks }}</div>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label">
+                  Wine, beer &amp; other selections
+                  <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
+                </label>
+                <div class="char-counter" id="ctr-bar_wine_beer"></div>
+                {{ kb_form.bar_wine_beer }}
+                <div class="form-text">{{ kb_form.bar_wine_beer.help_text }}</div>
+              </div>
+
+            </div>
+          </div><!-- /msub-bar -->
+
+          <!-- ── Happy Hour & Dietary ── -->
+          <div class="tab-pane fade" id="msub-hh" role="tabpanel">
+            <div class="row g-3">
+
+              <div class="col-12">
+                <label class="form-label">
+                  {{ kb_form.happy_hour_details.label }}
+                  <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
+                </label>
+                <div class="char-counter" id="ctr-happy_hour_details"></div>
+                {{ kb_form.happy_hour_details }}
+              </div>
+
+              <div class="col-12">
+                <label class="form-label">{{ kb_form.dietary_options.label }}</label>
+                {{ kb_form.dietary_options }}
+                <div class="form-text">{{ kb_form.dietary_options.help_text }}</div>
+              </div>
+
+            </div>
+          </div><!-- /msub-hh -->
+
+        </div><!-- /tab-content -->
+      </div><!-- /card -->
+    </div><!-- /tab-menu -->
 
     <!-- BILLING -->
     <div class="tab-pane fade" id="tab-billing">
-      <div class="card shadow-sm p-4">
+      <div class="card hover-lift p-4">
         <div class="row g-3">
           <div class="col-auto">
             <div class="form-check mt-2">
@@ -301,7 +466,7 @@
 
     <!-- RESERVATIONS -->
     <div class="tab-pane fade" id="tab-reservations">
-      <div class="card shadow-sm p-4">
+      <div class="card hover-lift p-4">
         <div class="row g-3">
           <div class="col-md-4">
             <label class="form-label">{{ kb_form.reservation_grace_min.label }}</label>
@@ -321,7 +486,7 @@
 
     <!-- PRIVATE EVENTS -->
     <div class="tab-pane fade" id="tab-events">
-      <div class="card shadow-sm p-4">
+      <div class="card hover-lift p-4">
         <div class="row g-3">
           <div class="col-auto">
             <div class="form-check mt-2">
@@ -362,7 +527,7 @@
 
     <!-- AMBIENCE -->
     <div class="tab-pane fade" id="tab-ambience">
-      <div class="card shadow-sm p-4">
+      <div class="card hover-lift p-4">
         <div class="row g-3">
           <div class="col-auto">
             <div class="form-check mt-2">
@@ -391,28 +556,13 @@
             <label class="form-label">{{ kb_form.cover_charge.label }}</label>
             {{ kb_form.cover_charge }}
           </div>
-          <div class="col-12">
-            <label class="form-label">{{ kb_form.art_gallery_info.label }}</label>
-            {{ kb_form.art_gallery_info }}
-            <div class="form-text">{{ kb_form.art_gallery_info.help_text }}</div>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">{{ kb_form.cigar_policy.label }}</label>
-            {{ kb_form.cigar_policy }}
-            <div class="form-text">{{ kb_form.cigar_policy.help_text }}</div>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">{{ kb_form.show_charge_policy.label }}</label>
-            {{ kb_form.show_charge_policy }}
-            <div class="form-text">{{ kb_form.show_charge_policy.help_text }}</div>
-          </div>
         </div>
       </div>
     </div>
 
     <!-- FACILITIES -->
     <div class="tab-pane fade" id="tab-facilities">
-      <div class="card shadow-sm p-4">
+      <div class="card hover-lift p-4">
         <div class="row g-3">
           <div class="col-auto">
             <div class="form-check mt-2">{{ kb_form.has_terrace }}<label class="form-check-label">{{ kb_form.has_terrace.label }}</label></div>
@@ -441,94 +591,76 @@
 
     <!-- AGENT BEHAVIOR -->
     <div class="tab-pane fade" id="tab-agent">
-      <div class="card shadow-sm p-4">
-        <p class="section-hint">Controls what the AI collects from the caller and how it speaks about your brand.</p>
-        <div class="mb-3 form-check">
-          {{ kb_form.collect_guest_info }}
-          <label class="form-check-label">{{ kb_form.collect_guest_info.label }}</label>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">{{ kb_form.guest_info_to_collect.label }}</label>
-          {{ kb_form.guest_info_to_collect }}
-          <div class="form-text">{{ kb_form.guest_info_to_collect.help_text }}</div>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">{{ kb_form.affiliated_restaurants.label }}</label>
-          {{ kb_form.affiliated_restaurants }}
-          <div class="form-text">{{ kb_form.affiliated_restaurants.help_text }}</div>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">
-            {{ kb_form.brand_voice_notes.label }}
-            <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
-          </label>
-          <div class="char-counter" id="ctr-brand_voice_notes"></div>
-          {{ kb_form.brand_voice_notes }}
-          <div class="form-text">{{ kb_form.brand_voice_notes.help_text }}</div>
-        </div>
-      </div>
-    </div>
 
-    <!-- OTHER -->
-    <div class="tab-pane fade" id="tab-other">
-      <div class="card shadow-sm p-4">
-        <p class="section-hint">
-          Add one fact per line using <strong>Label: Value</strong> format. The agent reads each label to find answers — keep values short and direct.
-          <br>Example: <code>Gift cards: Yes, available at the bar or online &nbsp;|&nbsp; Wi-Fi password: Dragones2025 &nbsp;|&nbsp; Corkage fee: $25 per bottle</code>
-        </p>
-        <div class="mb-3">
-          <label class="form-label">{{ kb_form.additional_info.label }}</label>
-          <div class="char-counter" id="ctr-additional_info"></div>
-          {{ kb_form.additional_info }}
-          <div class="form-text">{{ kb_form.additional_info.help_text }}</div>
-        </div>
-      </div>
-    </div>
+      <!-- Call Transfer -->
+      <div class="card hover-lift p-4 mb-3">
+        <h6 class="fw-semibold mb-1">Call Transfer</h6>
+        <p class="section-hint mb-3">When enabled, the agent can connect the caller to a staff member instead of handling the call itself.</p>
 
-    <!-- ESCALATION -->
-    <div class="tab-pane fade" id="tab-escalation">
-      <div class="card shadow-sm p-4">
-        <p class="section-hint">
-          When enabled, the agent can transfer the call to a human in specific situations.
-          Define exactly when escalation should happen — the agent will monitor for these conditions on every call.
-        </p>
-
-        <!-- Enable toggle -->
         <div class="mb-4 p-3 rounded" style="background:#f8f9fa; border:1px solid #dee2e6;">
           <div class="form-check form-switch">
             {{ kb_form.escalation_enabled }}
             <label class="form-check-label fw-semibold" for="{{ kb_form.escalation_enabled.id_for_label }}">
-              Enable human escalation
+              Enable live call transfer to staff
             </label>
           </div>
-          <div class="form-text mt-1">When enabled, the agent will transfer calls to a human when the conditions below are met.</div>
+          <div class="form-text mt-1">The agent will offer to transfer the call when the conditions below are met.</div>
         </div>
 
-        <!-- Conditions -->
-        <div class="mb-4">
-          <label class="form-label">
-            Escalation conditions
-            <span class="badge bg-warning text-dark ms-1" style="font-size:.7rem;">Agent reads</span>
-          </label>
-          {{ kb_form.escalation_conditions }}
-          <div class="form-text">{{ kb_form.escalation_conditions.help_text }}</div>
-        </div>
-
-        <!-- Transfer number -->
         <div class="mb-3">
-          <label class="form-label">Transfer phone number</label>
+          <label class="form-label">Transfer to number</label>
           {{ kb_form.escalation_transfer_number }}
-          <div class="form-text">{{ kb_form.escalation_transfer_number.help_text }}</div>
+          <div class="form-text">International format — e.g. +17865551234</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Transfer when</label>
+          {{ kb_form.escalation_conditions }}
+          <div class="form-text">One condition per line. The agent will offer to transfer when any condition is clearly met.</div>
         </div>
 
-        <!-- Admin reminder -->
         <div class="alert alert-info py-2 mb-0" style="font-size:.825rem;">
           <i class="bi bi-info-circle me-1"></i>
-          After saving, go to <strong>Django Admin → Restaurant → "Retell: 1e — Configure escalation tool on LLM"</strong> to push the transfer tool to Retell.
-          Then run <strong>"Retell: 1b — Update LLM prompt"</strong> to push the updated agent instructions.
+          After saving, ask your developer to run <strong>Retell: 1e — Configure escalation tool</strong> and <strong>Retell: 1b — Update LLM prompt</strong> to activate the transfer.
         </div>
       </div>
+
+      <!-- Sister Locations -->
+      <div class="card hover-lift p-4">
+        <h6 class="fw-semibold mb-1">Sister Locations</h6>
+        <p class="section-hint mb-3">Other restaurants you own. The agent will confirm these names if a caller asks, but won't provide details about them.</p>
+        <div class="mb-0">
+          {{ kb_form.affiliated_restaurants }}
+          <div class="form-text">One restaurant name per line.</div>
+        </div>
+      </div>
+
     </div>
+
+    <!-- OTHER -->
+    <div class="tab-pane fade" id="tab-other">
+      <div class="card hover-lift p-4">
+        <p class="section-hint mb-3">
+          Add any fact your agent should know that doesn't have a dedicated field — concept, affiliation, capacity, gift cards, Wi-Fi, birthday policy, and anything unique to your venue.
+          The agent uses the <strong>label</strong> to match caller questions and the <strong>value</strong> to answer them.
+        </p>
+        <p class="section-hint mb-3">
+          <strong>Examples:</strong>
+          <code class="d-block mt-1">Concept → Cuban-Asian fusion inspired by Havana's Barrio Chino</code>
+          <code class="d-block">Affiliation → Our Bogotá and Cartagena locations are separate and unaffiliated</code>
+          <code class="d-block">Gift cards → Yes, available at the bar and online</code>
+          <code class="d-block">Corkage fee → $25 per bottle, max 2 per table</code>
+          <code class="d-block">Birthday policy → Complimentary dessert with 24h advance notice</code>
+        </p>
+        <input type="hidden" name="venue_facts_json" id="venue-facts-json" value="">
+        {{ venue_facts|json_script:"venue-facts-initial" }}
+        <div id="venue-facts-rows" class="mb-2"></div>
+        <button type="button" id="add-venue-fact" class="btn btn-sm btn-dark">
+          + Add fact
+        </button>
+      </div>
+    </div>
+
+    <!-- ESCALATION -->
 
   </div><!-- /.tab-content -->
 </form>
@@ -545,10 +677,13 @@ const EXAMPLES = {
   "id_hours_of_operation":   "Mon–Thu 12pm–midnight, Fri–Sat 12pm–2am, Sun 12pm–11pm",
   "id_kitchen_closing_time": "30 minutes before closing",
   "id_holiday_closure_notes":"Closed Thanksgiving and Christmas Day. Open all other holidays.",
-  "id_private_event_closures":"Occasionally closed for private buyouts — check the website for updates.",
+  "id_private_event_closures":"March 15, 2026: closed for private buyout.\nApril 20, 2026: partial closure — bar open, no dining.",
 
-  "id_food_menu_summary":    "Latin-Asian fusion cuisine. Best sellers: ceviche tostada ($18), short rib tacos ($24), wagyu sliders ($22). Most dishes $15–$35. Shareable plates and à la carte available.",
-  "id_bar_menu_summary":     "Craft cocktails are our specialty. Signature mojito ($16), house sangria ($14). Full wine, beer, and spirits selection. Bottle service available on weekends.",
+  "id_menu_cuisine_type":    "Elevated Cuban-Asian fusion inspired by Havana's Barrio Chino. Wok cooking, dumplings/gyoza, and robata open-flame grilling. Best for shareable plates and cocktail pairing.",
+  "id_menu_price_range":     "$15–$35 per dish",
+  "id_menu_categories":      "Starters & shareables, Dumplings & gyoza, Robata & grilled, Wok & fried rice, Mains, Sides",
+  "id_bar_concept":          "Craft cocktails with an extensive rum and mezcal selection. Full wine list and draft beers.",
+  "id_bar_wine_beer":        "Full wine list available by glass and bottle. Draft beers on tap. Bottle service available on weekends.",
   "id_happy_hour_details":   "Mon–Fri 4–7pm. 50% off all cocktails and select draft beers. Available at bar and lounge only, not dining tables.",
   "id_dietary_options":      "Vegan and gluten-free options available on request. Please notify your server of any allergies — our kitchen can accommodate most dietary needs.",
 
@@ -568,43 +703,39 @@ const EXAMPLES = {
   "id_party_vibe_start_time":"10:30pm",
   "id_dress_code":           "Smart casual. No athletic wear or flip-flops after 9pm.",
   "id_cover_charge":         "$20 cover after 10pm on Fridays and Saturdays",
-  "id_art_gallery_info":     "Rotating exhibits from local Miami artists. Artwork available for purchase — ask the host for details.",
-  "id_cigar_policy":         "Cigars permitted on the terrace only. Not allowed indoors.",
-  "id_show_charge_policy":   "$10 per person entertainment fee for groups of 15+ on weekends",
-
   "id_valet_cost":           "$20 valet parking",
   "id_free_parking_info":    "Free street parking on SW 8th St after 6pm. Municipal lot 2 blocks east, $5 flat rate evenings.",
 
-  "id_guest_info_to_collect":"name, party size, date, time, phone number",
-  "id_affiliated_restaurants":"Sister Restaurant Name, Another Location Name",
-  "id_brand_voice_notes":    "Warm, welcoming tone. Key phrases: 'We'd love to have you' for reservations, 'Let me check on that' when unsure. Mention the website for menus and bookings. Switch to Spanish if caller speaks Spanish first.",
+  "id_affiliated_restaurants":     "Sister Restaurant Name\nAnother Location Name",
+  "id_escalation_transfer_number": "+17865551234",
+  "id_escalation_conditions":      "Caller asks to speak with a manager.\nCaller reports an emergency on-site.",
 
-  "id_additional_info":      "Gift cards: Yes, available at the bar and online\nWi-Fi: Free — password is Dragones2025\nBirthday policy: Complimentary dessert with 24h advance notice\nCorkage fee: $25 per bottle, max 2 bottles per table\nMinimum age: 21+ after 10pm on weekends",
 };
 
 // ── Tab → field IDs map (for completion counters) ────────────────────────────
 const TAB_FIELDS = {
   "tab-basic":        ["id_name","id_website","id_address_full","id_location_reference","id_welcome_phrase","id_contact_phone","id_contact_email"],
-  "tab-hours":        ["id_hours_of_operation","id_kitchen_closing_time","id_holiday_closure_notes"],
-  "tab-menu":         ["id_food_menu_url","id_food_menu_summary","id_bar_menu_summary","id_happy_hour_details","id_dietary_options"],
+  "tab-hours":        ["id_hours_of_operation","id_kitchen_closing_time","id_holiday_closure_notes","id_private_event_closures"],
+  "tab-menu":         ["id_food_menu_url","id_menu_cuisine_type","id_menu_best_sellers","id_menu_price_range","id_menu_categories","id_bar_menu_url","id_bar_concept","id_bar_signature_drinks","id_bar_wine_beer","id_happy_hour_details","id_dietary_options"],
   "tab-billing":      ["id_service_charge_pct","id_max_cards_to_split"],
   "tab-reservations": ["id_reservation_grace_min","id_no_show_fee","id_large_party_min_guests"],
   "tab-events":       ["id_private_dining_min_spend","id_press_contact","id_special_events_info"],
   "tab-ambience":     ["id_live_music_details","id_party_vibe_start_time","id_dress_code","id_cover_charge"],
   "tab-facilities":   ["id_valet_cost","id_free_parking_info"],
-  "tab-agent":        ["id_guest_info_to_collect","id_affiliated_restaurants","id_brand_voice_notes"],
-  "tab-other":        ["id_additional_info"],
+  "tab-agent":        ["id_escalation_transfer_number","id_escalation_conditions","id_affiliated_restaurants"],
+  "tab-other":        [],
 };
 
 // ── Char counter setup ────────────────────────────────────────────────────────
 const COUNTERS = [
-  { id: "id_food_menu_summary",   ctr: "ctr-food_menu_summary",   limit: 500, warn: 400 },
-  { id: "id_bar_menu_summary",    ctr: "ctr-bar_menu_summary",    limit: 500, warn: 400 },
-  { id: "id_happy_hour_details",  ctr: "ctr-happy_hour_details",  limit: 400, warn: 300 },
-  { id: "id_special_events_info", ctr: "ctr-special_events_info", limit: 400, warn: 300 },
+  { id: "id_menu_best_sellers",    ctr: "ctr-menu_best_sellers",    limit: 600, warn: 480 },
+  { id: "id_bar_signature_drinks", ctr: "ctr-bar_signature_drinks", limit: 400, warn: 320 },
+  { id: "id_bar_wine_beer",        ctr: "ctr-bar_wine_beer",        limit: 400, warn: 320 },
+  { id: "id_happy_hour_details",       ctr: "ctr-happy_hour_details",       limit: 400, warn: 300 },
+  { id: "id_private_event_closures",  ctr: "ctr-private_event_closures",  limit: 400, warn: 300 },
+  { id: "id_special_events_info",     ctr: "ctr-special_events_info",     limit: 400, warn: 300 },
   { id: "id_live_music_details",  ctr: "ctr-live_music_details",  limit: 400, warn: 300 },
-  { id: "id_brand_voice_notes",   ctr: "ctr-brand_voice_notes",   limit: 800, warn: 600 },
-  { id: "id_additional_info",     ctr: "ctr-additional_info",     limit: 1500, warn: 1200 },
+
   { id: "id_hours_of_operation",  ctr: "ctr-hours_of_operation",  limit: 400, warn: 300 },
 ];
 
@@ -698,8 +829,171 @@ document.getElementById("kb-form").addEventListener("input", e => {
   updateTabCounters();
 });
 
+// ── Dish Row Builder ──────────────────────────────────────────────────────────
+const DISH_CFG = {
+  "food": { tbodyId: "dish-tbody-food", targetId: "id_menu_best_sellers" },
+  "bar":  { tbodyId: "dish-tbody-bar",  targetId: "id_bar_signature_drinks" },
+};
+
+function makeDishRow(group, name, desc, price, starred) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td><input class="form-control form-control-sm" placeholder="Dish name" value="${_esc(name)}"></td>
+    <td><input class="form-control form-control-sm" placeholder="Short description" value="${_esc(desc)}"></td>
+    <td><input class="form-control form-control-sm" placeholder="$18" style="max-width:90px" value="${_esc(price)}"></td>
+    <td class="dish-star"><input type="checkbox" class="form-check-input" title="Signature / must-try"${starred ? " checked" : ""}></td>
+    <td class="dish-remove">
+      <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="removeDishRow(this,'${group}')">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </td>`;
+  tr.querySelectorAll("input").forEach(inp => inp.addEventListener("input", () => serializeDishes(group)));
+  return tr;
+}
+
+function _esc(s) { return (s || "").replace(/"/g, "&quot;"); }
+
+function addDishRow(group) {
+  const cfg = DISH_CFG[group];
+  document.getElementById(cfg.tbodyId).appendChild(makeDishRow(group, "", "", "", false));
+}
+
+function removeDishRow(btn, group) {
+  btn.closest("tr").remove();
+  serializeDishes(group);
+}
+
+function serializeDishes(group) {
+  const cfg   = DISH_CFG[group];
+  const tbody = document.getElementById(cfg.tbodyId);
+  const lines = [];
+  tbody.querySelectorAll("tr").forEach(tr => {
+    const inputs  = tr.querySelectorAll("input[type=text], input:not([type])");
+    const name    = (inputs[0]?.value || "").trim();
+    const desc    = (inputs[1]?.value || "").trim();
+    const price   = (inputs[2]?.value || "").trim();
+    const starred = tr.querySelector("input[type=checkbox]")?.checked;
+    if (!name) return;
+    let line = (starred ? "★ " : "") + name;
+    if (desc)  line += " — " + desc;
+    if (price) line += " — " + price;
+    lines.push(line);
+  });
+  const ta = document.getElementById(cfg.targetId);
+  if (ta) {
+    ta.value = lines.join("\n");
+    ta.dispatchEvent(new Event("input"));
+  }
+}
+
+function parseDishes(group) {
+  const cfg  = DISH_CFG[group];
+  const ta   = document.getElementById(cfg.targetId);
+  if (!ta || !ta.value.trim()) return;
+  const tbody = document.getElementById(cfg.tbodyId);
+  ta.value.split("\n").forEach(line => {
+    line = line.trim();
+    if (!line) return;
+    const starred = line.startsWith("★ ");
+    if (starred) line = line.slice(2);
+    const parts = line.split(" — ");
+    const name  = parts[0] || "";
+    const desc  = parts[1] || "";
+    const price = parts[2] || "";
+    tbody.appendChild(makeDishRow(group, name, desc, price, starred));
+  });
+}
+
+// Hide raw textareas and parse existing data into rows
+["id_menu_best_sellers", "id_bar_signature_drinks"].forEach(id => {
+  document.getElementById(id)?.closest(".d-none") || document.getElementById(id)?.classList.add("d-none");
+});
+parseDishes("food");
+parseDishes("bar");
+
+// Serialize before form submit
+document.getElementById("kb-form").addEventListener("submit", () => {
+  try { serializeDishes("food"); } catch(e) { console.warn("dish serializer:", e); }
+  try { serializeDishes("bar"); } catch(e) { console.warn("dish serializer:", e); }
+  serializeVenueFacts();
+}, { capture: true });
+
+// ── Venue facts dynamic rows ──────────────────────────────────────────────────
+const FACT_PLACEHOLDERS = [
+  ["Gift cards",      "Yes, available at the bar and online"],
+  ["Wi-Fi",           "Free — password is Dragones2025"],
+  ["Corkage fee",     "$25 per bottle, max 2 bottles per table"],
+  ["Birthday policy", "Complimentary dessert with 24h advance notice"],
+  ["Art gallery",     "Cuban art on walls — pieces available for purchase"],
+  ["Cigar policy",    "Terrace only. Not allowed indoors."],
+  ["Minimum age",     "21+ after 10pm on weekends"],
+  ["Show charge",     "$10 per person for groups 15+ on weekends"],
+];
+
+function buildFactRow(label, value) {
+  label = label || "";
+  value = value || "";
+  const idx = document.querySelectorAll(".venue-fact-row").length;
+  const [ph_label, ph_value] = FACT_PLACEHOLDERS[idx % FACT_PLACEHOLDERS.length];
+
+  const labelInput = document.createElement("input");
+  labelInput.type = "text";
+  labelInput.className = "form-control form-control-sm fact-label";
+  labelInput.placeholder = ph_label;
+  labelInput.value = label;
+
+  const valueInput = document.createElement("input");
+  valueInput.type = "text";
+  valueInput.className = "form-control form-control-sm fact-value";
+  valueInput.placeholder = ph_value;
+  valueInput.value = value;
+
+  const row = document.createElement("div");
+  row.className = "venue-fact-row row g-2 mb-2 align-items-center";
+
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "btn btn-sm btn-outline-danger remove-fact";
+  removeBtn.title = "Remove";
+  removeBtn.textContent = "×";
+  labelInput.addEventListener("input", serializeVenueFacts);
+  valueInput.addEventListener("input", serializeVenueFacts);
+  removeBtn.addEventListener("click", () => { row.remove(); serializeVenueFacts(); });
+
+  const col1 = document.createElement("div"); col1.className = "col-md-4"; col1.appendChild(labelInput);
+  const col2 = document.createElement("div"); col2.className = "col";      col2.appendChild(valueInput);
+  const col3 = document.createElement("div"); col3.className = "col-auto"; col3.appendChild(removeBtn);
+
+  row.appendChild(col1);
+  row.appendChild(col2);
+  row.appendChild(col3);
+  return row;
+}
+
+function serializeVenueFacts() {
+  const facts = [];
+  document.querySelectorAll(".venue-fact-row").forEach(row => {
+    const label = row.querySelector(".fact-label").value.trim();
+    const value = row.querySelector(".fact-value").value.trim();
+    if (label && value) facts.push({ label, value });
+  });
+  document.getElementById("venue-facts-json").value = JSON.stringify(facts);
+}
+
+function initVenueFacts() {
+  const container = document.getElementById("venue-facts-rows");
+  const existing = JSON.parse(document.getElementById("venue-facts-initial").textContent || "[]");
+  existing.forEach(f => container.appendChild(buildFactRow(f.label, f.value)));
+  document.getElementById("add-venue-fact").addEventListener("click", () => {
+    container.appendChild(buildFactRow());
+    serializeVenueFacts();
+  });
+  serializeVenueFacts();  // prime hidden input with current facts on page load
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 buildExampleHints();
 updateTabCounters();
+initVenueFacts();
 </script>
 {% endblock %}

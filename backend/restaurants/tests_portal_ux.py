@@ -106,13 +106,6 @@ class KbLintTest(TestCase):
         result = _kb_lint(r, kb)
         self.assertTrue(any("Happy hour" in w for w in result["warnings"]))
 
-    def test_warning_when_brand_voice_too_long(self):
-        r = make_restaurant()
-        kb = make_kb(r, brand_voice_notes="x" * 801)
-        result = _kb_lint(r, kb)
-        self.assertTrue(any("Brand voice" in w for w in result["warnings"]))
-        self.assertIn("agent", result["warning_tabs"])
-
     def test_warning_when_additional_info_too_long(self):
         r = make_restaurant()
         kb = make_kb(r, additional_info="x" * 1501)
@@ -140,8 +133,11 @@ class KbHealthScoreTest(TestCase):
         make_kb(r,
             hours_of_operation="Mon–Sun 12pm–10pm",
             food_menu_url="https://testbistro.com/menu",
-            food_menu_summary="Great food summary here.",
-            bar_menu_summary="Great bar summary here.",
+            menu_cuisine_type="Latin-Asian fusion",
+            menu_best_sellers="Ceviche tostada ($18)\nShort rib tacos ($24)",
+            menu_price_range="$15–$35 per dish",
+            bar_concept="Craft cocktails, extensive rum selection",
+            bar_signature_drinks="Signature mojito ($16)\nMezcal sour ($18)",
             happy_hour_details="Mon–Fri 4–7pm.",
             dietary_options="Vegan, gluten-free.",
             reservation_grace_min=15,

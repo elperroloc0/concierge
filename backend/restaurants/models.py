@@ -230,12 +230,31 @@ class RestaurantKnowledgeBase(models.Model):
         "restaurants.Restaurant", on_delete=models.CASCADE, related_name="knowledge_base"
     )
 
+    # ── Spoken pronunciation overrides ────────────────────────────────────
+    # When set, these override the auto-generated spoken forms in the agent prompt.
+    contact_email_spoken = models.CharField(
+        max_length=255, blank=True, default="",
+        help_text=(
+            "How the agent should say the email address aloud. "
+            "Leave blank to auto-generate. "
+            "Example (ES): 'admon calle dragones arroba gmail punto com' "
+            "Example (EN): 'admon calle dragones at gmail dot com'"
+        )
+    )
+
     # ── Hours & Availability ──────────────────────────────────────────────
     hours_of_operation     = models.TextField(blank=True, default="")
     kitchen_closing_time   = models.CharField(max_length=128, blank=True, default="")
     closes_on_holidays     = models.BooleanField(default=False)
     holiday_closure_notes  = models.TextField(blank=True, default="")
-    private_event_closures = models.TextField(blank=True, default="")
+    private_event_closures = models.TextField(
+        blank=True, default="",
+        help_text=(
+            "Dates when the restaurant is fully or partially closed due to private events or buyouts. "
+            "Use format: Month D, YYYY — description. One entry per line. "
+            "Example: March 15, 2026: closed for private event."
+        )
+    )
 
     # ── Menu & Food ───────────────────────────────────────────────────────
     food_menu_url     = models.URLField(blank=True, default="")
@@ -248,6 +267,23 @@ class RestaurantKnowledgeBase(models.Model):
         blank=True, default="",
         help_text="Cocktail/wine/beer highlights with prices. Used by the AI on calls."
     )
+
+    # ── Structured menu fields (columns added by migration 0022) ──────────
+    menu_cuisine_type    = models.CharField(max_length=200, blank=True, default="",
+        help_text="Cuisine type & concept. e.g. 'Latin-Asian fusion, tapas-style sharing plates'.")
+    menu_best_sellers    = models.TextField(blank=True, default="",
+        help_text="Signature dishes with prices. One item per line.")
+    menu_price_range     = models.CharField(max_length=100, blank=True, default="",
+        help_text="Typical price range. e.g. '$15–$35 per dish'.")
+    menu_categories      = models.CharField(max_length=255, blank=True, default="",
+        help_text="Menu sections. e.g. 'Starters, Dumplings, Wok & fried rice, Mains, Sides'.")
+    bar_concept          = models.CharField(max_length=200, blank=True, default="",
+        help_text="Bar specialty & concept. e.g. 'Craft cocktails, extensive rum & mezcal selection'.")
+    bar_signature_drinks = models.TextField(blank=True, default="",
+        help_text="Signature cocktails with prices. One item per line.")
+    bar_wine_beer        = models.TextField(blank=True, default="",
+        help_text="Wine & beer selection highlights.")
+
     happy_hour_details = models.TextField(blank=True, default="")
     dietary_options    = models.TextField(
         blank=True, default="",
@@ -293,12 +329,6 @@ class RestaurantKnowledgeBase(models.Model):
     )
     dress_code   = models.CharField(max_length=255, blank=True, default="")
     cover_charge = models.CharField(max_length=128, blank=True, default="")
-    art_gallery_info   = models.TextField(blank=True, default="",
-        help_text="Art gallery description and how to inquire about artwork or collaborations.")
-    cigar_policy       = models.CharField(max_length=255, blank=True, default="",
-        help_text="Where cigars are allowed and any special cigar promotions.")
-    show_charge_policy = models.CharField(max_length=255, blank=True, default="",
-        help_text="Show/entertainment charge for large groups (e.g. 15+ guests).")
 
     # ── Facilities & Access ───────────────────────────────────────────────
     has_terrace       = models.BooleanField(default=False)
@@ -334,6 +364,10 @@ class RestaurantKnowledgeBase(models.Model):
     )
 
     # ── Other / Free-form ─────────────────────────────────────────────────
+    venue_facts = models.JSONField(
+        blank=True, default=list,
+        help_text="Venue-specific facts as label/value pairs (e.g. Gift cards, Wi-Fi, corkage fee)."
+    )
     additional_info = models.TextField(
         blank=True, default="",
         help_text=(

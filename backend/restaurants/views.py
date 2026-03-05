@@ -3,7 +3,7 @@ import logging
 import os
 import re
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 logger = logging.getLogger(__name__)
@@ -22,6 +22,8 @@ from retell import Retell
 
 from .forms import KnowledgeBaseForm, RestaurantBasicForm
 from .models import CallDetail, CallEvent, Restaurant, RestaurantKnowledgeBase, SmsLog, Subscription
+from .services.retell_client import RetellClient
+from .services.retell_tools import build_tool_list
 
 
 # ─── Retell Webhook Helpers ───────────────────────────────────────────────────
@@ -36,24 +38,38 @@ def _friendly_url(url: str) -> str:
     )
 
 
+def _camel_split(s: str) -> str:
+    """'CalleDragonesMia' → 'Calle Dragones Mia'. No-op on all-lowercase strings."""
+    return re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', s)
+
+
 def _spoken_email(email: str, lang: str = "en") -> str:
     """Convert an email address to a naturally spoken form.
     Spanish: 'info@calledragones.com' → 'info arroba calledragones punto com'
     English: 'info@calledragones.com' → 'info at calledragones dot com'
+    CamelCase local parts are split: 'AdmonCalle@...' → 'Admon Calle ...'
     """
     if not email:
         return ""
     at_word  = "arroba" if lang == "es" else "at"
     dot_word = "punto"  if lang == "es" else "dot"
-    return email.replace("@", f" {at_word} ").replace(".", f" {dot_word} ")
+    local, _, rest = email.partition("@")
+    local = _camel_split(local)
+    rest  = rest.replace(".", f" {dot_word} ")
+    return f"{local} {at_word} {rest}"
 
 
 def _spoken_domain(domain: str, lang: str = "en") -> str:
-    """Convert a domain to spoken form: 'calledragones.com' → 'calledragones punto com'"""
+    """Convert a domain to spoken form.
+    'CalleDragonesMia.com' → 'Calle Dragones Mia punto com'
+    """
     if not domain:
         return ""
     dot_word = "punto" if lang == "es" else "dot"
-    return domain.replace(".", f" {dot_word} ")
+    # Split CamelCase in each segment so TTS pronounces them as separate words
+    parts = domain.split(".")
+    parts = [_camel_split(p) for p in parts]
+    return f" {dot_word} ".join(parts)
 
 
 def _build_dynamic_variables(restaurant):
@@ -79,7 +95,11 @@ def _build_dynamic_variables(restaurant):
         "website_domain":        domain,
         "website_domain_spoken": _spoken_domain(domain, lang),
         "contact_email":         restaurant.contact_email or "",
-        "contact_email_spoken":  _spoken_email(restaurant.contact_email or "", lang),
+        "contact_email_spoken":  (
+            kb.contact_email_spoken
+            if kb and kb.contact_email_spoken
+            else _spoken_email(restaurant.contact_email or "", lang)
+        ),
         "welcome_phrase":        restaurant.welcome_phrase,
         "primary_lang":          restaurant.primary_lang,
         "conversation_tone":     restaurant.conversation_tone,
@@ -92,12 +112,16 @@ def _build_dynamic_variables(restaurant):
     # KB fields that the agent needs at call-start (reservation routing + escalation).
     # All other KB data is fetched on demand via the get_info tool.
     if kb:
+        # Pre-compute effective menu URLs: use KB-specific URL if set, else fall back to restaurant website
+        _site = restaurant.website or ""
         dyn.update({
             "affiliated_restaurants": kb.affiliated_restaurants,
             "reservation_grace_min":  str(kb.reservation_grace_min) if kb.reservation_grace_min else "N/A",
             "large_party_min_guests": str(kb.large_party_min_guests) if kb.large_party_min_guests else "N/A",
             "escalation_enabled":     "yes" if kb.escalation_enabled else "no",
             "escalation_conditions":  kb.escalation_conditions or "",
+            "food_menu_url":          kb.food_menu_url or _site,
+            "bar_menu_url":           kb.bar_menu_url  or _site,
         })
     else:
         dyn.update({
@@ -106,6 +130,8 @@ def _build_dynamic_variables(restaurant):
             "large_party_min_guests": "N/A",
             "escalation_enabled":     "no",
             "escalation_conditions":  "",
+            "food_menu_url":          restaurant.website or "",
+            "bar_menu_url":           restaurant.website or "",
         })
     return dyn
 
@@ -128,6 +154,180 @@ _REASON_KEYWORDS = [
     ("private_event", ["evento", "event", "private", "privado", "buyout", "party", "fiesta", "celebration"]),
     ("complaint",     ["complaint", "queja", "upset", "frustrated", "bad experience", "problema", "wrong"]),
 ]
+
+
+# ─── Date Resolution Helpers ──────────────────────────────────────────────────
+
+# Spoken day-of-month words → integer (covers 1–31 in English and Spanish)
+_DAY_WORDS = {
+    # English
+    "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5,
+    "sixth": 6, "seventh": 7, "eighth": 8, "ninth": 9, "tenth": 10,
+    "eleventh": 11, "twelfth": 12, "thirteenth": 13, "fourteenth": 14,
+    "fifteenth": 15, "sixteenth": 16, "seventeenth": 17, "eighteenth": 18,
+    "nineteenth": 19, "twentieth": 20, "twenty first": 21, "twenty second": 22,
+    "twenty third": 23, "twenty fourth": 24, "twenty fifth": 25,
+    "twenty sixth": 26, "twenty seventh": 27, "twenty eighth": 28,
+    "twenty ninth": 29, "thirtieth": 30, "thirty first": 31,
+    # Spanish
+    "uno": 1, "primero": 1, "dos": 2, "segundo": 2, "tres": 3, "tercero": 3,
+    "cuatro": 4, "cuarto": 4, "cinco": 5, "quinto": 5,
+    "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10,
+    "once": 11, "doce": 12, "trece": 13, "catorce": 14, "quince": 15,
+    "dieciseis": 16, "diecisiete": 17, "dieciocho": 18, "diecinueve": 19,
+    "veinte": 20, "veintiuno": 21, "veintidos": 22, "veintitres": 23,
+    "veinticuatro": 24, "veinticinco": 25, "veintiseis": 26,
+    "veintisiete": 27, "veintiocho": 28, "veintinueve": 29,
+    "treinta": 30, "treinta y uno": 31,
+}
+
+_DAYS_EN = {
+    "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+    "friday": 4, "saturday": 5, "sunday": 6,
+}
+_DAYS_ES = {
+    "lunes": 0, "martes": 1, "miércoles": 2, "miercoles": 2,
+    "jueves": 3, "viernes": 4, "sábado": 5, "sabado": 5, "domingo": 6,
+}
+_MONTHS_ES = {
+    1: "enero", 2: "febrero", 3: "marzo", 4: "abril", 5: "mayo",
+    6: "junio", 7: "julio", 8: "agosto", 9: "septiembre",
+    10: "octubre", 11: "noviembre", 12: "diciembre",
+}
+_MONTHS_EN = {
+    1: "January", 2: "February", 3: "March", 4: "April", 5: "May",
+    6: "June", 7: "July", 8: "August", 9: "September",
+    10: "October", 11: "November", 12: "December",
+}
+_DAY_NAMES_ES = {0: "lunes", 1: "martes", 2: "miércoles", 3: "jueves", 4: "viernes", 5: "sábado", 6: "domingo"}
+_DAY_NAMES_EN = {0: "Monday", 1: "Tuesday", 2: "Wednesday", 3: "Thursday", 4: "Friday", 5: "Saturday", 6: "Sunday"}
+
+
+def _ordinal_en(n: int) -> str:
+    if 11 <= (n % 100) <= 13:
+        return f"{n}th"
+    return f"{n}" + {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+
+
+def _spoken_date_es(d: date) -> str:
+    """'el viernes 6 de marzo'"""
+    return f"el {_DAY_NAMES_ES[d.weekday()]} {d.day} de {_MONTHS_ES[d.month]}"
+
+
+def _spoken_date_en(d: date) -> str:
+    """'Friday, March 6th'"""
+    return f"{_DAY_NAMES_EN[d.weekday()]}, {_MONTHS_EN[d.month]} {_ordinal_en(d.day)}"
+
+
+def _resolve_relative_date(text: str, today: date):
+    """
+    Resolve a spoken relative date to a datetime.date.
+    Returns (date | None, ambiguity_message | None).
+    """
+    # Normalize: strip accents for matching robustness
+    import unicodedata
+    tl = unicodedata.normalize("NFKD", text.lower().strip())
+    tl = "".join(c for c in tl if not unicodedata.combining(c))
+    # Strip ordinal suffixes: "5th" → "5", "3rd" → "3", "1st" → "1"
+    tl = re.sub(r'\b(\d+)(st|nd|rd|th)\b', r'\1', tl)
+
+    if tl in ("today", "hoy", "hoy mismo"):
+        return today, None
+
+    if tl in ("tomorrow", "manana", "el dia de manana"):
+        return today + timedelta(days=1), None
+
+    if any(p in tl for p in ("next week", "proxima semana", "semana que viene", "semana proxima")):
+        return None, "Which day next week? Ask: '¿Qué día de la próxima semana?'"
+
+    is_next = any(p in tl for p in (
+        "next ", "proximo", "que viene", "siguiente", "de la proxima",
+    ))
+
+    all_days = {**_DAYS_EN, **_DAYS_ES}
+    day_num = None
+    for name, num in all_days.items():
+        if name in tl:
+            day_num = num
+            break
+
+    if day_num is not None:
+        days_until = (day_num - today.weekday()) % 7
+        if days_until == 0:
+            days_until = 7  # never today — push to next occurrence
+        if is_next and days_until < 7:
+            days_until += 7  # "next X" = always next week
+        return today + timedelta(days=days_until), None
+
+    # Extract explicit 4-digit year if the caller mentioned one
+    year_m = re.search(r'\b(20\d{2})\b', tl)
+    explicit_year = int(year_m.group(1)) if year_m else None
+
+    # Reject years more than 1 year ahead (e.g. 2028 when today is 2026)
+    if explicit_year is not None and explicit_year > today.year + 1:
+        return None, (
+            f"We only accept reservations up to a year ahead — "
+            f"did you mean {today.year} or {today.year + 1}?"
+        )
+
+    # Month-name + day number (English and Spanish)
+    # name→number: {"january": 1, "enero": 1, "marzo": 3, ...}
+    # Keys normalized (no accents) to match the already-normalized `tl`
+    import unicodedata as _ud
+    def _norm(s):
+        return "".join(c for c in _ud.normalize("NFKD", s.lower()) if not _ud.combining(c))
+    _month_lookup = {}
+    for _k, _v in {**_MONTHS_EN, **{k: v for k, v in _MONTHS_ES.items()}}.items():
+        _month_lookup[_norm(_v)] = _k
+    # Ensure English names aren't lost to the Spanish merge (same int keys)
+    for _k, _v in _MONTHS_EN.items():
+        _month_lookup[_norm(_v)] = _k
+    for month_name, month_num in _month_lookup.items():
+        if month_name in tl:
+            # Try numeric digit first
+            day_n = None
+            m = re.search(r"\b(\d{1,2})\b", tl)
+            if m:
+                day_n = int(m.group(1))
+            else:
+                # Fall back to spoken day-of-month words (e.g. "quince", "fifteenth")
+                # Check multi-word keys first (longest match wins)
+                for word, num in sorted(_DAY_WORDS.items(), key=lambda x: -len(x[0])):
+                    if word in tl:
+                        day_n = num
+                        break
+            if day_n is not None:
+                try:
+                    if explicit_year is not None:
+                        # Caller specified a year — use it as-is (past years flagged via is_past)
+                        candidate = date(explicit_year, month_num, day_n)
+                    else:
+                        # No year given — assume current year, bump to next if already past
+                        candidate = date(today.year, month_num, day_n)
+                        if candidate < today:
+                            candidate = date(today.year + 1, month_num, day_n)
+                    return candidate, None
+                except ValueError:
+                    pass
+
+    # MM/DD or DD/MM numeric pattern
+    slash_m = re.search(r"\b(\d{1,2})[/\-](\d{1,2})\b", tl)
+    if slash_m:
+        a, b = int(slash_m.group(1)), int(slash_m.group(2))
+        for month_n, day_n in [(a, b), (b, a)]:
+            if 1 <= month_n <= 12 and 1 <= day_n <= 31:
+                try:
+                    if explicit_year is not None:
+                        candidate = date(explicit_year, month_n, day_n)
+                    else:
+                        candidate = date(today.year, month_n, day_n)
+                        if candidate < today:
+                            candidate = date(today.year + 1, month_n, day_n)
+                    return candidate, None
+                except ValueError:
+                    pass
+
+    return None, "Could not understand the date — ask the caller for day and month."
 
 
 def _parse_transcript_for_guest_info(transcript: str) -> dict:
@@ -489,17 +689,27 @@ def _format_kb_topic(kb, topic: str) -> str:
         add("Hours of operation", kb.hours_of_operation)
         add("Kitchen closes", kb.kitchen_closing_time)
         add("Holiday closures", kb.holiday_closure_notes or ("Closed on major holidays" if kb.closes_on_holidays else ""))
-        add("Private event closures", kb.private_event_closures)
-        # Include upcoming events so agent sees schedule changes / closures before confirming hours
-        add("Upcoming events & schedule changes", kb.special_events_info)
+        add("Operational closures & date-specific changes", kb.private_event_closures)
+        # special_events_info removed — entertainment events do NOT block reservations
 
     elif topic == "menu":
-        add("Food menu", kb.food_menu_summary)
+        if any([kb.menu_cuisine_type, kb.menu_best_sellers, kb.menu_price_range]):
+            add("Cuisine & concept", kb.menu_cuisine_type)
+            add("Signature dishes", kb.menu_best_sellers)
+            add("Price range", kb.menu_price_range)
+            add("Menu sections", kb.menu_categories)
+        else:
+            add("Food menu", kb.food_menu_summary)  # legacy fallback
         if kb.food_menu_url:
             lines.append(f"Menu link (SMS only — never read aloud): {kb.food_menu_url}")
 
     elif topic == "bar_menu":
-        add("Bar & cocktails", kb.bar_menu_summary)
+        if any([kb.bar_concept, kb.bar_signature_drinks]):
+            add("Bar concept", kb.bar_concept)
+            add("Signature cocktails", kb.bar_signature_drinks)
+            add("Wine & beer", kb.bar_wine_beer)
+        else:
+            add("Bar & cocktails", kb.bar_menu_summary)  # legacy fallback
         if kb.bar_menu_url:
             lines.append(f"Bar menu link (SMS only — never read aloud): {kb.bar_menu_url}")
 
@@ -541,9 +751,6 @@ def _format_kb_topic(kb, topic: str) -> str:
         add("Noise level", kb.get_noise_level_display() if kb.noise_level else None)
         add("Dress code", kb.dress_code)
         add("Cover charge", kb.cover_charge)
-        add("Art gallery", kb.art_gallery_info)
-        add("Cigar policy", kb.cigar_policy)
-        add("Show charge", kb.show_charge_policy)
 
     elif topic == "facilities":
         lines.append(f"Terrace: {'Yes' if kb.has_terrace else 'No'}")
@@ -551,11 +758,15 @@ def _format_kb_topic(kb, topic: str) -> str:
         lines.append(f"Stroller-friendly: {'Yes' if kb.stroller_friendly else 'No'}")
 
     elif topic == "special_events":
-        add("Special events", kb.special_events_info)
+        add("Special events & entertainment", kb.special_events_info)
 
     elif topic == "additional":
         add("Additional info", kb.additional_info)
-        add("Brand voice notes", kb.brand_voice_notes)
+        for fact in (kb.venue_facts or []):
+            label = (fact.get("label") or "").strip()
+            value = (fact.get("value") or "").strip()
+            if label and value:
+                add(label, value)
 
     else:
         return "Unknown topic. Use one of: hours, menu, bar_menu, happy_hour, dietary, parking, billing, reservations, private_events, ambience, facilities, special_events, additional."
@@ -715,6 +926,51 @@ def retell_tool_save_caller_info(request):
     return JsonResponse({"result": "Info saved"})
 
 
+@csrf_exempt
+def retell_tool_resolve_date(request):
+    """Retell custom tool — resolves a relative date phrase to an actual calendar date."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "invalid json"}, status=400)
+
+    args      = data.get("args", {})
+    call      = data.get("call", {})
+    to_number = call.get("to_number", "").strip()
+    text      = args.get("text", "").strip()
+
+    if not text:
+        return JsonResponse({"date_iso": "", "spoken_es": "", "spoken_en": "",
+                             "is_past": False, "ambiguity": "No date text provided."})
+
+    restaurant = Restaurant.objects.filter(retell_phone_number=to_number, is_active=True).first()
+    tz_name = restaurant.timezone if restaurant else "UTC"
+    try:
+        tz = ZoneInfo(tz_name)
+    except ZoneInfoNotFoundError:
+        tz = ZoneInfo("UTC")
+    today = datetime.now(tz=tz).date()
+
+    resolved, ambiguity = _resolve_relative_date(text, today)
+
+    if resolved is None:
+        return JsonResponse({
+            "date_iso": "", "spoken_es": "", "spoken_en": "",
+            "is_past": False, "ambiguity": ambiguity or "Could not parse date.",
+        })
+
+    is_past = resolved < today
+    return JsonResponse({
+        "date_iso":  resolved.isoformat(),
+        "spoken_es": _spoken_date_es(resolved),
+        "spoken_en": _spoken_date_en(resolved),
+        "is_past":   is_past,
+        "ambiguity": "",
+    })
+
+
 # ─── KB Quality Helpers ───────────────────────────────────────────────────────
 
 def _kb_lint(restaurant, kb):
@@ -763,13 +1019,6 @@ def _kb_lint(restaurant, kb):
             )
             if "menu" not in warning_tabs:
                 warning_tabs.append("menu")
-        if len(kb.brand_voice_notes) > 800:
-            warnings.append(
-                f"Brand voice notes are long ({len(kb.brand_voice_notes)} chars). "
-                "Consider moving specific phrases to their own fields."
-            )
-            if "agent" not in warning_tabs:
-                warning_tabs.append("agent")
         if len(kb.additional_info) > 1500:
             warnings.append(
                 f"Additional info is very long ({len(kb.additional_info)} chars). "
@@ -802,7 +1051,8 @@ def _kb_health_score(restaurant):
         critical_missing.append("Address")
     if kb and not kb.hours_of_operation:
         critical_missing.append("Hours of operation")
-    if kb and not kb.food_menu_url and not kb.food_menu_summary:
+    _menu_filled = kb and (kb.food_menu_url or kb.menu_cuisine_type or kb.menu_best_sellers or kb.food_menu_summary)
+    if not _menu_filled:
         critical_missing.append("Menu info")
 
     scored = [
@@ -810,8 +1060,11 @@ def _kb_health_score(restaurant):
     ]
     if kb:
         scored += [
-            kb.hours_of_operation, kb.food_menu_url, kb.food_menu_summary,
-            kb.bar_menu_summary, kb.happy_hour_details, kb.dietary_options,
+            kb.hours_of_operation,
+            kb.food_menu_url,
+            kb.menu_cuisine_type, kb.menu_best_sellers, kb.menu_price_range,
+            kb.bar_concept, kb.bar_signature_drinks,
+            kb.happy_hour_details, kb.dietary_options,
             str(kb.reservation_grace_min) if kb.reservation_grace_min else "",
         ]
 
@@ -959,6 +1212,31 @@ def portal_dashboard(request, slug):
     return render(request, "portal/dashboard.html", context)
 
 
+def _sync_retell_tools(request, restaurant: Restaurant, kb: RestaurantKnowledgeBase) -> None:
+    """Push the current tool list (with or without escalation) to Retell after KB save."""
+    base_url = settings.RETELL_WEBHOOK_BASE_URL
+    if not base_url:
+        messages.warning(request, "Call transfer could not be synced: RETELL_WEBHOOK_BASE_URL is not configured.")
+        return
+    if not restaurant.retell_api_key or not restaurant.retell_llm_id:
+        messages.warning(request, "Call transfer settings saved, but Retell is not yet configured for this account. Contact support to activate.")
+        return
+
+    escalation_number = kb.escalation_transfer_number if kb.escalation_enabled else None
+    tools = build_tool_list(base_url, escalation_number=escalation_number)
+
+    try:
+        client = RetellClient(api_key=restaurant.retell_api_key)
+        client.update_llm(restaurant.retell_llm_id, general_tools=tools)
+        if kb.escalation_enabled and escalation_number:
+            messages.success(request, f"Call transfer activated — calls will be forwarded to {escalation_number} when conditions are met.")
+        else:
+            messages.info(request, "Call transfer deactivated.")
+    except Exception as exc:
+        logger.error("Failed to sync Retell tools for %s: %s", restaurant.slug, exc)
+        messages.error(request, f"Settings saved, but failed to sync call transfer with Retell: {exc}")
+
+
 @login_required
 def portal_knowledge_base(request, slug):
     restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
@@ -968,8 +1246,36 @@ def portal_knowledge_base(request, slug):
         basic_form = RestaurantBasicForm(request.POST, instance=restaurant)
         kb_form = KnowledgeBaseForm(request.POST, instance=kb)
         if basic_form.is_valid() and kb_form.is_valid():
+            # Capture old escalation state before saving
+            old_enabled = kb.escalation_enabled
+            old_number  = kb.escalation_transfer_number
+
             basic_form.save()
             kb_form.save()
+
+            # Parse and save venue_facts from the dynamic form rows
+            raw_facts = request.POST.get("venue_facts_json", "[]")
+            try:
+                facts = json.loads(raw_facts)
+                kb.venue_facts = [
+                    {"label": f["label"].strip(), "value": f["value"].strip()}
+                    for f in facts
+                    if f.get("label", "").strip() and f.get("value", "").strip()
+                ]
+                kb.save(update_fields=["venue_facts"])
+            except (json.JSONDecodeError, KeyError, TypeError):
+                pass
+
+            kb.refresh_from_db()
+
+            # Auto-push tools to Retell if escalation settings changed
+            escalation_changed = (
+                kb.escalation_enabled != old_enabled
+                or kb.escalation_transfer_number != old_number
+            )
+            if escalation_changed:
+                _sync_retell_tools(request, restaurant, kb)
+
             messages.success(request, "Knowledge base updated successfully.")
             return redirect("portal_kb", slug=restaurant.slug)
     else:
@@ -982,6 +1288,7 @@ def portal_knowledge_base(request, slug):
         "basic_form": basic_form,
         "kb_form": kb_form,
         "lint": lint,
+        "venue_facts": kb.venue_facts or [],
     })
 
 
