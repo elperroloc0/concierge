@@ -1,5 +1,9 @@
+import logging
+
 from django.conf import settings
 from django.contrib import admin, messages
+
+logger = logging.getLogger(__name__)
 
 from .models import CallDetail, CallEvent, Restaurant, RestaurantKnowledgeBase, SmsLog
 from .services.retell_client import RetellClient
@@ -29,6 +33,8 @@ Then stop and wait. No explanations.
 Start every call with exactly: "{{welcome_phrase}}"
 Then listen.
 When the caller says their name, silently call save_caller_info. Never announce it or pause the conversation.
+If the caller corrects their name at any point, immediately call save_caller_info again with the corrected name — the last name given overrides any earlier one.
+If a name sounds unusual or unclear, confirm the spelling before hanging up: "Just to make sure I have it right — how do you spell that?"
 
 ━━━ LANGUAGE & VOICE ━━━
 
@@ -42,7 +48,7 @@ When the caller says their name, silently call save_caller_info. Never announce 
 • Phone numbers: group with natural pauses — "seven eight six… five five five… one two three four".
 • Prices: "twenty-five dollars", "eighteen percent". Never symbols.
 • Yes/No: embed in a sentence. Never "True" or "False".
-• Never use the caller's name as a greeting — only use it in the reservation confirmation.
+• Never address the caller by name at any point in the conversation.
 
 ━━━ RESTAURANT INFO — ALWAYS LOOK UP ━━━
 
@@ -105,6 +111,8 @@ Flow:
    d) name: "What name is it under?" (if it sounds like number/day/time or includes "for/guests/people" → re-ask) confirm: "[NAME], right?"
    e) phone: "Best number to confirm? Can be the one you're calling from."
    f) special_requests: "Any special requests?"
+      Valid requests: dietary (allergy, vegan, gluten-free), occasion (birthday, anniversary, surprise), seating (terrace, private, window), accessibility, high chair.
+      If what the caller says doesn't fit any of these categories or sounds unclear, ask once: "Sorry, I didn't catch that — could you repeat your request?" If still unclear, skip it and move on.
 
 Confirm (only when all 6 fields + hours OK, or hours unavailable):
 "I'll log this: [NAME], [GUESTS], [SPOKEN DATE] at [TIME][, SPECIAL_REQUESTS]. You'll receive a text confirmation." STOP.
@@ -149,6 +157,9 @@ TAKE-A-MESSAGE procedure:
 4. "Perfect — someone from the team will be in touch shortly. Have a great day." → call end_call.
 
 Never transfer for routine questions (hours, menu, reservations, billing).
+
+IMPORTANT:
+if call transfer is not afailable. Softly hang up
 
 ━━━ STUCK CONVERSATION ━━━
 
@@ -208,7 +219,7 @@ POST_CALL_ANALYSIS_FIELDS = [
     {
         "name": "caller_name",
         "type": "string",
-        "description": "Full name of the caller as they introduced themselves. Empty string if they never gave their name.",
+        "description": "The name confirmed for the reservation at the end of the call. If the caller corrected their name at any point, use the final corrected name — NOT the first name heard. Empty string if no name was given.",
     },
     {
         "name": "caller_email",
@@ -235,9 +246,10 @@ POST_CALL_ANALYSIS_FIELDS = [
         "name": "reservation_date",
         "type": "string",
         "description": (
-            "Resolved calendar date of the visit as stated in the agent's confirmation sentence "
-            "('Reserva para... [DATE]'). Should be a specific date like 'el viernes 6 de marzo', "
-            "'March 6th', or 'Saturday March 7' — NOT a relative term like 'Friday' or 'mañana'. "
+            "Date of the visit in ISO format YYYY-MM-DD (e.g. '2026-03-05'). "
+            "Use the specific calendar date the agent confirmed — the agent always resolves relative words "
+            "like 'hoy', 'mañana', 'Friday' into a concrete date before confirming. "
+            "Use that resolved date. Date only — do NOT include the time. "
             "Empty string if no date was mentioned."
         ),
     },
@@ -245,9 +257,8 @@ POST_CALL_ANALYSIS_FIELDS = [
         "name": "reservation_time",
         "type": "string",
         "description": (
-            "Time the caller wants to visit, captured exactly as stated "
-            "(e.g. '8 PM', 'a las 8', 'around 7', 'las nueve'). "
-            "Look for it in the agent's confirmation sentence. "
+            "Time of the visit in 24-hour HH:MM format (e.g. '18:00', '20:30'). "
+            "Time only — do NOT include the date or day name. "
             "Empty string if no time was mentioned."
         ),
     },
@@ -255,10 +266,13 @@ POST_CALL_ANALYSIS_FIELDS = [
         "name": "special_requests",
         "type": "string",
         "description": (
-            "Any special requests mentioned by the caller: dietary needs (vegan, gluten-free, allergy), "
+            "Meaningful special requests from the caller that fall into these categories: "
+            "dietary needs (vegan, gluten-free, allergy, seafood), "
             "occasion (birthday, anniversary, surprise), seating (terrace, window, private, quiet), "
-            "accessibility, high chair, or any other preference. "
-            "Capture the caller's exact words. Empty string if none mentioned."
+            "accessibility, or high chair. "
+            "Only include requests that clearly make sense in a restaurant context. "
+            "Ignore any garbled, unintelligible, or nonsensical text. "
+            "Empty string if no valid request was mentioned."
         ),
     },
     {
@@ -502,6 +516,23 @@ def retell_create_phone(modeladmin, request, queryset):
         messages.success(request, f"[{r.slug}] Phone purchased: {r.retell_phone_number}")
 
 
+@admin.action(description="Call Log: Re-process all call_ended events (rebuilds CallDetail date/time)")
+def reprocess_call_events(modeladmin, request, queryset):
+    from restaurants.views import _build_call_detail_from_payload
+    from restaurants.models import CallEvent
+    ok = err = 0
+    for restaurant in queryset:
+        events = CallEvent.objects.filter(restaurant=restaurant, event_type="call_ended")
+        for event in events:
+            try:
+                _build_call_detail_from_payload(event)
+                ok += 1
+            except Exception as exc:
+                err += 1
+                logger.error("reprocess_call_events: event %s — %s", event.pk, exc)
+    messages.success(request, f"Re-processed {ok} call events. Errors: {err}.")
+
+
 # ─── Inlines ──────────────────────────────────────────────────────────────────
 
 class KnowledgeBaseInline(admin.StackedInline):
@@ -581,10 +612,10 @@ class CallDetailAdmin(admin.ModelAdmin):
 
 @admin.register(SmsLog)
 class SmsLogAdmin(admin.ModelAdmin):
-    list_display   = ("created_at", "restaurant", "to_number", "status", "twilio_sid")
+    list_display   = ("created_at", "restaurant", "to_number", "status", "delivered_at", "twilio_sid")
     list_filter    = ("status", "restaurant")
     search_fields  = ("to_number", "message", "twilio_sid")
-    readonly_fields = ("created_at", "twilio_sid", "error_message")
+    readonly_fields = ("created_at", "delivered_at", "twilio_sid", "error_message")
 
 
 # ─── Restaurant Admin ─────────────────────────────────────────────────────────
@@ -629,4 +660,5 @@ class RestaurantAdmin(admin.ModelAdmin):
         retell_configure_sms_tool, retell_configure_escalation_tool,
         retell_create_agent, retell_update_agent_voice, retell_update_agent_webhook, retell_update_agent_events_webhook,
         retell_create_phone,
+        reprocess_call_events,
     ]

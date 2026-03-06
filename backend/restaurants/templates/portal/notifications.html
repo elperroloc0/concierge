@@ -1,0 +1,129 @@
+{% extends "portal/base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block page_title %}Notification Settings{% endblock %}
+{% block nav_notifications %}active{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h4 class="fw-bold">Notification Settings</h4>
+  <p class="text-muted">Choose which email alerts you receive after calls.</p>
+</div>
+
+{% if saved %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+  <i class="bi bi-check-circle me-1"></i> Notification preferences saved.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<form method="post">
+  {% csrf_token %}
+
+  <!-- Master switch -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body d-flex align-items-center justify-content-between">
+      <div>
+        <h6 class="mb-1 fw-bold"><i class="bi bi-envelope-fill text-primary me-2"></i>Email Notifications</h6>
+        <p class="text-muted small mb-0">Master switch — disable to stop all email alerts.</p>
+      </div>
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" name="notify_via_email" id="masterSwitch"
+               {% if restaurant.notify_via_email %}checked{% endif %}
+               style="width:3em;height:1.5em;">
+      </div>
+    </div>
+  </div>
+
+  <!-- Email address -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+      <label for="notify_email" class="form-label fw-semibold">
+        <i class="bi bi-at me-1"></i>Notification Email
+      </label>
+      <input type="email" class="form-control" id="notify_email" name="notify_email"
+             value="{{ restaurant.notify_email }}" placeholder="owner@restaurant.com">
+      <div class="form-text">All alerts are sent to this address.</div>
+    </div>
+  </div>
+
+  <!-- Per-event toggles -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-light fw-bold border-0 py-3">
+      <i class="bi bi-sliders me-1"></i> Alert Types
+    </div>
+    <ul class="list-group list-group-flush">
+
+      <!-- Reservations -->
+      <li class="list-group-item d-flex align-items-center justify-content-between py-3">
+        <div>
+          <span class="fw-semibold"><i class="bi bi-calendar-event text-primary me-2"></i>Reservation Requests</span>
+          <p class="text-muted small mb-0">Get notified when a caller wants to make a reservation.</p>
+        </div>
+        <div class="form-check form-switch">
+          <input class="form-check-input pref-toggle" type="checkbox" name="notify_on_reservation"
+                 {% if restaurant.notify_on_reservation %}checked{% endif %}
+                 style="width:2.5em;height:1.3em;">
+        </div>
+      </li>
+
+      <!-- Complaints -->
+      <li class="list-group-item d-flex align-items-center justify-content-between py-3">
+        <div>
+          <span class="fw-semibold"><i class="bi bi-exclamation-triangle text-danger me-2"></i>Complaints</span>
+          <p class="text-muted small mb-0">Urgent alert when the AI detects a customer complaint.</p>
+        </div>
+        <div class="form-check form-switch">
+          <input class="form-check-input pref-toggle" type="checkbox" name="notify_on_complaint"
+                 {% if restaurant.notify_on_complaint %}checked{% endif %}
+                 style="width:2.5em;height:1.3em;">
+        </div>
+      </li>
+
+      <!-- Follow-ups -->
+      <li class="list-group-item d-flex align-items-center justify-content-between py-3">
+        <div>
+          <span class="fw-semibold"><i class="bi bi-reply-fill text-warning me-2"></i>Follow-up Needed</span>
+          <p class="text-muted small mb-0">Alert when a caller asks to be called back or needs a human.</p>
+        </div>
+        <div class="form-check form-switch">
+          <input class="form-check-input pref-toggle" type="checkbox" name="notify_on_followup"
+                 {% if restaurant.notify_on_followup %}checked{% endif %}
+                 style="width:2.5em;height:1.3em;">
+        </div>
+      </li>
+
+      <!-- Daily digest -->
+      <li class="list-group-item d-flex align-items-center justify-content-between py-3">
+        <div>
+          <span class="fw-semibold"><i class="bi bi-journal-text text-info me-2"></i>Daily Call Digest</span>
+          <p class="text-muted small mb-0">Morning summary of all calls from the previous day.</p>
+        </div>
+        <div class="form-check form-switch">
+          <input class="form-check-input pref-toggle" type="checkbox" name="notify_daily_digest"
+                 {% if restaurant.notify_daily_digest %}checked{% endif %}
+                 style="width:2.5em;height:1.3em;">
+        </div>
+      </li>
+
+    </ul>
+  </div>
+
+  <button type="submit" class="btn btn-primary px-4 py-2">
+    <i class="bi bi-check-lg me-1"></i> Save Preferences
+  </button>
+</form>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Disable per-event toggles when master switch is off
+  const master = document.getElementById('masterSwitch');
+  const prefs  = document.querySelectorAll('.pref-toggle');
+  function syncToggles() {
+    prefs.forEach(p => { p.disabled = !master.checked; });
+  }
+  master.addEventListener('change', syncToggles);
+  syncToggles();
+</script>
+{% endblock %}

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Daily Digest — {{ restaurant_name }}</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;">
+  <tr><td align="center">
+  <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+
+    <!-- Header -->
+    <tr>
+      <td style="background:#1e1b4b;padding:20px 28px;">
+        <span style="color:#ffffff;font-size:17px;font-weight:700;letter-spacing:-.3px;">&#128222; Concierge</span>
+        <span style="color:#a5b4fc;font-size:13px;margin-left:10px;">{{ restaurant_name }}</span>
+      </td>
+    </tr>
+
+    <!-- Title -->
+    <tr>
+      <td style="padding:24px 28px 0;">
+        <p style="margin:0 0 2px;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;">Daily Call Digest</p>
+        <p style="margin:0 0 16px;font-size:22px;font-weight:700;color:#111827;line-height:1.2;">{{ date_str }}</p>
+      </td>
+    </tr>
+
+    <!-- Stats -->
+    <tr>
+      <td style="padding:0 28px;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+          <tr>
+            <td style="text-align:center;padding:16px;border-right:1px solid #e5e7eb;width:25%;">
+              <p style="margin:0;font-size:28px;font-weight:700;color:#111827;">{{ total }}</p>
+              <p style="margin:4px 0 0;font-size:11px;color:#6b7280;text-transform:uppercase;">Calls</p>
+            </td>
+            <td style="text-align:center;padding:16px;border-right:1px solid #e5e7eb;width:25%;">
+              <p style="margin:0;font-size:28px;font-weight:700;color:#1d4ed8;">{{ reservations }}</p>
+              <p style="margin:4px 0 0;font-size:11px;color:#6b7280;text-transform:uppercase;">Reservations</p>
+            </td>
+            <td style="text-align:center;padding:16px;border-right:1px solid #e5e7eb;width:25%;">
+              <p style="margin:0;font-size:28px;font-weight:700;color:#b91c1c;">{{ complaints }}</p>
+              <p style="margin:4px 0 0;font-size:11px;color:#6b7280;text-transform:uppercase;">Complaints</p>
+            </td>
+            <td style="text-align:center;padding:16px;width:25%;">
+              <p style="margin:0;font-size:28px;font-weight:700;color:#b45309;">{{ follow_ups }}</p>
+              <p style="margin:4px 0 0;font-size:11px;color:#6b7280;text-transform:uppercase;">Follow-ups</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- Reason breakdown -->
+    {% if reason_lines %}
+    <tr>
+      <td style="padding:16px 28px 0;">
+        <p style="margin:0 0 10px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">By Reason</p>
+        <table cellpadding="0" cellspacing="0" width="100%">
+          {% for reason, count in reason_lines %}
+          <tr>
+            <td style="font-size:13px;color:#374151;padding:3px 0;">{{ reason }}</td>
+            <td style="font-size:13px;color:#111827;font-weight:600;text-align:right;padding:3px 0;">{{ count }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- CTA -->
+    {% if portal_url %}
+    <tr>
+      <td style="padding:24px 28px;">
+        <a href="{{ portal_url }}" style="display:inline-block;background:#4f46e5;color:#ffffff;font-size:13px;font-weight:600;padding:10px 22px;border-radius:8px;text-decoration:none;letter-spacing:-.1px;">
+          View All Calls &#8594;
+        </a>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- Footer -->
+    <tr>
+      <td style="background:#f9fafb;padding:14px 28px;border-top:1px solid #e5e7eb;">
+        <p style="margin:0;font-size:11px;color:#9ca3af;">
+          Sent by Concierge AI for {{ restaurant_name }}.
+          Manage notifications in your portal settings.
+        </p>
+      </td>
+    </tr>
+
+  </table>
+  </td></tr>
+</table>
+</body>
+</html>

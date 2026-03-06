@@ -381,12 +381,23 @@ def _parse_transcript_for_guest_info(transcript: str) -> dict:
             break
 
     # --- Reservation date ---
+    _SPANISH_MONTHS_RE = r"(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)"
+    _DAYS_ES_RE = r"(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)"
     date_pats = [
-        r"(?:this|next)\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)",
+        # Most specific first: "el jueves 5 de marzo" / "viernes 13 de marzo"
+        rf"(?:el\s+)?{_DAYS_ES_RE}\s+\d{{1,2}}\s+de\s+{_SPANISH_MONTHS_RE}",
+        # "el 5 de marzo"
+        rf"el\s+\d{{1,2}}\s+de\s+{_SPANISH_MONTHS_RE}",
+        # "5 de marzo" (no article)
+        rf"\d{{1,2}}\s+de\s+{_SPANISH_MONTHS_RE}",
+        # English: "March 5th", "March 5"
         r"(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?",
+        # English relative: "this Friday", "next Saturday"
+        r"(?:this|next)\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)",
+        # English ordinal: "on the 5th"
         r"on\s+the\s+\d{1,2}(?:st|nd|rd|th)?",
-        r"(?:este|el\s+pr[oó]ximo|el)\s+(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)",
-        r"el\s+\d{1,2}\s+de\s+(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)",
+        # Day name only (least specific — fallback)
+        rf"(?:este|el\s+pr[oó]ximo|el)\s+{_DAYS_ES_RE}",
     ]
     for pat in date_pats:
         m = re.search(pat, tl)
@@ -395,16 +406,42 @@ def _parse_transcript_for_guest_info(transcript: str) -> dict:
             break
 
     # --- Reservation time ---
+    _SPANISH_NUM_WORDS = {
+        "una": "1", "dos": "2", "tres": "3", "cuatro": "4", "cinco": "5",
+        "seis": "6", "siete": "7", "ocho": "8", "nueve": "9", "diez": "10",
+        "once": "11", "doce": "12", "medianoche": "00", "mediodia": "12",
+    }
     time_pats = [
-        r"(?:at\s+)?(\d{1,2}(?::\d{2})?)\s*(?:pm|am|p\.m\.|a\.m\.)",
-        r"around\s+(\d{1,2}(?::\d{2})?)\s*(?:pm|am)?",
+        # Digits + AM/PM: "6:00 PM", "8 PM"
+        r"(?:at\s+)?(\d{1,2}(?::\d{2})?)\s*(pm|am|p\.m\.|a\.m\.)",
+        # "around 7 PM"
+        r"around\s+(\d{1,2}(?::\d{2})?)\s*(pm|am)?",
+        # "a las 6:00" / "a las 8"
         r"(?:a\s+las?|alrededor\s+de\s+las?)\s+(\d{1,2}(?::\d{2})?)",
     ]
     for pat in time_pats:
-        m = re.search(pat, tl)
+        m = re.search(pat, tl, re.IGNORECASE)
         if m:
             result["reservation_time"] = m.group(0).strip()
             break
+    # Fallback: Spanish word form — "a las ocho PM", "las ocho de la noche"
+    if "reservation_time" not in result:
+        m = re.search(
+            r"(?:a\s+las?\s+)?(" + "|".join(_SPANISH_NUM_WORDS) + r")\s*(pm|am|de\s+la\s+noche|de\s+la\s+ma[ñn]ana)?",
+            tl, re.IGNORECASE,
+        )
+        if m:
+            word = m.group(1).lower()
+            num  = _SPANISH_NUM_WORDS.get(word, "")
+            period_raw = (m.group(2) or "").lower()
+            if "noche" in period_raw or "pm" in period_raw:
+                period = "PM"
+            elif "mañana" in period_raw or "manana" in period_raw or "am" in period_raw:
+                period = "AM"
+            else:
+                period = ""
+            if num:
+                result["reservation_time"] = f"{num}:00 {period}".strip()
 
     # --- Call reason ---
     for reason, keywords in _REASON_KEYWORDS:
@@ -441,12 +478,95 @@ def _parse_transcript_for_guest_info(transcript: str) -> dict:
     if special_hits:
         result["special_requests"] = ", ".join(special_hits)
 
-    # --- follow_up_needed ---
-    result["follow_up_needed"] = any(
-        kw in tl for kw in ["call back", "callback", "llámame", "llame de vuelta", "transfer", "manager", "speak to someone"]
-    )
+    # follow_up_needed is now set explicitly by the AI via save_caller_info tool.
+    # Here we default to what was already saved; never override a True value.
+    existing_flag = _get_bool("follow_up_needed", False)
+    result["follow_up_needed"] = existing_flag
 
     return result
+
+
+_SPANISH_MONTHS = {
+    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4,
+    "mayo": 5, "junio": 6, "julio": 7, "agosto": 8,
+    "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12,
+}
+
+
+def _parse_reservation_date(s):
+    """Parse date string (ISO or Spanish natural language) to a date object."""
+    if not s:
+        return None
+    raw = str(s).strip()
+    # ISO
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        pass
+    # Spanish with number: "el jueves 5 de marzo", "el 5 de marzo", "5 de marzo"
+    m = re.search(r'(\d{1,2})\s+de\s+(\w+)', raw.lower())
+    if m:
+        month = _SPANISH_MONTHS.get(m.group(2))
+        if month:
+            day  = int(m.group(1))
+            year = date.today().year
+            try:
+                d = date(year, month, day)
+                if d < date.today() - timedelta(days=7):
+                    d = date(year + 1, month, day)
+                return d
+            except ValueError:
+                pass
+    return None
+
+
+def _parse_reservation_time(s):
+    """Parse time string (ISO 24h, 12h AM/PM, or Spanish word-form) to a time object."""
+    if not s:
+        return None
+    raw = str(s).strip()
+    # Strict 24h
+    for fmt in ("%H:%M", "%H:%M:%S"):
+        try:
+            return datetime.strptime(raw, fmt).time()
+        except (ValueError, TypeError):
+            pass
+    # Extract digit + AM/PM from any string (e.g. "a las 6:00 PM", "6 PM")
+    m = re.search(r'(\d{1,2}(?::\d{2})?)\s*(am|pm|a\.m\.|p\.m\.)', raw, re.IGNORECASE)
+    if m:
+        t_str  = m.group(1)
+        period = m.group(2).replace(".", "").upper()
+        if ":" not in t_str:
+            t_str += ":00"
+        try:
+            return datetime.strptime(f"{t_str} {period}", "%I:%M %p").time()
+        except (ValueError, TypeError):
+            pass
+    # Plain digit without AM/PM: "18:00" already handled; "6:00" ambiguous — treat as-is
+    m = re.search(r'(\d{1,2}):(\d{2})', raw)
+    if m:
+        try:
+            return datetime.strptime(f"{m.group(1)}:{m.group(2)}", "%H:%M").time()
+        except (ValueError, TypeError):
+            pass
+    # Spanish word number: "8:00 PM" already caught above; "ocho PM" → "8:00 PM"
+    _WORD_TO_HOUR = {
+        "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6,
+        "siete": 7, "ocho": 8, "nueve": 9, "diez": 10, "once": 11, "doce": 12,
+    }
+    for word, hour in _WORD_TO_HOUR.items():
+        if re.search(rf'\b{word}\b', raw, re.IGNORECASE):
+            if re.search(r'pm|noche', raw, re.IGNORECASE) and hour < 12:
+                hour += 12
+            elif re.search(r'am|mañana|manana', raw, re.IGNORECASE) and hour == 12:
+                hour = 0
+            try:
+                from datetime import time as time_cls
+                return time_cls(hour, 0)
+            except ValueError:
+                pass
+            break
+    return None
 
 
 def _build_call_detail_from_payload(call_event: CallEvent) -> None:
@@ -501,8 +621,8 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
             "call_reason":       _get("call_reason", "other"),
             "wants_reservation": _get_bool("wants_reservation", None),
             "party_size":        party_size,
-            "reservation_date":  str(_get("reservation_date", ""))[:128],
-            "reservation_time":  str(_get("reservation_time", ""))[:64],
+            "reservation_date":  _parse_reservation_date(_get("reservation_date", "")),
+            "reservation_time":  _parse_reservation_time(_get("reservation_time", "")),
             "special_requests":  str(_get("special_requests", "")),
             "follow_up_needed":  _get_bool("follow_up_needed", False),
             "notes":             "",
@@ -578,6 +698,152 @@ def retell_inbound_webhook(request, rest_id):
     return JsonResponse(dyn_response, status=200)
 
 
+def _send_call_alert_email(
+    call_event: CallEvent,
+    restaurant: Restaurant,
+    *,
+    subject_prefix: str,
+    reason_display: str,
+    reason_bg: str,
+    reason_color: str,
+    reason_border: str,
+    text_body_extra: str = "",
+) -> None:
+    """Shared helper: render and send an event-driven alert email to the restaurant owner."""
+    from django.core.mail import EmailMultiAlternatives
+    from django.template.loader import render_to_string
+    from django.utils.timezone import localtime
+
+    notify_email = restaurant.notify_email or (restaurant.user.email if restaurant.user else "")
+    if not restaurant.notify_via_email or not notify_email:
+        return
+
+    try:
+        detail = call_event.detail
+    except CallDetail.DoesNotExist:
+        detail = None
+
+    call_payload       = call_event.payload.get("call", {})
+    caller_phone       = (call_payload.get("from_number") or "").strip()
+    caller_name        = detail.caller_name  if detail else ""
+    caller_email_val   = detail.caller_email if detail else ""
+    transcript_raw     = call_payload.get("transcript", "") or ""
+    transcript_snippet = transcript_raw[-400:].strip() if transcript_raw else ""
+    call_dt = localtime(call_event.created_at).strftime("%b %-d, %Y at %-I:%M %p")
+
+    ctx = {
+        "restaurant_name":    restaurant.name,
+        "call_dt":            call_dt,
+        "caller_name":        caller_name,
+        "caller_phone":       caller_phone,
+        "caller_email":       caller_email_val,
+        "transcript_snippet": transcript_snippet,
+        "follow_up_needed":   detail.follow_up_needed if detail else False,
+        "wants_reservation":  detail.wants_reservation if detail else False,
+        "party_size":         detail.party_size if detail else None,
+        "reservation_date":   detail.reservation_date if detail else None,
+        "reservation_time":   detail.reservation_time if detail else None,
+        "special_requests":   detail.special_requests if detail else "",
+        "duration":           "",
+        "reason_display":     reason_display,
+        "reason_bg":          reason_bg,
+        "reason_color":       reason_color,
+        "reason_border":      reason_border,
+        "portal_url":         f"{settings.RETELL_WEBHOOK_BASE_URL}/portal/{restaurant.slug}/calls/",
+    }
+
+    html_body = render_to_string("emails/post_call_summary.html", ctx)
+    subject   = f"{subject_prefix} — {restaurant.name} [{caller_phone or 'Unknown #'}]"
+    text_body = (
+        f"{subject_prefix}\n\n"
+        f"Restaurant: {restaurant.name}\n"
+        f"Time: {call_dt}\n"
+        f"Caller: {caller_name or 'Unknown'}\n"
+        f"Phone: {caller_phone}\n"
+        f"{text_body_extra}\n"
+    )
+
+    try:
+        msg = EmailMultiAlternatives(subject, text_body, settings.DEFAULT_FROM_EMAIL, [notify_email])
+        msg.attach_alternative(html_body, "text/html")
+        msg.send()
+        logger.info("call_alert: [%s] sent to %s | restaurant=%s", reason_display, notify_email, restaurant.slug)
+    except Exception:
+        logger.exception("call_alert: [%s] failed | restaurant=%s", reason_display, restaurant.slug)
+
+
+def _send_followup_alert_email(call_event: CallEvent, restaurant: Restaurant) -> None:
+    """Send follow-up alert if the preference flag is on."""
+    if not restaurant.notify_on_followup:
+        return
+    _send_call_alert_email(
+        call_event, restaurant,
+        subject_prefix="⚠️ Follow-up Needed",
+        reason_display="Follow-up Required",
+        reason_bg="#fee2e2", reason_color="#b91c1c", reason_border="#fca5a5",
+        text_body_extra="The caller asked to be called back or requested a human agent.\n",
+    )
+
+
+def _send_reservation_alert_email(call_event: CallEvent, restaurant: Restaurant) -> None:
+    """Send reservation-intent alert if the preference flag is on."""
+    if not restaurant.notify_on_reservation:
+        return
+    _send_call_alert_email(
+        call_event, restaurant,
+        subject_prefix="📅 Reservation Request",
+        reason_display="Reservation Intent",
+        reason_bg="#dbeafe", reason_color="#1e40af", reason_border="#93c5fd",
+        text_body_extra="A caller expressed interest in making a reservation.\n",
+    )
+
+
+def _send_complaint_alert_email(call_event: CallEvent, restaurant: Restaurant) -> None:
+    """Send complaint alert if the preference flag is on."""
+    if not restaurant.notify_on_complaint:
+        return
+    _send_call_alert_email(
+        call_event, restaurant,
+        subject_prefix="🚨 Complaint Received",
+        reason_display="Complaint",
+        reason_bg="#fee2e2", reason_color="#991b1b", reason_border="#fca5a5",
+        text_body_extra="A caller raised a complaint. Immediate attention may be required.\n",
+    )
+
+
+def _send_payment_failed_email(restaurant: Restaurant) -> None:
+    """Send an email to the restaurant owner when their payment fails."""
+    from django.core.mail import EmailMultiAlternatives
+    from django.template.loader import render_to_string
+
+    notify_email = restaurant.notify_email or (restaurant.user.email if restaurant.user else "")
+    if not notify_email:
+        return
+
+    base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
+    ctx = {
+        "restaurant_name": restaurant.name,
+        "billing_url":     f"{base_url}/portal/{restaurant.slug}/billing/",
+    }
+
+    html_body = render_to_string("emails/payment_failed.html", ctx)
+    text_body = (
+        f"⚠️ Payment Failed — {restaurant.name}\n\n"
+        "Your subscription payment could not be processed.\n"
+        "Please update your payment method to keep your AI agent active.\n\n"
+        f"Update now: {ctx['billing_url']}\n"
+    )
+    subject = f"⚠️ Payment Failed — {restaurant.name}"
+
+    try:
+        msg = EmailMultiAlternatives(subject, text_body, settings.DEFAULT_FROM_EMAIL, [notify_email])
+        msg.attach_alternative(html_body, "text/html")
+        msg.send()
+        logger.info("payment_failed_email: sent to %s | restaurant=%s", notify_email, restaurant.slug)
+    except Exception:
+        logger.exception("payment_failed_email: failed | restaurant=%s", restaurant.slug)
+
+
 def _send_post_call_sms(call_event: CallEvent, restaurant: Restaurant) -> None:
     """Send a contextual follow-up SMS after call_ended, but only if no SMS was already sent."""
     from twilio.rest import Client as TwilioClient
@@ -617,8 +883,7 @@ def _send_post_call_sms(call_event: CallEvent, restaurant: Restaurant) -> None:
         detail = None
 
     kb       = getattr(restaurant, "knowledge_base", None)
-    name     = (detail.caller_name if detail else "").strip()
-    greeting = f"Hi {name}!" if name else "Hi!"
+    greeting = "Hi!"
 
     # Only send post-call SMS for calls with an actionable reason.
     # A generic "thanks for calling" blast to every caller is spam.
@@ -626,8 +891,8 @@ def _send_post_call_sms(call_event: CallEvent, restaurant: Restaurant) -> None:
         website = restaurant.website or ""
         parts = []
         if detail.party_size:        parts.append(f"{detail.party_size} guests")
-        if detail.reservation_date:  parts.append(detail.reservation_date)
-        if detail.reservation_time:  parts.append(f"at {detail.reservation_time}")
+        if detail.reservation_date:  parts.append(detail.reservation_date.strftime("%a %b %-d"))
+        if detail.reservation_time:  parts.append(f"at {detail.reservation_time.strftime('%-I:%M %p')}")
         if parts:
             summary = ", ".join(parts)
             message = f"{greeting} Your request at {restaurant.name} ({summary}) is noted. Book instantly: {website}"
@@ -642,16 +907,24 @@ def _send_post_call_sms(call_event: CallEvent, restaurant: Restaurant) -> None:
 
     message = message[:320]
 
+    callback_url = (
+        f"{settings.RETELL_WEBHOOK_BASE_URL}/api/retell/twilio/sms-status/"
+        if settings.RETELL_WEBHOOK_BASE_URL else None
+    )
+
     log = SmsLog(restaurant=restaurant, call_event=call_event, to_number=caller_phone, message=message)
     try:
         twilio_client = TwilioClient(account_sid, auth_token)
-        msg = twilio_client.messages.create(body=message, from_=from_number, to=caller_phone)
-        log.status     = "sent"
+        create_kwargs = {"body": message, "from_": from_number, "to": caller_phone}
+        if callback_url:
+            create_kwargs["status_callback"] = callback_url
+        msg = twilio_client.messages.create(**create_kwargs)
+        log.status     = SmsLog.STATUS_SENT
         log.twilio_sid = msg.sid
         log.save()
         logger.info("post_call_sms: sent to %s (sid=%s)", caller_phone, msg.sid)
     except Exception as exc:
-        log.status        = "failed"
+        log.status        = SmsLog.STATUS_FAILED
         log.error_message = str(exc)
         log.save()
         logger.exception("post_call_sms: failed to send to %s", caller_phone)
@@ -711,6 +984,19 @@ def retell_events_webhook(request):
             _build_call_detail_from_payload(call_event)
         except Exception:
             logger.exception("Failed to build CallDetail for CallEvent pk=%s", call_event.pk)
+
+        # ── Send event-driven email alerts ───────────────────────────────────
+        try:
+            detail = getattr(call_event, "detail", None)
+            if detail:
+                if detail.follow_up_needed:
+                    _send_followup_alert_email(call_event, restaurant)
+                if detail.wants_reservation:
+                    _send_reservation_alert_email(call_event, restaurant)
+                if detail.call_reason == "complaint":
+                    _send_complaint_alert_email(call_event, restaurant)
+        except Exception:
+            logger.exception("Failed to send alert email(s) for CallEvent pk=%s", call_event.pk)
 
         try:
             _send_post_call_sms(call_event, restaurant)
@@ -891,22 +1177,75 @@ def retell_tool_send_sms(request):
             account_sid = settings.TWILIO_ACCOUNT_SID
             auth_token  = settings.TWILIO_AUTH_TOKEN
             from_number = settings.TWILIO_FROM_NUMBER
-        twilio_client = TwilioClient(account_sid, auth_token)
-        msg = twilio_client.messages.create(
-            body=message,
-            from_=from_number,
-            to=to_number,
+        callback_url = (
+            f"{settings.RETELL_WEBHOOK_BASE_URL}/api/retell/twilio/sms-status/"
+            if settings.RETELL_WEBHOOK_BASE_URL else None
         )
-        log.status     = "sent"
+        twilio_client = TwilioClient(account_sid, auth_token)
+        create_kwargs = {"body": message, "from_": from_number, "to": to_number}
+        if callback_url:
+            create_kwargs["status_callback"] = callback_url
+        msg = twilio_client.messages.create(**create_kwargs)
+        log.status     = SmsLog.STATUS_SENT
         log.twilio_sid = msg.sid
         log.save()
         return JsonResponse({"result": f"SMS sent successfully to {to_number}"})
     except Exception as e:
-        log.status        = "failed"
+        log.status        = SmsLog.STATUS_FAILED
         log.error_message = str(e)
         log.save()
         logger.exception("SMS send failed to %s", to_number)
         return JsonResponse({"result": f"SMS could not be sent: {e}"})
+
+
+@csrf_exempt
+def twilio_sms_status_webhook(request):
+    """Twilio status callback — updates SmsLog.status when a message is delivered or fails."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    message_sid    = request.POST.get("MessageSid", "").strip()
+    message_status = request.POST.get("MessageStatus", "").strip()
+
+    if not message_sid:
+        return HttpResponse(status=400)
+
+    log = SmsLog.objects.select_related("restaurant").filter(twilio_sid=message_sid).first()
+    if not log:
+        # Unknown SID — not from this system, acknowledge silently
+        return HttpResponse(status=200)
+
+    # ── Validate Twilio signature ──────────────────────────────────────────────
+    if not settings.DEBUG:
+        from twilio.request_validator import RequestValidator
+        r = log.restaurant
+        auth_token = (
+            r.twilio_auth_token
+            if r and r.twilio_account_sid and r.twilio_auth_token and r.twilio_from_number
+            else settings.TWILIO_AUTH_TOKEN
+        )
+        validator = RequestValidator(auth_token)
+        url       = request.build_absolute_uri()
+        signature = request.META.get("HTTP_X_TWILIO_SIGNATURE", "")
+        if not validator.validate(url, request.POST, signature):
+            logger.warning("twilio_sms_status: invalid signature for sid=%s", message_sid)
+            return HttpResponse(status=403)
+
+    # ── Update status ──────────────────────────────────────────────────────────
+    if message_status == "delivered":
+        log.status       = SmsLog.STATUS_DELIVERED
+        log.delivered_at = timezone.now()
+        log.save(update_fields=["status", "delivered_at"])
+        logger.info("twilio_sms_status: delivered sid=%s", message_sid)
+    elif message_status in ("undelivered", "failed"):
+        error_code = request.POST.get("ErrorCode", "")
+        log.status        = SmsLog.STATUS_FAILED
+        log.error_message = f"Twilio: {message_status}" + (f" (code {error_code})" if error_code else "")
+        log.save(update_fields=["status", "error_message"])
+        logger.warning("twilio_sms_status: %s sid=%s code=%s", message_status, message_sid, error_code)
+    # "queued", "sending", "sent" are intermediate — no action needed
+
+    return HttpResponse(status=204)
 
 
 @csrf_exempt
@@ -919,13 +1258,16 @@ def retell_tool_save_caller_info(request):
     except json.JSONDecodeError:
         return JsonResponse({"result": "error: invalid json"}, status=400)
 
-    call         = data.get("call", {})
-    args         = data.get("args", {})
-    call_id      = call.get("call_id", "").strip()
-    from_number  = call.get("from_number", "").strip()
-    to_number    = call.get("to_number", "").strip()
-    caller_name  = args.get("caller_name", "").strip()[:255]
-    caller_email = args.get("caller_email", "").strip()[:255]
+    call          = data.get("call", {})
+    args          = data.get("args", {})
+    call_id       = call.get("call_id", "").strip()
+    from_number   = call.get("from_number", "").strip()
+    to_number     = call.get("to_number", "").strip()
+    caller_name   = args.get("caller_name", "").strip()[:255]
+    caller_email  = args.get("caller_email", "").strip()[:255]
+    # AI-driven follow-up flag — explicit signal from the agent
+    follow_up_raw = args.get("follow_up_needed")
+    follow_up     = bool(follow_up_raw) if follow_up_raw is not None else None
 
     if not caller_name:
         return JsonResponse({"result": "error: caller_name is required"}, status=400)
@@ -951,7 +1293,12 @@ def retell_tool_save_caller_info(request):
 
     detail, created = CallDetail.objects.get_or_create(
         call_event=call_event,
-        defaults={"caller_name": caller_name, "caller_phone": from_number, "caller_email": caller_email},
+        defaults={
+            "caller_name": caller_name,
+            "caller_phone": from_number,
+            "caller_email": caller_email,
+            "follow_up_needed": follow_up or False,
+        },
     )
     if not created:
         update_fields = []
@@ -964,8 +1311,15 @@ def retell_tool_save_caller_info(request):
         if caller_email and detail.caller_email != caller_email:
             detail.caller_email = caller_email
             update_fields.append("caller_email")
+        # Only set follow_up_needed to True — never clear it mid-call
+        if follow_up and not detail.follow_up_needed:
+            detail.follow_up_needed = True
+            update_fields.append("follow_up_needed")
         if update_fields:
             detail.save(update_fields=update_fields + ["updated_at"])
+
+    if follow_up:
+        logger.info("save_caller_info: follow_up_needed flagged for call_id=%r restaurant=%s", call_id, to_number)
 
     return JsonResponse({"result": "Info saved"})
 
@@ -1339,6 +1693,7 @@ def portal_calls(request, slug):
     reservation_filter = request.GET.get("reservation", "")
     date_from          = request.GET.get("date_from", "")
     date_to            = request.GET.get("date_to", "")
+    phone_filter       = request.GET.get("phone", "").strip()
 
     # Base queryset — all ended calls, joined with CallDetail + SmsLog
     base_qs = (
@@ -1369,6 +1724,20 @@ def portal_calls(request, slug):
         qs = qs.filter(created_at__date__gte=date_from)
     if date_to:
         qs = qs.filter(created_at__date__lte=date_to)
+    if phone_filter:
+        qs = qs.filter(detail__caller_phone__icontains=phone_filter)
+
+    # ── Repeat caller detection (phone numbers with >1 call) ──────────────────
+    from django.db.models import Count as _Count
+    repeat_phones = dict(
+        CallDetail.objects
+        .filter(call_event__restaurant=restaurant)
+        .exclude(caller_phone="")
+        .values("caller_phone")
+        .annotate(_n=_Count("id"))
+        .filter(_n__gt=1)
+        .values_list("caller_phone", "_n")
+    )
 
     paginator = Paginator(qs, 20)
     page_qs   = paginator.get_page(request.GET.get("page"))
@@ -1379,15 +1748,17 @@ def portal_calls(request, slug):
         call_data = event.payload.get("call", {})
         _, outcome, duration = _classify_call(event.payload)
         detail    = getattr(event, "detail", None)
+        phone = (detail.caller_phone if detail else "") or call_data.get("from_number", "")
         enriched.append({
-            "event":       event,
-            "date":        event.created_at,
-            "from_number": call_data.get("from_number", ""),
+            "event":        event,
+            "date":         event.created_at,
+            "from_number":  call_data.get("from_number", ""),
             "duration_sec": duration,
-            "outcome":     outcome,
-            "transcript":  call_data.get("transcript", ""),
-            "detail":      detail,
-            "sms_logs":    list(event.sms_logs.all()),
+            "outcome":      outcome,
+            "transcript":   call_data.get("transcript", ""),
+            "detail":       detail,
+            "sms_logs":     list(event.sms_logs.all()),
+            "call_count":   repeat_phones.get(phone, 1) if phone else 1,
         })
 
     return render(request, "portal/calls.html", {
@@ -1401,12 +1772,27 @@ def portal_calls(request, slug):
         "reservation_filter":  reservation_filter,
         "date_from":           date_from,
         "date_to":             date_to,
+        "phone_filter":        phone_filter,
         # stats
         "total_calls":         total_calls,
         "reservation_intents": reservation_intents,
         "follow_ups_pending":  follow_ups_pending,
         "sms_sent":            sms_sent,
     })
+
+
+@login_required
+def portal_resolve_followup(request, slug, event_pk):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    event = get_object_or_404(CallEvent, pk=event_pk, restaurant=restaurant)
+    try:
+        event.detail.follow_up_needed = False
+        event.detail.save(update_fields=["follow_up_needed"])
+    except CallDetail.DoesNotExist:
+        pass
+    return JsonResponse({"ok": True})
 
 
 @login_required
@@ -1449,12 +1835,6 @@ def portal_billing_checkout(request, slug):
     restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
     sub = _get_or_create_subscription(restaurant)
 
-    # ── Mock logic for verification if Stripe keys are missing in DEBUG ────────
-    base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
-    if settings.DEBUG and not settings.STRIPE_SECRET_KEY:
-        logger.info("MOCK: Stripe checkout for sub triggered (no keys) | restaurant=%s", restaurant.slug)
-        return redirect(f"{base_url}/portal/{slug}/billing/?success=1", permanent=False)
-
     stripe.api_key = settings.STRIPE_SECRET_KEY
     base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
 
@@ -1487,12 +1867,6 @@ def portal_billing_topup(request, slug):
 
     restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
     sub = _get_or_create_subscription(restaurant)
-
-    # ── Mock logic for verification if Stripe keys are missing in DEBUG ────────
-    base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
-    if settings.DEBUG and (not settings.STRIPE_SECRET_KEY or not settings.STRIPE_COMMUNICATION_PRICE_ID):
-        logger.info("MOCK: Stripe top-up triggered (mocking) | restaurant=%s", restaurant.slug)
-        return redirect(f"{base_url}/portal/{slug}/billing/?topup_success=1", permanent=False)
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
     base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
@@ -1538,6 +1912,33 @@ def portal_billing_portal(request, slug):
         return_url=f"{base_url}/portal/{slug}/billing/",
     )
     return redirect(portal_session.url, permanent=False)
+
+
+@login_required
+def portal_notifications(request, slug):
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    saved = False
+
+    if request.method == "POST":
+        restaurant.notify_via_email       = "notify_via_email" in request.POST
+        restaurant.notify_email           = request.POST.get("notify_email", "").strip()
+        restaurant.notify_on_reservation  = "notify_on_reservation" in request.POST
+        restaurant.notify_on_complaint    = "notify_on_complaint" in request.POST
+        restaurant.notify_on_followup     = "notify_on_followup" in request.POST
+        restaurant.notify_daily_digest    = "notify_daily_digest" in request.POST
+        restaurant.save(update_fields=[
+            "notify_via_email", "notify_email",
+            "notify_on_reservation", "notify_on_complaint",
+            "notify_on_followup", "notify_daily_digest",
+        ])
+        saved = True
+        logger.info("portal_notifications: saved prefs | restaurant=%s | email=%s",
+                     restaurant.slug, restaurant.notify_via_email)
+
+    return render(request, "portal/notifications.html", {
+        "restaurant": restaurant,
+        "saved":      saved,
+    })
 
 
 @csrf_exempt
@@ -1607,5 +2008,31 @@ def stripe_webhook(request):
         if sub:
             sub.status = "cancelled"
             sub.save(update_fields=["status"])
+
+    elif event["type"] == "invoice.paid":
+        customer_id = data.get("customer")
+        sub = Subscription.objects.filter(stripe_customer_id=customer_id).first()
+        if sub:
+            sub.status = "active"
+            period_end = data.get("lines", {}).get("data", [{}])[0].get("period", {}).get("end")
+            if period_end:
+                from datetime import datetime as dt
+                sub.current_period_end = dt.fromtimestamp(period_end, tz=timezone.utc)
+            sub.save(update_fields=["status", "current_period_end"])
+            logger.info("Stripe webhook | invoice.paid | customer=%s | status=active", customer_id)
+
+    elif event["type"] == "invoice.payment_failed":
+        customer_id = data.get("customer")
+        sub = Subscription.objects.filter(stripe_customer_id=customer_id).first()
+        if sub:
+            sub.status = "past_due"
+            sub.save(update_fields=["status"])
+            logger.warning("Stripe webhook | invoice.payment_failed | customer=%s", customer_id)
+            # Send payment-failed email to restaurant owner
+            try:
+                restaurant = sub.restaurant
+                _send_payment_failed_email(restaurant)
+            except Exception:
+                logger.exception("Failed to send payment_failed email | customer=%s", customer_id)
 
     return JsonResponse({"status": "ok"})

@@ -45,9 +45,27 @@ class Restaurant(models.Model):
     # if restaurant keeps existing number - did i set up forwarding to twilio?
     forwarding_enabled = models.BooleanField(default=False)
 
-    # notifications (summaries ans alerts)
-    notify_via_email = models.BooleanField(default=True)
+    # notifications (summaries and alerts)
+    notify_via_email = models.BooleanField(default=True)     # master switch
     notify_email = models.EmailField(blank=True, default="")
+
+    # per-event notification preferences
+    notify_on_reservation = models.BooleanField(
+        default=True,
+        help_text="Email the owner when a caller expresses reservation intent."
+    )
+    notify_on_complaint = models.BooleanField(
+        default=True,
+        help_text="Urgent email when the AI detects a complaint."
+    )
+    notify_on_followup = models.BooleanField(
+        default=True,
+        help_text="Email when the AI flags a call as needing a callback."
+    )
+    notify_daily_digest = models.BooleanField(
+        default=True,
+        help_text="Morning digest email with previous day's call summary."
+    )
 
     # whatsapp notifications
     notify_via_ws = models.BooleanField(default=False)
@@ -184,10 +202,10 @@ class CallDetail(models.Model):
     call_reason       = models.CharField(max_length=32, blank=True, default="other", choices=CALL_REASON_CHOICES)
     wants_reservation = models.BooleanField(null=True, blank=True)
 
-    # Reservation details (stored as strings — AI returns natural language like "this Saturday")
+    # Reservation details
     party_size       = models.PositiveSmallIntegerField(null=True, blank=True)
-    reservation_date = models.CharField(max_length=128, blank=True, default="")
-    reservation_time = models.CharField(max_length=64,  blank=True, default="")
+    reservation_date = models.DateField(null=True, blank=True)
+    reservation_time = models.TimeField(null=True, blank=True)
     special_requests = models.TextField(blank=True, default="")
 
     # Follow-up
@@ -205,6 +223,17 @@ class CallDetail(models.Model):
 
 
 class SmsLog(models.Model):
+    STATUS_PENDING     = "pending"
+    STATUS_SENT        = "sent"
+    STATUS_DELIVERED   = "delivered"
+    STATUS_FAILED      = "failed"
+    STATUS_CHOICES = [
+        (STATUS_PENDING,   "Pending"),
+        (STATUS_SENT,      "Sent (in transit)"),
+        (STATUS_DELIVERED, "Delivered"),
+        (STATUS_FAILED,    "Failed"),
+    ]
+
     restaurant    = models.ForeignKey(
         "restaurants.Restaurant", on_delete=models.CASCADE, related_name="sms_logs"
     )
@@ -213,9 +242,10 @@ class SmsLog(models.Model):
     )
     to_number     = models.CharField(max_length=32)
     message       = models.TextField()
-    status        = models.CharField(max_length=16, default="pending")  # sent | failed
-    twilio_sid    = models.CharField(max_length=64, blank=True)
+    status        = models.CharField(max_length=16, default=STATUS_PENDING, choices=STATUS_CHOICES)
+    twilio_sid    = models.CharField(max_length=64, blank=True, db_index=True)
     error_message = models.TextField(blank=True)
+    delivered_at  = models.DateTimeField(null=True, blank=True)
     created_at    = models.DateTimeField(auto_now_add=True)
 
     class Meta:

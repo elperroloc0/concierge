@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Call Summary — {{ restaurant_name }}</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;">
+  <tr><td align="center">
+  <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+
+    <!-- Header -->
+    <tr>
+      <td style="background:#1e1b4b;padding:20px 28px;">
+        <span style="color:#ffffff;font-size:17px;font-weight:700;letter-spacing:-.3px;">&#128222; Concierge</span>
+        <span style="color:#a5b4fc;font-size:13px;margin-left:10px;">{{ restaurant_name }}</span>
+      </td>
+    </tr>
+
+    <!-- Call meta -->
+    <tr>
+      <td style="padding:24px 28px 0;">
+        <p style="margin:0 0 2px;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;">Call received</p>
+        <p style="margin:0 0 16px;font-size:22px;font-weight:700;color:#111827;line-height:1.2;">{{ call_dt }}</p>
+
+        <!-- Reason badge -->
+        <span style="display:inline-block;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:600;background:{{ reason_bg }};color:{{ reason_color }};border:1px solid {{ reason_border }};">
+          {{ reason_display }}
+        </span>
+
+        {% if follow_up_needed %}
+        <span style="display:inline-block;margin-left:8px;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;">
+          &#9888; ACTION NEEDED — Follow-up Required
+        </span>
+        {% endif %}
+      </td>
+    </tr>
+
+    <!-- Divider -->
+    <tr><td style="padding:16px 28px 0;"><hr style="border:none;border-top:1px solid #f3f4f6;margin:0;"></td></tr>
+
+    <!-- Caller info -->
+    <tr>
+      <td style="padding:16px 28px 0;">
+        <p style="margin:0 0 10px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Caller</p>
+        <table cellpadding="0" cellspacing="0">
+          {% if caller_name %}
+          <tr>
+            <td style="font-size:13px;color:#6b7280;padding-right:8px;padding-bottom:4px;">Name</td>
+            <td style="font-size:13px;color:#111827;font-weight:600;padding-bottom:4px;">{{ caller_name }}</td>
+          </tr>
+          {% endif %}
+          {% if caller_phone %}
+          <tr>
+            <td style="font-size:13px;color:#6b7280;padding-right:8px;padding-bottom:4px;">Phone</td>
+            <td style="font-size:13px;color:#111827;padding-bottom:4px;">{{ caller_phone }}</td>
+          </tr>
+          {% endif %}
+          {% if caller_email %}
+          <tr>
+            <td style="font-size:13px;color:#6b7280;padding-right:8px;padding-bottom:4px;">Email</td>
+            <td style="font-size:13px;color:#111827;padding-bottom:4px;">{{ caller_email }}</td>
+          </tr>
+          {% endif %}
+          <tr>
+            <td style="font-size:13px;color:#6b7280;padding-right:8px;">Duration</td>
+            <td style="font-size:13px;color:#111827;">{{ duration }}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- Reservation block -->
+    {% if wants_reservation %}
+    <tr>
+      <td style="padding:16px 28px 0;">
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 16px;">
+          <p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:.05em;">&#128197; Reservation Intent</p>
+          <table cellpadding="0" cellspacing="0">
+            {% if party_size %}
+            <tr>
+              <td style="font-size:13px;color:#1e40af;padding-right:12px;padding-bottom:4px;">Guests</td>
+              <td style="font-size:13px;color:#1e3a8a;font-weight:600;padding-bottom:4px;">{{ party_size }}</td>
+            </tr>
+            {% endif %}
+            {% if reservation_date %}
+            <tr>
+              <td style="font-size:13px;color:#1e40af;padding-right:12px;padding-bottom:4px;">Date</td>
+              <td style="font-size:13px;color:#1e3a8a;font-weight:600;padding-bottom:4px;">{{ reservation_date }}</td>
+            </tr>
+            {% endif %}
+            {% if reservation_time %}
+            <tr>
+              <td style="font-size:13px;color:#1e40af;padding-right:12px;padding-bottom:4px;">Time</td>
+              <td style="font-size:13px;color:#1e3a8a;font-weight:600;padding-bottom:4px;">{{ reservation_time }}</td>
+            </tr>
+            {% endif %}
+            {% if special_requests %}
+            <tr>
+              <td style="font-size:13px;color:#1e40af;padding-right:12px;">Requests</td>
+              <td style="font-size:13px;color:#1e3a8a;font-weight:600;">{{ special_requests }}</td>
+            </tr>
+            {% endif %}
+          </table>
+        </div>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- Special requests (non-reservation) -->
+    {% if special_requests and not wants_reservation %}
+    <tr>
+      <td style="padding:16px 28px 0;">
+        <p style="margin:0 0 6px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Special Requests</p>
+        <p style="margin:0;font-size:13px;color:#374151;">{{ special_requests }}</p>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- Transcript snippet -->
+    {% if transcript_snippet %}
+    <tr>
+      <td style="padding:16px 28px 0;">
+        <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Transcript (last part)</p>
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;font-size:12px;color:#374151;line-height:1.6;white-space:pre-wrap;font-family:monospace;">{{ transcript_snippet }}</div>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- CTA button -->
+    {% if portal_url %}
+    <tr>
+      <td style="padding:24px 28px;">
+        <a href="{{ portal_url }}" style="display:inline-block;background:#4f46e5;color:#ffffff;font-size:13px;font-weight:600;padding:10px 22px;border-radius:8px;text-decoration:none;letter-spacing:-.1px;">
+          View Full Call Log &#8594;
+        </a>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- Footer -->
+    <tr>
+      <td style="background:#f9fafb;padding:14px 28px;border-top:1px solid #e5e7eb;">
+        <p style="margin:0;font-size:11px;color:#9ca3af;">
+          Sent by Concierge AI for {{ restaurant_name }}.
+          You're receiving this because you're the account owner.
+        </p>
+      </td>
+    </tr>
+
+  </table>
+  </td></tr>
+</table>
+</body>
+</html>

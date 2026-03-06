@@ -43,6 +43,24 @@ TWILIO_ACCOUNT_SID  = os.environ.get("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN   = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_FROM_NUMBER  = os.environ.get("TWILIO_FROM_NUMBER", "")
 
+# ── Email (Gmail SMTP) ────────────────────────────────────────────────────────
+# Set EMAIL_HOST_USER and EMAIL_HOST_PASSWORD (Gmail App Password) in .env
+# Google: myaccount.google.com → Security → App Passwords
+EMAIL_BACKEND       = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST          = 'smtp.gmail.com'
+EMAIL_PORT          = 465
+EMAIL_USE_SSL       = True
+EMAIL_USE_TLS       = False
+EMAIL_HOST_USER     = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+DEFAULT_FROM_EMAIL  = os.environ.get("EMAIL_HOST_USER", "")
+# Fix SSL cert verification on macOS — point OpenSSL to certifi's bundle
+try:
+    import certifi
+    os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+except ImportError:
+    pass
+
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True

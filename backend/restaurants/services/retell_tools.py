@@ -37,15 +37,24 @@ def _save_caller_info_tool_definition(base_url: str) -> dict:
         "name": "save_caller_info",
         "description": (
             "Save the caller's name as soon as you learn it. "
-            "Call once silently — do NOT announce it or pause the conversation."
+            "Call once silently — do NOT announce it or pause the conversation. "
+            "Also set follow_up_needed=true if the caller explicitly asks to be called back "
+            "or requests to speak with a human and could not be transferred."
         ),
         "url": f"{base_url}/api/retell/tools/save-caller-info/",
         "speak_during_execution": False,
         "parameters": {
             "type": "object",
             "properties": {
-                "caller_name":  {"type": "string", "description": "Full name as introduced."},
-                "caller_email": {"type": "string", "description": "Email if provided. Omit otherwise."},
+                "caller_name":      {"type": "string", "description": "Full name as introduced."},
+                "caller_email":     {"type": "string", "description": "Email if provided. Omit otherwise."},
+                "follow_up_needed": {
+                    "type": "boolean",
+                    "description": (
+                        "Set to true ONLY if the caller explicitly asked to be called back "
+                        "or requested a human and was not transferred. Default: false."
+                    ),
+                },
             },
             "required": ["caller_name"],
         },
