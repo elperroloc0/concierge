@@ -7,6 +7,7 @@ services:
   - type: web
     name: concierge-backend
     env: python
+    rootDir: backend
     buildCommand: "./build.sh"
     startCommand: "gunicorn backend.wsgi:application"
     envVars:
