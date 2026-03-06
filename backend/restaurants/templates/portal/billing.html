@@ -12,6 +12,9 @@
   .status-trialing { background: #d1ecf1; color: #0c5460; }
   .status-past_due { background: #fff3cd; color: #856404; }
   .status-cancelled,.status-inactive { background: #f8d7da; color: #721c24; }
+  .expense-stat { text-align: center; padding: 12px; }
+  .expense-stat .value { font-size: 1.5rem; font-weight: 700; }
+  .expense-stat .label { font-size: .75rem; text-transform: uppercase; color: #6b7280; }
 </style>
 {% endblock %}
 
@@ -63,12 +66,17 @@
           {% if sub.current_period_end %}
             <p class="small text-muted mb-3">Next billing: <strong>{{ sub.current_period_end|date:"M d, Y" }}</strong></p>
           {% endif %}
-          <form method="post" action="{% url 'portal_billing_portal' restaurant.slug %}">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-outline-dark w-100 fw-semibold">
-              <i class="bi bi-gear me-1"></i> Manage Plan & Invoices
+          <div class="d-flex gap-2">
+            <form method="post" action="{% url 'portal_billing_portal' restaurant.slug %}" class="flex-grow-1">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-outline-dark w-100 fw-semibold">
+                <i class="bi bi-gear me-1"></i> Manage Plan
+              </button>
+            </form>
+            <button type="button" class="btn btn-outline-danger fw-semibold" data-bs-toggle="modal" data-bs-target="#cancelModal">
+              <i class="bi bi-x-circle"></i>
             </button>
-          </form>
+          </div>
         {% else %}
           <div class="alert alert-info py-2 small mb-4">
             Required to activate your AI agent and receive calls.
@@ -88,7 +96,7 @@
     </div>
   </div>
 
-  <!-- Column 2: Communication Credits (Retell Usage) -->
+  <!-- Column 2: Communication Credits -->
   <div class="col-lg-6">
     <div class="card p-4 h-100 shadow-sm border-2" style="border-radius:16px; border: 2px solid #e9ecef;">
       <h5 class="fw-bold mb-3">Communication Credits</h5>
@@ -106,6 +114,18 @@
         {% endif %}
       </div>
 
+      <!-- Expense stats -->
+      <div class="row g-0 mb-3 border rounded-3 overflow-hidden">
+        <div class="col-6 expense-stat border-end bg-light">
+          <div class="value text-dark">${{ expenses_7d|floatformat:2 }}</div>
+          <div class="label">Last 7 days</div>
+        </div>
+        <div class="col-6 expense-stat bg-light">
+          <div class="value text-dark">${{ expenses_30d|floatformat:2 }}</div>
+          <div class="label">Last 30 days</div>
+        </div>
+      </div>
+
       <div class="mt-auto">
         <p class="small text-muted mb-3"><i class="bi bi-info-circle me-1"></i> Costs are deducted in real-time after each call.</p>
         <form method="post" action="{% url 'portal_billing_topup' restaurant.slug %}">
@@ -117,6 +137,37 @@
       </div>
     </div>
   </div>
+
+  <!-- Recent Expenses Table -->
+  {% if recent_calls %}
+  <div class="col-12 mt-2">
+    <div class="card shadow-sm border-0" style="border-radius:16px;">
+      <div class="card-header bg-white border-0 py-3">
+        <h6 class="fw-bold mb-0"><i class="bi bi-receipt me-2"></i>Recent Communication Expenses</h6>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="border-0 ps-4">Date</th>
+              <th class="border-0">Phone Number</th>
+              <th class="border-0 text-end pe-4">Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for call in recent_calls %}
+            <tr>
+              <td class="ps-4 small">{{ call.created_at|date:"M d, H:i" }}</td>
+              <td class="small">{{ call.caller_phone|default:"Unknown" }}</td>
+              <td class="text-end pe-4 fw-semibold small">${{ call.call_cost|floatformat:4 }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   <!-- Included Features -->
   <div class="col-12 mt-2">
@@ -135,5 +186,34 @@
     </div>
   </div>
 
+</div>
+
+<!-- Cancel Subscription Modal -->
+<div class="modal fade" id="cancelModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Cancel Subscription</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to cancel your Concierge AI subscription?</p>
+        <div class="alert alert-warning py-2 small mb-0">
+          <i class="bi bi-info-circle me-1"></i>
+          Your AI phone agent will <strong>stop answering calls immediately</strong>.
+          Your communication credit balance will be preserved.
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Keep Subscription</button>
+        <form method="post" action="{% url 'portal_cancel_subscription' restaurant.slug %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger fw-semibold">
+            <i class="bi bi-x-circle me-1"></i> Yes, Cancel
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}

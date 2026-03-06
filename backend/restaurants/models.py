@@ -158,6 +158,11 @@ class Subscription(models.Model):
 
     # Usage-based billing: communication expenses (synced from Retell)
     communication_balance  = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    communication_markup   = models.DecimalField(
+        max_digits=4, decimal_places=2, default=1.30,
+        help_text="Multiplier applied to Retell's combined_cost before deducting from balance. "
+                  "e.g. 1.30 = 30% markup. Set to 1.00 for no markup."
+    )
 
     created_at             = models.DateTimeField(auto_now_add=True)
     updated_at             = models.DateTimeField(auto_now=True)
@@ -211,6 +216,12 @@ class CallDetail(models.Model):
     # Follow-up
     follow_up_needed = models.BooleanField(default=False)
     notes            = models.TextField(blank=True, default="")
+
+    # Cost tracking
+    call_cost = models.DecimalField(
+        max_digits=8, decimal_places=4, null=True, blank=True,
+        help_text="Combined cost of this call in USD (voice + LLM)."
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

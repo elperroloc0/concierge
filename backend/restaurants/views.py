@@ -966,17 +966,30 @@ def retell_events_webhook(request):
     if event_type == "call_ended":
         # ── Subtract Call Cost from Communication Balance ─────────────────────
         call_payload = data.get("call", {})
-        combined_cost = call_payload.get("combined_cost") # in USD
-        if combined_cost is not None:
+
+        # Retell API structure changed: combined_cost is now inside call_cost
+        cost_data = call_payload.get("call_cost", {})
+        if isinstance(cost_data, dict) and "combined_cost" in cost_data:
+            combined_cost_cents = cost_data.get("combined_cost")
+        else:
+            combined_cost_cents = call_payload.get("combined_cost") # Legacy fallback
+
+        marked_up_cost = None
+        if combined_cost_cents is not None:
             try:
                 from decimal import Decimal
                 sub = getattr(restaurant, "subscription", None)
                 if sub:
-                    cost_decimal = Decimal(str(combined_cost))
-                    sub.communication_balance -= cost_decimal
+                    # Retell returns cost in cents. Convert to USD.
+                    raw_cost_usd = Decimal(str(combined_cost_cents)) / Decimal("100")
+                    markup = sub.communication_markup or Decimal("1.30")
+                    marked_up_cost = (raw_cost_usd * markup).quantize(Decimal("0.0001"))
+
+                    sub.communication_balance -= marked_up_cost
                     sub.save(update_fields=["communication_balance"])
-                    logger.info("Retell call_ended | Subtracted cost: %.4f | New balance: %.4f | restaurant=%s",
-                                combined_cost, sub.communication_balance, restaurant.slug)
+
+                    logger.info("Retell call_ended | base_cost_usd=%.4f × markup=%.2f = final_deduction=%.4f | balance=%.2f | restaurant=%s",
+                                raw_cost_usd, markup, marked_up_cost, sub.communication_balance, restaurant.slug)
             except Exception:
                 logger.exception("Failed to update communication balance for restaurant=%s", restaurant.slug)
 
@@ -984,6 +997,16 @@ def retell_events_webhook(request):
             _build_call_detail_from_payload(call_event)
         except Exception:
             logger.exception("Failed to build CallDetail for CallEvent pk=%s", call_event.pk)
+
+        # Store the marked-up cost on the detail record (what the client actually pays)
+        if marked_up_cost is not None:
+            try:
+                detail = getattr(call_event, "detail", None)
+                if detail:
+                    detail.call_cost = marked_up_cost
+                    detail.save(update_fields=["call_cost"])
+            except Exception:
+                logger.exception("Failed to store call_cost for CallEvent pk=%s", call_event.pk)
 
         # ── Send event-driven email alerts ───────────────────────────────────
         try:
@@ -1812,10 +1835,32 @@ def _get_or_create_subscription(restaurant):
 def portal_billing(request, slug):
     restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
     sub = _get_or_create_subscription(restaurant)
+
+    # ── Expense aggregation ──────────────────────────────────────────────────
+    from django.db.models import Sum
+    now = timezone.now()
+    expenses_7d  = CallDetail.objects.filter(
+        call_event__restaurant=restaurant,
+        call_cost__isnull=False,
+        created_at__gte=now - timezone.timedelta(days=7),
+    ).aggregate(total=Sum("call_cost"))["total"] or 0
+    expenses_30d = CallDetail.objects.filter(
+        call_event__restaurant=restaurant,
+        call_cost__isnull=False,
+        created_at__gte=now - timezone.timedelta(days=30),
+    ).aggregate(total=Sum("call_cost"))["total"] or 0
+    recent_calls = CallDetail.objects.filter(
+        call_event__restaurant=restaurant,
+        call_cost__isnull=False,
+    ).select_related("call_event").order_by("-created_at")[:10]
+
     return render(request, "portal/billing.html", {
         "restaurant": restaurant,
         "sub": sub,
         "stripe_publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
+        "expenses_7d":  expenses_7d,
+        "expenses_30d": expenses_30d,
+        "recent_calls": recent_calls,
         "features": [
             "AI phone agent available 24/7",
             "Multilingual support — answers in the caller's language",
@@ -1828,12 +1873,41 @@ def portal_billing(request, slug):
 
 
 @login_required
+def portal_cancel_subscription(request, slug):
+    if request.method != "POST":
+        return redirect("portal_billing", slug=slug)
+
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    sub = _get_or_create_subscription(restaurant)
+
+    if sub.stripe_subscription_id:
+        try:
+            stripe.api_key = settings.STRIPE_SECRET_KEY
+            stripe.Subscription.cancel(sub.stripe_subscription_id)
+            logger.info("portal_cancel: cancelled Stripe sub %s | restaurant=%s",
+                        sub.stripe_subscription_id, restaurant.slug)
+        except Exception:
+            logger.exception("portal_cancel: Stripe API error | restaurant=%s", restaurant.slug)
+            messages.error(request, "Could not cancel subscription. Please try again or contact support.")
+            return redirect("portal_billing", slug=slug)
+
+    sub.status = "cancelled"
+    sub.save(update_fields=["status"])
+    messages.success(request, "Your subscription has been cancelled.")
+    return redirect("portal_billing", slug=slug)
+
+
+@login_required
 def portal_billing_checkout(request, slug):
     if request.method != "POST":
         return redirect("portal_billing", slug=slug)
 
     restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
     sub = _get_or_create_subscription(restaurant)
+
+    if not settings.STRIPE_SECRET_KEY:
+        messages.error(request, "Stripe is not configured yet. Please contact support.")
+        return redirect("portal_billing", slug=slug)
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
     base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
@@ -1868,6 +1942,10 @@ def portal_billing_topup(request, slug):
     restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
     sub = _get_or_create_subscription(restaurant)
 
+    if not settings.STRIPE_SECRET_KEY or not settings.STRIPE_COMMUNICATION_PRICE_ID:
+        messages.error(request, "Stripe is not configured yet. Please contact support.")
+        return redirect("portal_billing", slug=slug)
+
     stripe.api_key = settings.STRIPE_SECRET_KEY
     base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
 
@@ -1899,6 +1977,10 @@ def portal_billing_portal(request, slug):
 
     restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
     sub = _get_or_create_subscription(restaurant)
+
+    if not settings.STRIPE_SECRET_KEY:
+        messages.error(request, "Stripe is not configured yet. Please contact support.")
+        return redirect("portal_billing", slug=slug)
 
     if not sub.stripe_customer_id:
         messages.error(request, "No billing account found. Please subscribe first.")
@@ -2008,6 +2090,14 @@ def stripe_webhook(request):
         if sub:
             sub.status = "cancelled"
             sub.save(update_fields=["status"])
+
+    elif event["type"] == "customer.subscription.paused":
+        customer_id = data.get("customer")
+        sub = Subscription.objects.filter(stripe_customer_id=customer_id).first()
+        if sub:
+            sub.status = "inactive"
+            sub.save(update_fields=["status"])
+            logger.info("Stripe webhook | subscription paused | customer=%s", customer_id)
 
     elif event["type"] == "invoice.paid":
         customer_id = data.get("customer")
