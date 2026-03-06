@@ -31,8 +31,6 @@ class Restaurant(models.Model):
     primary_lang =  models.CharField(max_length=16, default="es", choices=[("es", "Spanish"), ("en", "English"), ("other", "other"),])
     conversation_tone =  models.CharField(max_length=16, default="friendly", choices=[("formal", "Formal"), ("friendly", "Friendly"), ("adaptive", "Adaptive")],)
     welcome_phrase = models.TextField(blank=True, default="")
-
-    # phone strategy
     phone_mode = models.CharField(
         max_length=16,
         default="new",
