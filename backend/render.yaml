@@ -1,0 +1,22 @@
+databases:
+  - name: concierge-db
+    databaseName: concierge
+    user: concierge
+
+services:
+  - type: web
+    name: concierge-backend
+    env: python
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn backend.wsgi:application"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: concierge-db
+          property: connectionString
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: SECRET_KEY
+        generateValue: true
+      - key: WEB_CONCURRENCY
+        value: 4
