@@ -310,7 +310,6 @@ def retell_create_agent(modeladmin, request, queryset):
             voice_temperature=1.2,   # more variation = less monotone
             language=lang,
             response_engine={"llm_id": r.retell_llm_id, "type": "retell-llm"},
-            inbound_dynamic_variables_webhook_url=inbound_url,
             webhook_url=events_url,
         )
         r.retell_agent_id = agent.agent_id
