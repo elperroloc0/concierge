@@ -15,7 +15,7 @@ from .services.retell_tools import (
     _escalation_tool_definition,
     build_tool_list,
 )
-LANG_MAP = {"es": "es-US", "en": "en-US", "other": "multi"}
+LANG_MAP = {"es": "es-419", "en": "en-US", "other": "multi"}
 
 AGENT_SYSTEM_PROMPT = """You are the professional, friendly, and human-like voice assistant for {{restaurant_name}}.
 You handle calls naturally and efficiently, exactly like a great human receptionist.
