@@ -299,7 +299,7 @@ def retell_create_agent(modeladmin, request, queryset):
 
         inbound_url = f"{settings.RETELL_WEBHOOK_BASE_URL}/api/retell/webhook/{r.pk}/"
         events_url = f"{settings.RETELL_WEBHOOK_BASE_URL}/api/retell/events/"
-        lang = LANG_MAP.get(r.primary_lang, "multilingual")
+        lang = LANG_MAP.get(r.primary_lang, "multi")
 
         client = RetellClient(api_key=r.retell_api_key)
         agent = client.create_agent(
