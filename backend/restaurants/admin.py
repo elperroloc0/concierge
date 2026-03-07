@@ -516,7 +516,7 @@ class RestaurantAdmin(admin.ModelAdmin):
     prepopulated_fields = {"slug": ("name",)}
     fieldsets = (
         (None, {"fields": (
-            "name", "slug", "is_active", "public_id",
+            "name", "slug", "user", "is_active", "public_id",
             "primary_lang", "conversation_tone", "timezone",
             "website", "contact_email", "contact_phone",
             "address_full", "location_reference",
