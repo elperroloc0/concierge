@@ -2,8 +2,13 @@ import re
 import urllib.parse
 
 from django import forms
+from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import PasswordChangeForm
+from django.core.exceptions import ValidationError
 
 from .models import Restaurant, RestaurantKnowledgeBase
+
+User = get_user_model()
 
 _TEXT  = {"class": "form-control"}
 _SEL   = {"class": "form-select"}
@@ -174,3 +179,51 @@ class KnowledgeBaseForm(forms.ModelForm):
                 "Must start with + followed by 8–15 digits."
             )
         return number
+
+
+class AccountEmailForm(forms.Form):
+    current_password = forms.CharField(
+        label="Current Password",
+        widget=forms.PasswordInput(attrs=_TEXT),
+        required=True
+    )
+    new_email = forms.EmailField(
+        label="New Email",
+        widget=forms.EmailInput(attrs=_TEXT),
+        required=True
+    )
+
+    def __init__(self, *args, user=None, restaurant=None, **kwargs):
+        self.user = user
+        self.restaurant = restaurant
+        super().__init__(*args, **kwargs)
+
+    def clean_current_password(self):
+        current_password = self.cleaned_data.get("current_password")
+        if not self.user.check_password(current_password):
+            raise forms.ValidationError("Incorrect current password.")
+        return current_password
+
+    def clean_new_email(self):
+        new_email = self.cleaned_data.get("new_email", "").strip().lower()
+        # Check against restaurant contact email or user email/username
+        if self.restaurant and self.restaurant.contact_email:
+            current_email = self.restaurant.contact_email.lower()
+        else:
+            current_email = (self.user.email or self.user.username).lower()
+
+        if new_email == current_email:
+            raise forms.ValidationError("This is already your current email address.")
+        if User.objects.filter(email__iexact=new_email).exclude(pk=self.user.pk).exists():
+            raise forms.ValidationError("This email is already in use by another account.")
+        if User.objects.filter(username__iexact=new_email).exclude(pk=self.user.pk).exists():
+            raise forms.ValidationError("This email is already in use by another account.")
+        return new_email
+
+
+class PasswordUpdateForm(PasswordChangeForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.update(_TEXT)
+

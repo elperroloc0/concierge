@@ -7,6 +7,7 @@ urlpatterns = [
     # ── Auth (no slug — pre-login) ─────────────────────────────────────────
     path("login/",views.portal_login,   name="portal_login"),
     path("logout/",views.portal_logout,  name="portal_logout"),
+    path("account/confirm-email/<uuid:token>/", views.portal_confirm_email, name="portal_confirm_email"),
 
     # ── Restaurant-scoped pages ────────────────────────────────────────────
     path("<slug:slug>/",                    views.portal_dashboard,        name="portal_dashboard"),
@@ -20,4 +21,5 @@ urlpatterns = [
     path("<slug:slug>/billing/topup/",      views.portal_billing_topup,          name="portal_billing_topup"),
     path("<slug:slug>/billing/cancel/",     views.portal_cancel_subscription,    name="portal_cancel_subscription"),
     path("<slug:slug>/notifications/",      views.portal_notifications,          name="portal_notifications"),
+    path("<slug:slug>/account/",            views.portal_account,                name="portal_account"),
 ]

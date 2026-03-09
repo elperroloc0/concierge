@@ -16,12 +16,13 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from retell import Retell
 
-from .forms import KnowledgeBaseForm, RestaurantBasicForm
-from .models import CallDetail, CallEvent, Restaurant, RestaurantKnowledgeBase, SmsLog, Subscription
+from .forms import KnowledgeBaseForm, RestaurantBasicForm, AccountEmailForm, PasswordUpdateForm
+from .models import CallDetail, CallEvent, Restaurant, RestaurantKnowledgeBase, SmsLog, Subscription, PendingEmailChange
 from .services.retell_client import RetellClient
 from .services.retell_tools import build_tool_list
 
@@ -1576,6 +1577,142 @@ def portal_login(request):
 def portal_logout(request):
     logout(request)
     return redirect("portal_login")
+
+
+@login_required
+def portal_account(request, slug):
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    user = request.user
+
+    if request.method == "POST":
+        if "update_email" in request.POST:
+            email_form = AccountEmailForm(request.POST, user=user, restaurant=restaurant)
+            password_form = PasswordUpdateForm(user)
+            if email_form.is_valid():
+                new_email = email_form.cleaned_data["new_email"]
+
+                # Delete any existing pending changes for this user
+                PendingEmailChange.objects.filter(user=user).delete()
+
+                # Create new pending change
+                pending = PendingEmailChange.objects.create(user=user, new_email=new_email)
+
+                # Send confirmation email to new address
+                confirm_url = request.build_absolute_uri(
+                    reverse("portal_confirm_email", kwargs={"token": pending.token})
+                )
+                try:
+                    from django.core.mail import send_mail
+                    send_mail(
+                        subject="Confirm your new email address for Concierge AI",
+                        message=f"Please click the following link to confirm this is your new email address for the {restaurant.name} Portal:\n\n{confirm_url}\n\nIf you did not request this change, please ignore this email.",
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[new_email],
+                        fail_silently=False,
+                    )
+
+                    # Send security alert to old address
+                    old_email = user.email or user.username
+                    if restaurant.contact_email:
+                        old_email = restaurant.contact_email
+
+                    send_mail(
+                        subject="Security Alert: Email change requested",
+                        message=f"A request was made to change the email address on your {restaurant.name} portal account to {new_email}.\n\nIf you did not make this request, please log in and change your password immediately, as your account may be compromised.",
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[old_email],
+                        fail_silently=True,
+                    )
+                    messages.success(request, f"A confirmation email has been sent to {new_email}. Please check your inbox.")
+                except Exception as e:
+                    logger.error(f"Failed to send email confirmation: {e}")
+                    messages.error(request, "Failed to send confirmation email. Please ensure the system's email settings are configured correctly.")
+                    pending.delete()
+
+                return redirect("portal_account", slug=slug)
+            else:
+                 # If email form is invalid, we fall through to rendering the template with the invalid form
+                 pass
+
+        elif "update_password" in request.POST:
+            email_form = AccountEmailForm(user=user, restaurant=restaurant)
+            password_form = PasswordUpdateForm(user, request.POST)
+            if password_form.is_valid():
+                password_form.save()
+                from django.contrib.auth import update_session_auth_hash
+                update_session_auth_hash(request, password_form.user)
+                messages.success(request, "Your password was successfully updated!")
+                return redirect("portal_account", slug=slug)
+            else:
+                 # If password form is invalid, we fall through to rendering the template with the invalid form
+                 pass
+    else:
+        email_form = AccountEmailForm(user=user, restaurant=restaurant)
+        password_form = PasswordUpdateForm(user)
+
+    pending_changes = PendingEmailChange.objects.filter(user=user, expires_at__gt=timezone.now())
+
+    return render(request, "portal/account.html", {
+        "restaurant": restaurant,
+        "email_form": email_form,
+        "password_form": password_form,
+        "pending_changes": pending_changes,
+    })
+
+
+def portal_confirm_email(request, token):
+    pending = get_object_or_404(PendingEmailChange, token=token)
+
+    if not pending.is_valid():
+        pending.delete()
+        return render(request, "portal/email_confirmed.html", {
+            "success": False,
+            "error": "This confirmation link has expired."
+        })
+
+    user = pending.user
+    old_email = user.email
+    new_email = pending.new_email
+
+    # Check if someone else took this email while we were waiting
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    if User.objects.filter(email__iexact=new_email).exclude(pk=user.pk).exists():
+        pending.delete()
+        return render(request, "portal/email_confirmed.html", {
+            "success": False,
+            "error": "This email address is already in use by another account."
+        })
+
+    user.email = new_email
+    user.username = new_email  # We use email as username in this system
+    user.save()
+
+    # Also update restaurant's contact email
+    if hasattr(user, 'restaurant') and user.restaurant:
+        user.restaurant.contact_email = new_email
+        user.restaurant.save()
+
+    # Clean up pending change
+    pending.delete()
+
+    try:
+        from django.core.mail import send_mail
+        send_mail(
+            subject="Your email has been successfully updated",
+            message=f"This is a confirmation that your email address has been successfully changed from {old_email} to {new_email}.",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[new_email],
+            fail_silently=True,
+        )
+    except Exception:
+        pass
+
+    return render(request, "portal/email_confirmed.html", {
+        "success": True,
+        "new_email": new_email
+    })
+
 
 
 @login_required

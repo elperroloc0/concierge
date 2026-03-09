@@ -1,9 +1,14 @@
 import uuid
 
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.db import models
+from django.db.models import JSONField
 from django.forms import ValidationError
+from django.utils import timezone
 from django.utils.text import slugify
+from django.utils.translation import gettext_lazy as _
+
+User = get_user_model()
 
 # Create your models here.
 class Restaurant(models.Model):
@@ -435,3 +440,25 @@ class RestaurantKnowledgeBase(models.Model):
 
     def __str__(self):
         return f"KB: {self.restaurant.name}"
+
+
+class PendingEmailChange(models.Model):
+    """Stores a requested email change until the user clicks the confirmation link."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="pending_email_changes")
+    new_email = models.EmailField()
+    token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            # Token expires in 24 hours
+            self.expires_at = timezone.now() + timezone.timedelta(hours=24)
+        super().save(*args, **kwargs)
+
+    def is_valid(self):
+        return timezone.now() < self.expires_at
+
+    def __str__(self):
+        return f"Pending change for {self.user.email} -> {self.new_email}"
+
