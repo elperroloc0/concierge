@@ -535,7 +535,7 @@ class SubscriptionAdmin(admin.ModelAdmin):
     )
     list_filter = ("status",)
     search_fields = ("restaurant__name", "stripe_customer_id", "stripe_subscription_id")
-    actions = ["show_webhook_url"]
+    actions = ["show_webhook_url", "reset_stripe_ids"]
 
     def changelist_view(self, request, extra_context=None):
         if not getattr(settings, "STRIPE_SECRET_KEY", "") or not getattr(settings, "STRIPE_WEBHOOK_SECRET", ""):
@@ -546,6 +546,11 @@ class SubscriptionAdmin(admin.ModelAdmin):
     def show_webhook_url(self, request, queryset):
         domain = request.get_host()
         messages.info(request, f"Set your Stripe Webhook URL to: https://{domain}/api/stripe/webhook/")
+
+    @admin.action(description="Stripe: Reset/Clear Stripe IDs (use when switching Test/Live modes)")
+    def reset_stripe_ids(self, request, queryset):
+        count = queryset.update(stripe_customer_id="", stripe_subscription_id="")
+        messages.success(request, f"Successfully cleared Stripe IDs for {count} subscriptions. New IDs will be generated on next payment attempt.")
 
 
 class CallDetailInline(admin.StackedInline):
