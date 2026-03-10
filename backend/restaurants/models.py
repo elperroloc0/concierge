@@ -224,7 +224,7 @@ class CallDetail(models.Model):
     special_requests = models.TextField(blank=True, default="")
 
     # Follow-up
-    follow_up_needed = models.BooleanField(default=False)
+    follow_up_needed = models.BooleanField(default=True)
     notes            = models.TextField(blank=True, default="")
 
     # Cost tracking

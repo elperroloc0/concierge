@@ -670,7 +670,7 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
             "reservation_date":  _parse_reservation_date(_get("reservation_date", "")),
             "reservation_time":  _parse_reservation_time(_get("reservation_time", "")),
             "special_requests":  str(_get("special_requests", "")),
-            "follow_up_needed":  _get_bool("follow_up_needed", False),
+            "follow_up_needed":  _get_bool("follow_up_needed", True),
             "recording_url":     call.get("recording_url", ""),
             "notes":             "",
         },
