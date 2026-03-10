@@ -196,14 +196,14 @@ def _build_agent_prompt(restaurant: Restaurant) -> str:
         prompt = prompt[:first_newline] + "\n" + _ESCALATION_RULE_BLOCK + prompt[first_newline + 1:]
 
     if not restaurant.enable_sms:
-        # Strictly remove SMS offerings so the AI doesn't mention it when disabled.
-        # We target specific sentences or clauses within the prompt.
+        # Remove SMS offer sentences from the prompt text
         prompt = prompt.replace(' If applicable, offer to send a text message with a link (e.g., "Would you like me to text you the menu?"). If they say yes, call `send_sms`.', "")
         prompt = prompt.replace(' Offer to text them the contact email, and stop the booking process.', " Stop the booking process.")
         prompt = prompt.replace(' Tell them they will receive a confirmation text and transition to WRAP UP.', " Transition to WRAP UP.")
-
-        # Additional safety check: remove the SMS badge text manually if it leaked in from anywhere
         prompt = prompt.replace(" SMS", "")
+
+        # Explicit hard prohibition — catches anything the string replacements miss
+        prompt += "\n\n### SMS DISABLED\nSMS is not available for this account. NEVER offer, suggest, or mention sending a text message under any circumstances. If a caller asks for a text, politely explain that you are unable to send text messages."
     return prompt
 
 # ─── Admin Actions ────────────────────────────────────────────────────────────
