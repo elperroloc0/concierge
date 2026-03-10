@@ -128,9 +128,11 @@ def _escalation_tool_definition(transfer_number: str) -> dict:
             "Only call this after acknowledging the caller. Never call for routine questions."
         ),
         "transfer_destination": {
-            "type": "number",
+            "type": "predefined",
             "number": transfer_number,
-            "description": "Human agent / restaurant manager",
+        },
+        "transfer_option": {
+            "type": "cold_transfer",
         },
     }
 
