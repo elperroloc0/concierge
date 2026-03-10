@@ -775,8 +775,7 @@ def retell_inbound_webhook(request, rest_id):
             "Retell inbound webhook | Invalid signature | restaurant=%s | Check if Retell Webhook Secret differs from API Key.",
             restaurant.slug
         )
-        # Temporarily allow bypass during debug
-        # return JsonResponse({"detail": "invalid signature"}, status=401)
+        return JsonResponse({"detail": "invalid signature"}, status=401)
 
     return JsonResponse(dyn_response, status=200)
 
@@ -1046,8 +1045,7 @@ def retell_events_webhook(request):
                 "Retell events webhook | Invalid signature | restaurant=%s | Check if Retell Webhook Secret differs from API Key.",
                 restaurant.slug
             )
-            # Temporarily allow bypass during debug
-            # return JsonResponse({"detail": "invalid signature"}, status=401)
+            return JsonResponse({"detail": "invalid signature"}, status=401)
 
     # Retell sends "event" (not "event_type") — fall back for safety
     event_type = data.get("event") or data.get("event_type", "")
