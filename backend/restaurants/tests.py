@@ -455,37 +455,6 @@ class InboundWebhookTest(TestCase):
             "valid-sig",
         )
 
-    # ── Dev bypass ────────────────────────────────────────────────────────────
-
-    @override_settings(DEBUG=True)
-    def test_dev_bypass_skips_signature_check(self):
-        """
-        When DEBUG=True and the correct bypass header is sent,
-        the view should return 200 WITHOUT verifying the Retell signature.
-
-        override_settings() changes Django settings only for this test,
-        then restores them automatically. Never rely on global settings in tests.
-        """
-        with patch.dict("os.environ", {"RETELL_DEV_BYPASS_SECRET": "dev-secret"}):
-            # No signature header needed — bypass header replaces it
-            response = self.client.post(
-                self.url,
-                data=json.dumps(self.valid_payload),
-                content_type="application/json",
-                HTTP_X_DEV_BYPASS="dev-secret",
-            )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("dynamic_variables", response.json().get("call_inbound", {}))
-
-    @override_settings(DEBUG=True)
-    def test_dev_bypass_fails_with_wrong_secret(self):
-        """Wrong bypass secret should NOT skip signature verification."""
-        with patch.dict("os.environ", {"RETELL_DEV_BYPASS_SECRET": "dev-secret"}):
-            response = self._post(headers={"HTTP_X_DEV_BYPASS": "wrong-secret"})
-
-        # Falls through to signature check, which returns 401 (no sig header)
-        self.assertEqual(response.status_code, 401)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

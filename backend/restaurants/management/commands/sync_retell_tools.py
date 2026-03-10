@@ -59,11 +59,22 @@ class Command(BaseCommand):
 
             try:
                 client = RetellClient(api_key=r.retell_api_key)
-                client.update_llm(
+                llm_result = client.update_llm(
                     r.retell_llm_id,
                     general_tools=tools,
                     general_prompt=prompt,
                 )
+                if r.retell_agent_id:
+                    client.point_agent_to_llm_version(
+                        r.retell_agent_id, r.retell_llm_id, llm_result.version
+                    )
+                    published_version = client.publish_agent(r.retell_agent_id)
+                    if r.retell_phone_number:
+                        client.pin_phone_to_agent_version(
+                            r.retell_phone_number,
+                            r.retell_agent_id,
+                            published_version,
+                        )
                 tool_names = [t.get("name", "?") for t in tools]
                 self.stdout.write(
                     self.style.SUCCESS(
@@ -73,3 +84,4 @@ class Command(BaseCommand):
                 )
             except Exception as exc:
                 self.stderr.write(self.style.ERROR(f"[{r.slug}] ❌ Failed: {exc}"))
+

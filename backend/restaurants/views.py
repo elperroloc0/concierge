@@ -755,13 +755,7 @@ def retell_inbound_webhook(request, rest_id):
     dyn_vars["account_status"] = "active"
     dyn_response = {"call_inbound": {"dynamic_variables": dyn_vars}}
 
-    if settings.DEBUG:
-        bypass_secret = getattr(settings, "RETELL_DEV_BYPASS_SECRET", os.environ.get("RETELL_DEV_BYPASS_SECRET"))
-        bypass_header = request.headers.get("x-dev-bypass") or request.META.get("HTTP_X_DEV_BYPASS")
-        if bypass_secret and bypass_header == bypass_secret:
-            return JsonResponse(dyn_response, status=200)
-
-    # Production: verify Retell signature strictly
+    # Verify Retell signature
     signature = request.headers.get("x-retell-signature", "")
     if not signature:
         return JsonResponse({"detail": "missing signature"}, status=401)
@@ -1036,16 +1030,15 @@ def retell_events_webhook(request):
         logger.warning("Retell events webhook | Unknown number: %r", to_number)
         return JsonResponse({"detail": "unknown number"}, status=404)
 
-    if not settings.DEBUG:
-        if not sig or not restaurant.retell_api_key:
-            return JsonResponse({"detail": "unauthorized"}, status=401)
-        retell_client = Retell(api_key=restaurant.retell_api_key)
-        if not retell_client.verify(raw, restaurant.retell_api_key, sig):
-            logger.warning(
-                "Retell events webhook | Invalid signature | restaurant=%s | Check if Retell Webhook Secret differs from API Key.",
-                restaurant.slug
-            )
-            return JsonResponse({"detail": "invalid signature"}, status=401)
+    if not sig or not restaurant.retell_api_key:
+        return JsonResponse({"detail": "unauthorized"}, status=401)
+    retell_client = Retell(api_key=restaurant.retell_api_key)
+    if not retell_client.verify(raw, restaurant.retell_api_key, sig):
+        logger.warning(
+            "Retell events webhook | Invalid signature | restaurant=%s | Check if Retell Webhook Secret differs from API Key.",
+            restaurant.slug
+        )
+        return JsonResponse({"detail": "invalid signature"}, status=401)
 
     # Retell sends "event" (not "event_type") — fall back for safety
     event_type = data.get("event") or data.get("event_type", "")
@@ -1348,20 +1341,19 @@ def twilio_sms_status_webhook(request):
         return HttpResponse(status=200)
 
     # ── Validate Twilio signature ──────────────────────────────────────────────
-    if not settings.DEBUG:
-        from twilio.request_validator import RequestValidator
-        r = log.restaurant
-        auth_token = (
-            r.twilio_auth_token
-            if r and r.twilio_account_sid and r.twilio_auth_token and r.twilio_from_number
-            else settings.TWILIO_AUTH_TOKEN
-        )
-        validator = RequestValidator(auth_token)
-        url       = request.build_absolute_uri()
-        signature = request.META.get("HTTP_X_TWILIO_SIGNATURE", "")
-        if not validator.validate(url, request.POST, signature):
-            logger.warning("twilio_sms_status: invalid signature for sid=%s", message_sid)
-            return HttpResponse(status=403)
+    from twilio.request_validator import RequestValidator
+    r = log.restaurant
+    auth_token = (
+        r.twilio_auth_token
+        if r and r.twilio_account_sid and r.twilio_auth_token and r.twilio_from_number
+        else settings.TWILIO_AUTH_TOKEN
+    )
+    validator = RequestValidator(auth_token)
+    url       = request.build_absolute_uri()
+    signature = request.META.get("HTTP_X_TWILIO_SIGNATURE", "")
+    if not validator.validate(url, request.POST, signature):
+        logger.warning("twilio_sms_status: invalid signature for sid=%s", message_sid)
+        return HttpResponse(status=403)
 
     # ── Update status ──────────────────────────────────────────────────────────
     if message_status == "delivered":
@@ -1904,11 +1896,26 @@ def _sync_retell_tools(request, restaurant: Restaurant, kb: RestaurantKnowledgeB
         client = RetellClient(api_key=restaurant.retell_api_key)
         prompt = _build_agent_prompt(restaurant)
 
-        client.update_llm(
+        llm_result = client.update_llm(
             restaurant.retell_llm_id,
             general_tools=tools,
             general_prompt=prompt
         )
+
+        if restaurant.retell_agent_id:
+            client.point_agent_to_llm_version(
+                restaurant.retell_agent_id,
+                restaurant.retell_llm_id,
+                llm_result.version,
+            )
+            published_version = client.publish_agent(restaurant.retell_agent_id)
+            if restaurant.retell_phone_number:
+                client.pin_phone_to_agent_version(
+                    restaurant.retell_phone_number,
+                    restaurant.retell_agent_id,
+                    published_version,
+                )
+
         if kb.escalation_enabled and escalation_number:
             messages.success(request, f"Call transfer activated — calls will be forwarded to {escalation_number} when conditions are met.")
         else:
@@ -1916,6 +1923,7 @@ def _sync_retell_tools(request, restaurant: Restaurant, kb: RestaurantKnowledgeB
     except Exception as exc:
         logger.error("Failed to sync Retell tools for %s: %s", restaurant.slug, exc)
         messages.error(request, f"Settings saved, but failed to sync call transfer with Retell: {exc}")
+
 
 
 @login_required
@@ -1936,15 +1944,7 @@ def portal_knowledge_base(request, slug):
             kb_form.save()
             kb.refresh_from_db()
 
-            # Auto-push tools to Retell if escalation settings changed
-            escalation_changed = (
-                kb.escalation_enabled != old_enabled
-                or kb.escalation_transfer_number != old_number
-            )
-            enable_sms_changed = restaurant.enable_sms != old_enable_sms
-
-            if escalation_changed or enable_sms_changed:
-                _sync_retell_tools(request, restaurant, kb)
+            _sync_retell_tools(request, restaurant, kb)
 
             messages.success(request, "Knowledge base updated successfully.")
             return redirect("portal_kb", slug=restaurant.slug)

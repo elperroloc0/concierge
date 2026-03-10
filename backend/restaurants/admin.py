@@ -18,6 +18,7 @@ from .services.retell_tools import (
 LANG_MAP = {"es": "es-419", "en": "en-US", "other": "multi"}
 
 AGENT_SYSTEM_PROMPT = """{{account_status_directive}}
+
 You are the professional, friendly, and human-like voice assistant for {{restaurant_name}}.
 You handle calls naturally and efficiently, exactly like a great human receptionist.
 
@@ -73,10 +74,9 @@ Guide the conversation through these states based on the caller's intent:
 
 [STATE 4: ROUTING / MESSAGES]
 - Trigger: Caller has a complaint, wants to speak to a manager, asks for callback, or asks something out of scope/unknown.
-- Action:
-  * If {{escalation_enabled}} is "yes", you MUST call `transfer_to_human` immediately — do NOT ask for permission or explain further. Transfer conditions: {{escalation_conditions}}. If conditions field is empty, transfer any time the caller asks to speak to a person.
-  * If {{escalation_enabled}} is "no", offer to take a message. Ask for their name and number, then call `save_caller_info`.
+- Action: Offer to take a message. Ask for their name and number, then call `save_caller_info`.
 - Next: Transition to WRAP UP.
+
 
 [STATE 5: WRAP UP]
 - Trigger: The conversation has reached a natural conclusion or the caller is ready to hang up.
@@ -154,9 +154,37 @@ POST_CALL_ANALYSIS_FIELDS = [
 ]
 
 
+# Injected at the top of the prompt ONLY when escalation is enabled.
+# Keeps it completely out of the LLM context when transfer is off.
+_ESCALATION_RULE_BLOCK = """
+## CALL TRANSFER
+You may transfer calls to a human staff member using the `transfer_to_human` tool.
+
+Transfer the call ONLY when: {{escalation_conditions}}
+
+When transferring: briefly acknowledge, then call `transfer_to_human` immediately.
+If the condition is NOT met: assist the caller yourself. Do not offer or mention transfer.
+
+---
+"""
+
+
 def _build_agent_prompt(restaurant: Restaurant) -> str:
-    """Read the base prompt and strip out SMS instructions if SMS is disabled."""
+    """Build the system prompt, injecting escalation rule only when enabled."""
     prompt = AGENT_SYSTEM_PROMPT
+
+    # Inject ABSOLUTE RULE only when escalation is active.
+    # When OFF, zero mention of transfer_to_human appears in the prompt.
+    try:
+        escalation_enabled = restaurant.knowledge_base.escalation_enabled
+    except Exception:
+        escalation_enabled = False
+
+    if escalation_enabled:
+        # Insert escalation block right after the first line (account_status_directive)
+        first_newline = prompt.index("\n")
+        prompt = prompt[:first_newline] + "\n" + _ESCALATION_RULE_BLOCK + prompt[first_newline + 1:]
+
     if not restaurant.enable_sms:
         prompt = prompt.replace(
             " If applicable, offer to send a text message with a link (e.g., \"Would you like me to text you the menu?\"). If they say yes, call `send_sms`.",
@@ -205,12 +233,17 @@ def retell_update_llm_prompt(modeladmin, request, queryset):
         client = RetellClient(api_key=r.retell_api_key)
         prompt = _build_agent_prompt(r)
 
-        client.update_llm(
+        llm_result = client.update_llm(
             r.retell_llm_id,
             general_prompt=prompt,
             begin_message=r.welcome_phrase
         )
-        messages.success(request, f"[{r.slug}] LLM prompt updated: {r.retell_llm_id}")
+        if r.retell_agent_id:
+            client.point_agent_to_llm_version(r.retell_agent_id, r.retell_llm_id, llm_result.version)
+            published_version = client.publish_agent(r.retell_agent_id)
+            if r.retell_phone_number:
+                client.pin_phone_to_agent_version(r.retell_phone_number, r.retell_agent_id, published_version)
+        messages.success(request, f"[{r.slug}] LLM prompt updated and published: {r.retell_llm_id}")
 
 
 @admin.action(description="Retell: 1c — Configure post-call analysis fields (call_analysis)")
@@ -250,8 +283,13 @@ def retell_configure_sms_tool(modeladmin, request, queryset):
         client = RetellClient(api_key=r.retell_api_key)
         tools = build_tool_list(base_url)
         try:
-            client.update_llm(r.retell_llm_id, general_tools=tools)
-            messages.success(request, f"[{r.slug}] Base tools (SMS + save_caller_info + get_info + resolve_date) registered on LLM: {r.retell_llm_id}")
+            llm_result = client.update_llm(r.retell_llm_id, general_tools=tools)
+            if r.retell_agent_id:
+                client.point_agent_to_llm_version(r.retell_agent_id, r.retell_llm_id, llm_result.version)
+                published_version = client.publish_agent(r.retell_agent_id)
+                if r.retell_phone_number:
+                    client.pin_phone_to_agent_version(r.retell_phone_number, r.retell_agent_id, published_version)
+            messages.success(request, f"[{r.slug}] Base tools configured and published: {r.retell_llm_id}")
         except Exception as exc:
             messages.error(request, f"[{r.slug}] Failed to configure tools: {exc}")
 
@@ -284,8 +322,13 @@ def retell_configure_escalation_tool(modeladmin, request, queryset):
         client = RetellClient(api_key=r.retell_api_key)
         tools = build_tool_list(base_url, escalation_number=kb.escalation_transfer_number)
         try:
-            client.update_llm(r.retell_llm_id, general_tools=tools)
-            messages.success(request, f"[{r.slug}] All tools configured (SMS + save_caller_info + get_info + resolve_date + escalation → {kb.escalation_transfer_number})")
+            llm_result = client.update_llm(r.retell_llm_id, general_tools=tools)
+            if r.retell_agent_id:
+                client.point_agent_to_llm_version(r.retell_agent_id, r.retell_llm_id, llm_result.version)
+                published_version = client.publish_agent(r.retell_agent_id)
+                if r.retell_phone_number:
+                    client.pin_phone_to_agent_version(r.retell_phone_number, r.retell_agent_id, published_version)
+            messages.success(request, f"[{r.slug}] All tools configured and published (SMS + save_caller_info + get_info + resolve_date + escalation → {kb.escalation_transfer_number})")
         except Exception as exc:
             messages.error(request, f"[{r.slug}] Failed to configure escalation tool: {exc}")
 
@@ -482,6 +525,27 @@ class SubscriptionInline(admin.StackedInline):
         "status", "communication_balance", "communication_markup",
         "stripe_customer_id", "stripe_subscription_id", "current_period_end",
     )
+
+
+@admin.register(Subscription)
+class SubscriptionAdmin(admin.ModelAdmin):
+    list_display = (
+        "restaurant", "status", "current_period_end", "communication_balance",
+        "stripe_customer_id", "stripe_subscription_id"
+    )
+    list_filter = ("status",)
+    search_fields = ("restaurant__name", "stripe_customer_id", "stripe_subscription_id")
+    actions = ["show_webhook_url"]
+
+    def changelist_view(self, request, extra_context=None):
+        if not getattr(settings, "STRIPE_SECRET_KEY", "") or not getattr(settings, "STRIPE_WEBHOOK_SECRET", ""):
+            messages.warning(request, "⚠️ STRIPE WARNING: STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET is missing from your .env file. Payment flows will fail.")
+        return super().changelist_view(request, extra_context=extra_context)
+
+    @admin.action(description="Stripe: Show Webhook Configuration URL")
+    def show_webhook_url(self, request, queryset):
+        domain = request.get_host()
+        messages.info(request, f"Set your Stripe Webhook URL to: https://{domain}/api/stripe/webhook/")
 
 
 class CallDetailInline(admin.StackedInline):

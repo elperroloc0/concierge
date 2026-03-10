@@ -124,8 +124,9 @@ def _escalation_tool_definition(transfer_number: str) -> dict:
         "type": "transfer_call",
         "name": "transfer_to_human",
         "description": (
-            "Transfer the caller to a human agent when escalation conditions are met. "
-            "Only call this after acknowledging the caller. Never call for routine questions."
+            "Transfer the caller to a human agent. "
+            "Call this IMMEDIATELY whenever the caller asks to speak with a person, manager, or human — "
+            "do NOT offer to take a message first. This is the highest priority action."
         ),
         "transfer_destination": {
             "type": "predefined",
@@ -135,6 +136,7 @@ def _escalation_tool_definition(transfer_number: str) -> dict:
             "type": "cold_transfer",
         },
     }
+
 
 
 def _end_call_tool_definition() -> dict:
