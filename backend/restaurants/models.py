@@ -233,6 +233,9 @@ class CallDetail(models.Model):
         help_text="Combined cost of this call in USD (voice + LLM)."
     )
 
+    # Audio recording URL from Retell AI
+    recording_url = models.URLField(max_length=500, blank=True, default="")
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

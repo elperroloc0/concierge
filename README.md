@@ -103,11 +103,3 @@ To run the entire test suite:
 ```bash
 python manage.py test
 ```
-
-### Production Deployment Check
-Before deploying to production, ensure your Django configuration is perfectly secure:
-```bash
-python manage.py check --deploy
-```
-
-- Ensure `DEBUG=False` in your production `.env` to enforce Webhook Signature validation and secure URL routing.

@@ -173,6 +173,7 @@ def _build_dynamic_variables(restaurant):
             "escalation_conditions":  kb.escalation_conditions or "",
             "food_menu_url":          kb.food_menu_url or _site,
             "bar_menu_url":           kb.bar_menu_url  or _site,
+            "brand_voice_notes":      kb.brand_voice_notes or "",
         })
     else:
         dyn.update({
@@ -183,6 +184,7 @@ def _build_dynamic_variables(restaurant):
             "escalation_conditions":  "",
             "food_menu_url":          restaurant.website or "",
             "bar_menu_url":           restaurant.website or "",
+            "brand_voice_notes":      "",
         })
     return dyn
 
@@ -669,6 +671,7 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
             "reservation_time":  _parse_reservation_time(_get("reservation_time", "")),
             "special_requests":  str(_get("special_requests", "")),
             "follow_up_needed":  _get_bool("follow_up_needed", False),
+            "recording_url":     call.get("recording_url", ""),
             "notes":             "",
         },
     )
