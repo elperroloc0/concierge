@@ -34,6 +34,9 @@
     <li class="nav-item">
       <a class="nav-link {% block nav_billing %}{% endblock %}" href="{% url 'portal_billing' restaurant.slug %}">
         <i class="bi bi-credit-card-fill"></i> Billing
+        {% if balance_status == "critical" %}<span class="balance-dot balance-dot-critical"></span>
+        {% elif balance_status == "warning" %}<span class="balance-dot balance-dot-warning"></span>
+        {% endif %}
       </a>
     </li>
     <li class="nav-item">
@@ -62,7 +65,15 @@
     </button>
     <span class="page-title text-truncate">{% block page_title %}{% endblock %}</span>
   </div>
+  {% if agent_status == "active" %}
   <span class="badge bg-success-subtle text-success px-3 py-2 rounded-pill fw-semibold border border-success-subtle d-none d-sm-inline-block"><i class="bi bi-robot me-1"></i> Agent Active</span>
+  {% elif agent_status == "no_credits" %}
+  <span class="badge bg-danger-subtle text-danger px-3 py-2 rounded-pill fw-semibold border border-danger-subtle d-none d-sm-inline-block"><i class="bi bi-robot me-1"></i> No Credits</span>
+  {% elif agent_status == "past_due" %}
+  <span class="badge bg-warning-subtle text-warning px-3 py-2 rounded-pill fw-semibold border border-warning-subtle d-none d-sm-inline-block"><i class="bi bi-robot me-1"></i> Payment Due</span>
+  {% else %}
+  <span class="badge bg-secondary-subtle text-secondary px-3 py-2 rounded-pill fw-semibold border border-secondary-subtle d-none d-sm-inline-block"><i class="bi bi-robot me-1"></i> Agent Inactive</span>
+  {% endif %}
 </div>
 
 <div class="main-content">

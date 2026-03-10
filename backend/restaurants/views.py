@@ -887,6 +887,48 @@ def _send_complaint_alert_email(call_event: CallEvent, restaurant: Restaurant) -
     )
 
 
+def _send_low_balance_email(restaurant: Restaurant, balance, level: str) -> None:
+    """Send a low-balance alert email to the restaurant owner."""
+    from django.core.mail import EmailMultiAlternatives
+
+    notify_email = restaurant.notify_email or (restaurant.user.email if restaurant.user else "")
+    if not notify_email:
+        return
+
+    base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
+    billing_url = f"{base_url}/portal/{restaurant.slug}/billing/"
+
+    if level == "critical":
+        subject = f"🔴 Créditos casi agotados — {restaurant.name}"
+        text_body = (
+            f"Tu saldo de comunicaciones es ${balance:.2f}.\n"
+            "El agente dejará de contestar llamadas si el saldo llega a cero.\n\n"
+            f"Recarga ahora: {billing_url}\n"
+        )
+    else:
+        subject = f"🟡 Saldo bajo — {restaurant.name}"
+        text_body = (
+            f"Tu saldo de comunicaciones bajó a ${balance:.2f}.\n"
+            "Recarga pronto para evitar interrupciones en el servicio.\n\n"
+            f"Recargar: {billing_url}\n"
+        )
+
+    html_body = (
+        f"<p>{text_body.replace(chr(10), '<br>')}</p>"
+        f"<p><a href='{billing_url}' style='background:#2563eb;color:#fff;padding:10px 20px;"
+        f"border-radius:6px;text-decoration:none;font-weight:600;'>Recargar créditos</a></p>"
+    )
+
+    try:
+        msg = EmailMultiAlternatives(subject, text_body, settings.DEFAULT_FROM_EMAIL, [notify_email])
+        msg.attach_alternative(html_body, "text/html")
+        msg.send()
+        logger.info("low_balance_email: [%s] $%.2f sent to %s | restaurant=%s",
+                    level, balance, notify_email, restaurant.slug)
+    except Exception:
+        logger.exception("low_balance_email: failed | restaurant=%s", restaurant.slug)
+
+
 def _send_payment_failed_email(restaurant: Restaurant) -> None:
     """Send an email to the restaurant owner when their payment fails."""
     from django.core.mail import EmailMultiAlternatives
@@ -1066,11 +1108,20 @@ def retell_events_webhook(request):
                     markup = sub.communication_markup or Decimal("1.30")
                     marked_up_cost = (raw_cost_usd * markup).quantize(Decimal("0.0001"))
 
+                    balance_before = sub.communication_balance
                     sub.communication_balance -= marked_up_cost
                     sub.save(update_fields=["communication_balance"])
+                    balance_after = sub.communication_balance
 
                     logger.info("Retell call_ended | base_cost_usd=%.4f × markup=%.2f = final_deduction=%.4f | balance=%.2f | restaurant=%s",
-                                raw_cost_usd, markup, marked_up_cost, sub.communication_balance, restaurant.slug)
+                                raw_cost_usd, markup, marked_up_cost, balance_after, restaurant.slug)
+
+                    # Send low-balance alert on first threshold crossing
+                    from decimal import Decimal as _D
+                    if balance_before > _D("3") and balance_after <= _D("3"):
+                        _send_low_balance_email(restaurant, balance_after, "critical")
+                    elif balance_before > _D("8") and balance_after <= _D("8"):
+                        _send_low_balance_email(restaurant, balance_after, "warning")
             except Exception:
                 logger.exception("Failed to update communication balance for restaurant=%s", restaurant.slug)
 
@@ -1658,18 +1709,23 @@ def portal_login(request):
 
     error = None
     if request.method == "POST":
-        user = authenticate(
-            request,
-            username=request.POST.get("username", "").strip(),
-            password=request.POST.get("password", "").strip(),
-        )
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        email = request.POST.get("email", "").strip().lower()
+        password = request.POST.get("password", "").strip()
+        user = None
+        try:
+            user_obj = User.objects.get(email__iexact=email)
+            user = authenticate(request, username=user_obj.username, password=password)
+        except User.DoesNotExist:
+            pass
         if user is not None:
             login(request, user)
             try:
                 return redirect("portal_dashboard", slug=user.restaurant.slug)
             except Exception:
                 return redirect("portal_login")
-        error = "Invalid username or password."
+        error = "Invalid email or password."
 
     return render(request, "portal/login.html", {"error": error})
 
