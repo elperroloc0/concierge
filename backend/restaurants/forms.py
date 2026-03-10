@@ -42,7 +42,7 @@ class RestaurantBasicForm(forms.ModelForm):
         fields = [
             "name", "address_full", "location_reference", "website",
             "timezone", "primary_lang", "conversation_tone", "welcome_phrase",
-            "contact_phone", "contact_email", "enable_sms",
+            "contact_phone", "contact_email",
         ]
         widgets = {
             "name":               forms.TextInput(attrs=_TEXT),
@@ -54,7 +54,6 @@ class RestaurantBasicForm(forms.ModelForm):
             "welcome_phrase":     forms.Textarea(attrs={**_ta(2), "placeholder": "Thank you for calling [Restaurant Name], how can I help you today?"}),
             "contact_phone":      forms.TextInput(attrs=_TEXT),
             "contact_email":      forms.EmailInput(attrs=_TEXT),
-            "enable_sms":         forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
     def clean_website(self):
@@ -96,7 +95,7 @@ class KnowledgeBaseForm(forms.ModelForm):
             # Facilities
             "has_terrace", "ac_intensity", "stroller_friendly",
             "has_valet", "valet_cost", "free_parking_info",
-            # Agent (owner-facing: call transfer + sister locations only)
+            # Agent (owner-facing: call transfer + sister locations)
             "escalation_enabled", "escalation_conditions", "escalation_transfer_number",
             "affiliated_restaurants",
             # Custom info

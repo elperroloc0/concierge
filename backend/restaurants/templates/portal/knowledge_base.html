@@ -228,17 +228,6 @@
             {{ basic_form.contact_email }}
           </div>
           <div class="col-12">
-            <div class="form-check mt-3 mb-2 p-3 rounded" style="background:#f8f9fa; border:1px solid #dee2e6;">
-              {{ basic_form.enable_sms }}
-              <label class="form-check-label fw-semibold" for="{{ basic_form.enable_sms.id_for_label }}">
-                Enable Twilio SMS integration
-              </label>
-              {% if basic_form.enable_sms.help_text %}
-                <div class="form-text mt-1">{{ basic_form.enable_sms.help_text }}</div>
-              {% endif %}
-            </div>
-          </div>
-          <div class="col-12">
             <label class="form-label">
               {{ kb_form.contact_email_spoken.label }}
               <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
@@ -667,7 +656,7 @@
       <!-- Sister Locations -->
       <div class="card hover-lift p-4">
         <h6 class="fw-semibold mb-1">Sister Locations</h6>
-        <p class="section-hint mb-3">Other restaurants you own. The agent will confirm these names if a caller asks, but won't provide details about them.</p>
+        <p class="section-hint mb-3">Other restaurants you own. The agent will mention these names if a caller asks, but won't provide details about them.</p>
         <div class="mb-0">
           {{ kb_form.affiliated_restaurants }}
           <div class="form-text">One restaurant name per line.</div>
@@ -735,9 +724,9 @@ const EXAMPLES = {
   "id_valet_cost":           "$20 valet parking",
   "id_free_parking_info":    "Free street parking on SW 8th St after 6pm. Municipal lot 2 blocks east, $5 flat rate evenings.",
 
-  "id_affiliated_restaurants":     "Sister Restaurant Name\nAnother Location Name",
   "id_escalation_transfer_number": "+17865551234",
   "id_escalation_conditions":      "Caller asks to speak with a manager.\nCaller reports an emergency on-site.",
+  "id_affiliated_restaurants":     "Sister Restaurant Name\nAnother Location Name",
 
 };
 
