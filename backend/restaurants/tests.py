@@ -295,23 +295,24 @@ class InboundWebhookTest(TestCase):
 
     # ── Restaurant lookup ─────────────────────────────────────────────────────
 
-    def test_unknown_restaurant_id_returns_404(self):
-        """A rest_id that doesn't exist in the DB should return 404."""
-        url = reverse("retell_webhook", kwargs={"rest_id": 99999})
-        response = self._post(url=url) if False else self.client.post(
+    def test_unknown_restaurant_id_returns_200_inactive(self):
+        """A rest_id that doesn't exist in the DB should return 200 with inactive status."""
+        response = self.client.post(
             reverse("retell_webhook", kwargs={"rest_id": 99999}),
             data=json.dumps(self.valid_payload),
             content_type="application/json",
         )
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["call_inbound"]["dynamic_variables"]["account_status"], "inactive")
 
-    def test_inactive_restaurant_returns_404(self):
-        """An inactive restaurant should not process calls."""
+    def test_inactive_restaurant_returns_200_inactive(self):
+        """An inactive restaurant should return 200 with inactive status."""
         self.restaurant.is_active = False
         self.restaurant.save()
 
         response = self._post()
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["call_inbound"]["dynamic_variables"]["account_status"], "inactive")
 
     # ── Payload validation ────────────────────────────────────────────────────
 
@@ -396,44 +397,38 @@ class InboundWebhookTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        dv = data["dynamic_variables"]
+        dv = data.get("call_inbound", {}).get("dynamic_variables", {})
 
         self.assertEqual(dv["restaurant_name"], "La Perla")
-        self.assertEqual(dv["address_full"], "123 Main St")
+        self.assertEqual(dv["address_full"], "123 Main Calle")
         self.assertEqual(dv["website"], "https://laperla.com")
         self.assertEqual(dv["welcome_phrase"], "Bienvenidos")
         self.assertEqual(dv["primary_lang"], "es")
         self.assertEqual(dv["timezone"], "America/New_York")
 
-    @override_settings(DEBUG=False)
-    def test_inactive_subscription_returns_402(self):
-        """If the restaurant has no active subscription, return 402."""
+    def test_inactive_subscription_returns_200_inactive(self):
+        """If the restaurant has no active subscription, return 200 inactive."""
         from .models import Subscription
         sub = self.subscription
         sub.status = "inactive"
         sub.save()
 
-        with patch("restaurants.views.Retell") as MockRetell:
-            MockRetell.return_value.verify.return_value = True
-            response = self._post(headers={"HTTP_X_RETELL_SIGNATURE": "valid-sig"})
+        response = self._post()
 
-        self.assertEqual(response.status_code, 402)
-        self.assertIn("Subscription inactive", response.json()["detail"])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["call_inbound"]["dynamic_variables"]["account_status"], "inactive")
 
-    @override_settings(DEBUG=False)
-    def test_insufficient_balance_returns_402(self):
-        """If communication_balance <= 0, return 402."""
+    def test_insufficient_balance_returns_200_inactive(self):
+        """If communication_balance <= 0, return 200 inactive."""
         from .models import Subscription
         sub = self.subscription
         sub.communication_balance = 0.00
         sub.save()
 
-        with patch("restaurants.views.Retell") as MockRetell:
-            MockRetell.return_value.verify.return_value = True
-            response = self._post(headers={"HTTP_X_RETELL_SIGNATURE": "valid-sig"})
+        response = self._post()
 
-        self.assertEqual(response.status_code, 402)
-        self.assertIn("Insufficient communication balance", response.json()["detail"])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["call_inbound"]["dynamic_variables"]["account_status"], "inactive")
 
     def test_valid_request_calls_verify_with_correct_arguments(self):
         """
@@ -473,10 +468,15 @@ class InboundWebhookTest(TestCase):
         """
         with patch.dict("os.environ", {"RETELL_DEV_BYPASS_SECRET": "dev-secret"}):
             # No signature header needed — bypass header replaces it
-            response = self._post(headers={"HTTP_X_DEV_BYPASS": "dev-secret"})
+            response = self.client.post(
+                self.url,
+                data=json.dumps(self.valid_payload),
+                content_type="application/json",
+                HTTP_X_DEV_BYPASS="dev-secret",
+            )
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("dynamic_variables", response.json())
+        self.assertIn("dynamic_variables", response.json().get("call_inbound", {}))
 
     @override_settings(DEBUG=True)
     def test_dev_bypass_fails_with_wrong_secret(self):
@@ -580,13 +580,16 @@ class EventsWebhookTest(TestCase):
         from decimal import Decimal
         sub = self.subscription
         sub.communication_balance = Decimal("10.00")
+        sub.communication_markup = Decimal("1.00")
         sub.save()
 
         payload = {
             "to_number": "+13051234567",
             "event": "call_ended",
             "call": {
-                "combined_cost": 0.50
+                "call_cost": {
+                    "combined_cost": 50
+                }
             }
         }
 

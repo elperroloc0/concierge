@@ -117,12 +117,24 @@
 
 {% block extra_scripts %}
 <script>
-  // Disable per-event toggles when master switch is off
+  // Disable per-event toggles when master switch is off, but ensure they submit
   const master = document.getElementById('masterSwitch');
   const prefs  = document.querySelectorAll('.pref-toggle');
+  const form   = document.querySelector('form');
+
   function syncToggles() {
-    prefs.forEach(p => { p.disabled = !master.checked; });
+    prefs.forEach(p => {
+        if (!master.checked) {
+            // Visually disabled but keep value
+            p.classList.add('opacity-50');
+            p.style.pointerEvents = 'none';
+        } else {
+            p.classList.remove('opacity-50');
+            p.style.pointerEvents = 'auto';
+        }
+    });
   }
+
   master.addEventListener('change', syncToggles);
   syncToggles();
 </script>

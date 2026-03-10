@@ -106,6 +106,10 @@ class Restaurant(models.Model):
         max_length=32, blank=True, default="",
         help_text="Twilio phone number to send SMS from (E.164 format, e.g. +17865550000)."
     )
+    enable_sms = models.BooleanField(
+        default=False,
+        help_text="Enable Twilio SMS sending capabilities and the Retell AI SMS tool."
+    )
 
     # Validation
     def clean(self):
@@ -116,6 +120,9 @@ class Restaurant(models.Model):
 
         if self.notify_via_ws and not self.notify_ws_numb:
             errors["notify_ws_numb"] = "Required if WhatsApp notifications are enabled."
+
+        if self.notify_via_email and not self.notify_email and not self.contact_email:
+            errors["notify_email"] = "Required if Email notifications are enabled."
 
         if errors:
             raise ValidationError(errors)

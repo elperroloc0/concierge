@@ -37,7 +37,7 @@ class Command(BaseCommand):
         for restaurant in restaurants:
             events = CallEvent.objects.filter(
                 restaurant=restaurant,
-                event_type="call_ended",
+                detail__isnull=False,
                 created_at__gte=start,
                 created_at__lt=end,
             )

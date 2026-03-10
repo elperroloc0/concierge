@@ -147,19 +147,21 @@ def _end_call_tool_definition() -> dict:
     }
 
 
-def build_tool_list(base_url: str, escalation_number: str | None = None) -> list:
+def build_tool_list(base_url: str, escalation_number: str | None = None, enable_sms: bool = False) -> list:
     """
     Build the full Retell general_tools list.
     end_call is always included.
     transfer_to_human is included only when escalation_number is provided.
+    send_sms is included only when enable_sms is True.
     """
     tools = [
-        _sms_tool_definition(base_url),
         _save_caller_info_tool_definition(base_url),
         _get_info_tool_definition(base_url),
         _resolve_date_tool_definition(base_url),
         _end_call_tool_definition(),
     ]
+    if enable_sms:
+        tools.append(_sms_tool_definition(base_url))
     if escalation_number:
         tools.append(_escalation_tool_definition(escalation_number))
     return tools

@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 logger = logging.getLogger(__name__)
 
 import stripe
-from backend import settings
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -85,6 +85,44 @@ def _spoken_domain(domain: str, lang: str = "en") -> str:
     return f" {dot_word} ".join(parts)
 
 
+def _spoken_address(address: str, lang: str = "en") -> str:
+    """
+    Expand common address abbreviations so Text-To-Speech (TTS) reads them naturally.
+    e.g. '1036 SW 8th St' -> '1036 South West 8th Street'
+    """
+    if not address:
+        return ""
+
+    # Simple dictionary replacement for common English/Spanish street abbreviations
+    replacements = {
+        r'\bSt\.?\b': 'Street' if lang == 'en' else 'Calle',
+        r'\bAve\.?\b': 'Avenue' if lang == 'en' else 'Avenida',
+        r'\bBlvd\.?\b': 'Boulevard' if lang == 'en' else 'Bulevar',
+        r'\bRd\.?\b': 'Road' if lang == 'en' else 'Ruta',
+        r'\bDr\.?\b': 'Drive',
+        r'\bLn\.?\b': 'Lane',
+        r'\bCt\.?\b': 'Court',
+        r'\bPl\.?\b': 'Place',
+        r'\bSq\.?\b': 'Square',
+        r'\bN\.?\b': 'North' if lang == 'en' else 'Norte',
+        r'\bS\.?\b': 'South' if lang == 'en' else 'Sur',
+        r'\bE\.?\b': 'East' if lang == 'en' else 'Este',
+        r'\bW\.?\b': 'West' if lang == 'en' else 'Oeste',
+        r'\bNW\b': 'North West' if lang == 'en' else 'Noroeste',
+        r'\bNE\b': 'North East' if lang == 'en' else 'Noreste',
+        r'\bSW\b': 'South West' if lang == 'en' else 'Suroeste',
+        r'\bSE\b': 'South East' if lang == 'en' else 'Sureste',
+        r'\bSte\.?\b': 'Suite',
+        r'\bApt\.?\b': 'Apartment' if lang == 'en' else 'Apartamento',
+    }
+
+    spoken = address
+    for pattern, replacement in replacements.items():
+        spoken = re.sub(pattern, replacement, spoken, flags=re.IGNORECASE)
+
+    return spoken
+
+
 def _build_dynamic_variables(restaurant):
     """Build the full dynamic_variables dict from Restaurant + KnowledgeBase."""
     kb = getattr(restaurant, "knowledge_base", None)
@@ -102,7 +140,7 @@ def _build_dynamic_variables(restaurant):
 
     dyn = {
         "restaurant_name":       restaurant.name,
-        "address_full":          restaurant.address_full,
+        "address_full":          _spoken_address(restaurant.address_full, lang),
         "location_reference":    restaurant.location_reference,
         "website":               restaurant.website,
         "website_domain":        domain,
@@ -480,9 +518,7 @@ def _parse_transcript_for_guest_info(transcript: str) -> dict:
         result["special_requests"] = ", ".join(special_hits)
 
     # follow_up_needed is now set explicitly by the AI via save_caller_info tool.
-    # Here we default to what was already saved; never override a True value.
-    existing_flag = _get_bool("follow_up_needed", False)
-    result["follow_up_needed"] = existing_flag
+    # It will be merged in _build_call_detail_from_payload via 'mid'.
 
     return result
 
@@ -578,19 +614,26 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
     """
     payload    = call_event.payload
     call       = payload.get("call", {})
-    analysis   = call.get("call_analysis") or {}
+
+    # Retell API change: custom fields are now nested under `custom_analysis_data`
+    full_analysis = call.get("call_analysis") or {}
+    analysis      = full_analysis.get("custom_analysis_data") or full_analysis
+
     transcript = (call.get("transcript") or "").strip()
     fallback   = _parse_transcript_for_guest_info(transcript) if transcript else {}
 
     # Third fallback: name saved real-time by save_caller_info tool during the call
     call_id = call.get("call_id", "")
-    if call_id and not analysis.get("caller_name") and not fallback.get("caller_name"):
+    if call_id:
         mid = (CallDetail.objects
                .filter(call_event__payload__call__call_id=call_id)
                .exclude(call_event=call_event)
                .order_by("created_at").first())
-        if mid and mid.caller_name:
-            fallback["caller_name"] = mid.caller_name
+        if mid:
+            if mid.caller_name and not analysis.get("caller_name") and not fallback.get("caller_name"):
+                fallback["caller_name"] = mid.caller_name
+            if mid.follow_up_needed:
+                fallback["follow_up_needed"] = True
 
     def _get(key, default=""):
         val = analysis.get(key)
@@ -664,37 +707,65 @@ def retell_inbound_webhook(request, rest_id):
         logger.error("Retell inbound webhook | Invalid JSON payload")
         return JsonResponse({"detail": "invalid json"}, status=400)
 
-    restaurant = get_object_or_404(Restaurant, id=rest_id, is_active=True)
-    sub = getattr(restaurant, "subscription", None)
+    restaurant = Restaurant.objects.filter(id=rest_id).first()
 
-    # ── Check Subscription Status & Communication Balance ─────────────────────
-    if not sub or not sub.is_active:
-        logger.warning("Retell inbound webhook | Subscription inactive | restaurant=%s", restaurant.slug)
-        return JsonResponse({"detail": "Subscription inactive. Please renew in the portal."}, status=402)
+    # ── Check Account & Subscription Status ──
+    is_valid_account = True
+    if not restaurant or not restaurant.is_active:
+        logger.warning("Retell inbound webhook | Restaurant inactive or missing | id=%s", rest_id)
+        is_valid_account = False
+    else:
+        sub = getattr(restaurant, "subscription", None)
+        if not sub or not sub.is_active:
+            logger.warning("Retell inbound webhook | Subscription inactive | restaurant=%s", restaurant.slug)
+            is_valid_account = False
+        elif sub.communication_balance <= 0:
+            logger.warning("Retell inbound webhook | Insufficient balance (%.2f) | restaurant=%s",
+                           sub.communication_balance, restaurant.slug)
+            is_valid_account = False
 
-    if sub.communication_balance <= 0:
-        logger.warning("Retell inbound webhook | Insufficient balance (%.2f) | restaurant=%s",
-                       sub.communication_balance, restaurant.slug)
-        return JsonResponse({"detail": "Insufficient communication balance. Please top up."}, status=402)
+    # If the account is invalid, we MUST return 200 OK so Retell doesn't fall back to defaults.
+    # We pass account_status="inactive" so the LLM knows to hang up immediately.
+    if not is_valid_account:
+        return JsonResponse({"call_inbound": {"dynamic_variables": {"account_status": "inactive"}}}, status=200)
 
+    # From here on, restaurant is guaranteed to be valid and active
     to_number = (payload.get("to_number") or "").strip()
+    if not to_number:
+        return JsonResponse({"detail": "missing to_number"}, status=400)
+
+    if not restaurant.retell_phone_number:
+        return JsonResponse({"detail": "missing retell_phone_number"}, status=400)
+
+    # The webhook validates the to_number against the DB a second time
+    if to_number != restaurant.retell_phone_number:
+        return JsonResponse({"detail": "unknown number"}, status=404)
 
     logger.warning("Retell inbound webhook | restaurant=%s | to_number=%r | payload_keys=%s",
                    restaurant.slug, to_number, list(payload.keys()))
 
-    dyn_response = {"call_inbound": {"dynamic_variables": _build_dynamic_variables(restaurant)}}
+    dyn_vars = _build_dynamic_variables(restaurant)
+    dyn_vars["account_status"] = "active"
+    dyn_response = {"call_inbound": {"dynamic_variables": dyn_vars}}
 
-    # In DEBUG mode skip signature verification (new inbound webhook doesn't send x-retell-signature)
     if settings.DEBUG:
-        return JsonResponse(dyn_response, status=200)
+        bypass_secret = getattr(settings, "RETELL_DEV_BYPASS_SECRET", os.environ.get("RETELL_DEV_BYPASS_SECRET"))
+        bypass_header = request.headers.get("x-dev-bypass") or request.META.get("HTTP_X_DEV_BYPASS")
+        if bypass_secret and bypass_header == bypass_secret:
+            return JsonResponse(dyn_response, status=200)
 
-    # Production: verify Retell signature
+    # Production: verify Retell signature strictly
     signature = request.headers.get("x-retell-signature", "")
-    if signature and restaurant.retell_api_key:
-        retell_client = Retell(api_key=restaurant.retell_api_key)
-        if not retell_client.verify(raw_str, restaurant.retell_api_key, signature):
-            logger.warning("Retell inbound webhook | Invalid signature | restaurant=%s", restaurant.slug)
-            return JsonResponse({"detail": "invalid signature"}, status=401)
+    if not signature:
+        return JsonResponse({"detail": "missing signature"}, status=401)
+
+    if not restaurant.retell_api_key:
+        return JsonResponse({"detail": "missing api key"}, status=500)
+
+    retell_client = Retell(api_key=restaurant.retell_api_key)
+    if not retell_client.verify(raw_str, restaurant.retell_api_key, signature):
+        logger.warning("Retell inbound webhook | Invalid signature | restaurant=%s", restaurant.slug)
+        return JsonResponse({"detail": "invalid signature"}, status=401)
 
     return JsonResponse(dyn_response, status=200)
 
@@ -847,6 +918,9 @@ def _send_payment_failed_email(restaurant: Restaurant) -> None:
 
 def _send_post_call_sms(call_event: CallEvent, restaurant: Restaurant) -> None:
     """Send a contextual follow-up SMS after call_ended, but only if no SMS was already sent."""
+    if not restaurant.enable_sms:
+        return
+
     from twilio.rest import Client as TwilioClient
 
     call_payload = call_event.payload.get("call", {})
@@ -994,12 +1068,33 @@ def retell_events_webhook(request):
             except Exception:
                 logger.exception("Failed to update communication balance for restaurant=%s", restaurant.slug)
 
+    elif event_type == "call_analyzed":
+        # ── Extract Call Details and Send Notifications ───────────────────────
         try:
             _build_call_detail_from_payload(call_event)
         except Exception:
             logger.exception("Failed to build CallDetail for CallEvent pk=%s", call_event.pk)
 
-        # Store the marked-up cost on the detail record (what the client actually pays)
+        # Calculate marked-up cost again just to store it on the detail record
+        call_payload = data.get("call", {})
+        cost_data = call_payload.get("call_cost", {})
+        if isinstance(cost_data, dict) and "combined_cost" in cost_data:
+            combined_cost_cents = cost_data.get("combined_cost")
+        else:
+            combined_cost_cents = call_payload.get("combined_cost")
+
+        marked_up_cost = None
+        if combined_cost_cents is not None:
+            try:
+                from decimal import Decimal
+                sub = getattr(restaurant, "subscription", None)
+                if sub:
+                    raw_cost_usd = Decimal(str(combined_cost_cents)) / Decimal("100")
+                    markup = sub.communication_markup or Decimal("1.30")
+                    marked_up_cost = (raw_cost_usd * markup).quantize(Decimal("0.0001"))
+            except Exception:
+                pass
+
         if marked_up_cost is not None:
             try:
                 detail = getattr(call_event, "detail", None)
@@ -1721,7 +1816,7 @@ def portal_dashboard(request, slug):
 
     thirty_days_ago = timezone.now() - timedelta(days=30)
     ended_events = CallEvent.objects.filter(
-        restaurant=restaurant, event_type="call_ended", created_at__gte=thirty_days_ago
+        restaurant=restaurant, detail__isnull=False, created_at__gte=thirty_days_ago
     ).order_by("created_at")
 
     total_calls = ended_events.count()
@@ -1789,11 +1884,18 @@ def _sync_retell_tools(request, restaurant: Restaurant, kb: RestaurantKnowledgeB
         return
 
     escalation_number = kb.escalation_transfer_number if kb.escalation_enabled else None
-    tools = build_tool_list(base_url, escalation_number=escalation_number)
+    tools = build_tool_list(base_url, escalation_number=escalation_number, enable_sms=restaurant.enable_sms)
 
     try:
+        from .admin import _build_agent_prompt
         client = RetellClient(api_key=restaurant.retell_api_key)
-        client.update_llm(restaurant.retell_llm_id, general_tools=tools)
+        prompt = _build_agent_prompt(restaurant)
+
+        client.update_llm(
+            restaurant.retell_llm_id,
+            general_tools=tools,
+            general_prompt=prompt
+        )
         if kb.escalation_enabled and escalation_number:
             messages.success(request, f"Call transfer activated — calls will be forwarded to {escalation_number} when conditions are met.")
         else:
@@ -1815,6 +1917,7 @@ def portal_knowledge_base(request, slug):
             # Capture old escalation state before saving
             old_enabled = kb.escalation_enabled
             old_number  = kb.escalation_transfer_number
+            old_enable_sms = restaurant.enable_sms
 
             basic_form.save()
             kb_form.save()
@@ -1825,7 +1928,9 @@ def portal_knowledge_base(request, slug):
                 kb.escalation_enabled != old_enabled
                 or kb.escalation_transfer_number != old_number
             )
-            if escalation_changed:
+            enable_sms_changed = restaurant.enable_sms != old_enable_sms
+
+            if escalation_changed or enable_sms_changed:
                 _sync_retell_tools(request, restaurant, kb)
 
             messages.success(request, "Knowledge base updated successfully.")
@@ -1855,10 +1960,10 @@ def portal_calls(request, slug):
     date_to            = request.GET.get("date_to", "")
     phone_filter       = request.GET.get("phone", "").strip()
 
-    # Base queryset — all ended calls, joined with CallDetail + SmsLog
+    # Base queryset — any CallEvent that has a CallDetail attached
     base_qs = (
         CallEvent.objects
-        .filter(restaurant=restaurant, event_type="call_ended")
+        .filter(restaurant=restaurant, detail__isnull=False)
         .select_related("detail")
         .prefetch_related("sms_logs")
         .order_by("-created_at")

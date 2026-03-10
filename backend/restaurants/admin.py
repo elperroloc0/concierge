@@ -17,7 +17,8 @@ from .services.retell_tools import (
 )
 LANG_MAP = {"es": "es-419", "en": "en-US", "other": "multi"}
 
-AGENT_SYSTEM_PROMPT = """You are the professional, friendly, and human-like voice assistant for {{restaurant_name}}.
+AGENT_SYSTEM_PROMPT = """{{account_status_directive}}
+You are the professional, friendly, and human-like voice assistant for {{restaurant_name}}.
 You handle calls naturally and efficiently, exactly like a great human receptionist.
 
 ### VOICE & BEHAVIOR
@@ -38,10 +39,11 @@ You handle calls naturally and efficiently, exactly like a great human reception
 - Affiliated restaurants: {{affiliated_restaurants}}
 
 ### GUARDRAILS & EDGE CASES (STRICT ADHERENCE)
+- **System Outage:** If you attempt to call ANY tool (such as `get_info`) and it fails or times out, you MUST assume the backend is down. Say: "I apologize, but our systems are currently undergoing maintenance. Please call back later." and then use the `end_call` tool to hang up.
 - Out of Scope: You ONLY help with {{restaurant_name}} topics. If asked about unrelated things, politely say you can only assist with restaurant matters.
 - Are you a robot?: If asked, proudly but naturally state you are the AI voice assistant for {{restaurant_name}}.
-- Emergencies: If an emergency is mentioned, immediately advise them to hang up and dial 911. Call `end_call`.
-- Rude/Abusive Callers: Remain professional. If abuse continues, politely end the interaction and call `end_call`.
+- Emergencies: If an emergency is mentioned, immediately advise them to hang up and dial 911, then use the `end_call` tool.
+- Rude/Abusive Callers: Remain professional. If abuse continues, politely end the interaction using the `end_call` tool.
 - Complaints/Disputes: If a caller complains about a bad experience, charge dispute, or fee: do NOT argue and do NOT promise refunds. Apologize sincerely and immediately offer to take a message for management (State 4).
 - Loops: If the caller asks the same thing 3 times and you don't have the answer, politely offer to take a message (State 4) or direct them to the website.
 
@@ -149,6 +151,24 @@ POST_CALL_ANALYSIS_FIELDS = [
 ]
 
 
+def _build_agent_prompt(restaurant: Restaurant) -> str:
+    """Read the base prompt and strip out SMS instructions if SMS is disabled."""
+    prompt = AGENT_SYSTEM_PROMPT
+    if not restaurant.enable_sms:
+        prompt = prompt.replace(
+            " If applicable, offer to send a text message with a link (e.g., \"Would you like me to text you the menu?\"). If they say yes, call `send_sms`.",
+            ""
+        )
+        prompt = prompt.replace(
+            " Offer to text them the contact email, and stop the booking process.",
+            " Stop the booking process."
+        )
+        prompt = prompt.replace(
+            " Tell them they will receive a confirmation text and transition to WRAP UP.",
+            " Transition to WRAP UP."
+        )
+    return prompt
+
 # ─── Admin Actions ────────────────────────────────────────────────────────────
 
 @admin.action(description="Retell: 1 — Create LLM (with system prompt)")
@@ -162,7 +182,8 @@ def retell_create_llm(modeladmin, request, queryset):
             continue
 
         client = RetellClient(api_key=r.retell_api_key)
-        llm = client.create_retell_llm(general_prompt=AGENT_SYSTEM_PROMPT)
+        prompt = _build_agent_prompt(r)
+        llm = client.create_retell_llm(general_prompt=prompt)
         r.retell_llm_id = llm.llm_id
         r.save(update_fields=["retell_llm_id"])
         messages.success(request, f"[{r.slug}] LLM created: {r.retell_llm_id}")
@@ -179,10 +200,11 @@ def retell_update_llm_prompt(modeladmin, request, queryset):
             continue
 
         client = RetellClient(api_key=r.retell_api_key)
+        prompt = _build_agent_prompt(r)
 
         client.update_llm(
             r.retell_llm_id,
-            general_prompt=AGENT_SYSTEM_PROMPT,
+            general_prompt=prompt,
             begin_message=r.welcome_phrase
         )
         messages.success(request, f"[{r.slug}] LLM prompt updated: {r.retell_llm_id}")
@@ -386,13 +408,13 @@ def retell_create_phone(modeladmin, request, queryset):
         messages.success(request, f"[{r.slug}] Phone purchased: {r.retell_phone_number}")
 
 
-@admin.action(description="Call Log: Re-process all call_ended events (rebuilds CallDetail date/time)")
+@admin.action(description="Call Log: Re-process all completed events (rebuilds CallDetail date/time)")
 def reprocess_call_events(modeladmin, request, queryset):
     from restaurants.views import _build_call_detail_from_payload
     from restaurants.models import CallEvent
     ok = err = 0
     for restaurant in queryset:
-        events = CallEvent.objects.filter(restaurant=restaurant, event_type="call_ended")
+        events = CallEvent.objects.filter(restaurant=restaurant, detail__isnull=False)
         for event in events:
             try:
                 _build_call_detail_from_payload(event)
@@ -533,8 +555,8 @@ class RestaurantAdmin(admin.ModelAdmin):
             "retell_phone_number", "retell_voice_id", "retell_area_code",
         )}),
         ("Twilio SMS (per-restaurant billing)", {"fields": (
-            "twilio_account_sid", "twilio_auth_token", "twilio_from_number",
-        ), "description": "Leave blank to use the platform-level Twilio credentials from .env."}),
+            "enable_sms", "twilio_account_sid", "twilio_auth_token", "twilio_from_number",
+        ), "description": "Enable Twilio integration, or leave credentials blank to use the platform-level Twilio from .env."}),
     )
     inlines = [KnowledgeBaseInline, SubscriptionInline]
     actions = [

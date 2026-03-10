@@ -17,13 +17,13 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         qs = (
             CallEvent.objects
-            .filter(event_type="call_ended")
+            .filter(event_type__in=["call_ended", "call_analyzed"])
             .exclude(detail__isnull=False)
             .order_by("created_at")
         )
 
         total = qs.count()
-        self.stdout.write(f"Found {total} call_ended events without CallDetail.")
+        self.stdout.write(f"Found {total} events without CallDetail.")
 
         if options["dry_run"]:
             self.stdout.write("Dry run — no changes made.")

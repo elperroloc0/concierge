@@ -228,6 +228,17 @@
             {{ basic_form.contact_email }}
           </div>
           <div class="col-12">
+            <div class="form-check mt-3 mb-2 p-3 rounded" style="background:#f8f9fa; border:1px solid #dee2e6;">
+              {{ basic_form.enable_sms }}
+              <label class="form-check-label fw-semibold" for="{{ basic_form.enable_sms.id_for_label }}">
+                Enable Twilio SMS integration
+              </label>
+              {% if basic_form.enable_sms.help_text %}
+                <div class="form-text mt-1">{{ basic_form.enable_sms.help_text }}</div>
+              {% endif %}
+            </div>
+          </div>
+          <div class="col-12">
             <label class="form-label">
               {{ kb_form.contact_email_spoken.label }}
               <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
