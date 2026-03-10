@@ -3,7 +3,11 @@ Retell LLM tool definitions — shared between admin actions and the portal view
 """
 
 
-def _sms_tool_definition(base_url: str) -> dict:
+def _sms_tool_definition(base_url: str, lang: str = "en") -> dict:
+    execution_msg = "Perfect — I'm sending that to your number right now."
+    if lang == "es":
+        execution_msg = "Perfecto — te lo estoy enviando a tu número ahora mismo."
+
     return {
         "type": "custom",
         "name": "send_sms",
@@ -13,7 +17,7 @@ def _sms_tool_definition(base_url: str) -> dict:
         ),
         "url": f"{base_url}/api/retell/tools/send-sms/",
         "speak_during_execution": True,
-        "execution_message_description": "Perfect — I'm sending that to your number right now.",
+        "execution_message_description": execution_msg,
         "execution_message_type": "static_text",
         "parameters": {
             "type": "object",
@@ -124,9 +128,8 @@ def _escalation_tool_definition(transfer_number: str) -> dict:
         "type": "transfer_call",
         "name": "transfer_to_human",
         "description": (
-            "Transfer the caller to a human agent. "
-            "Call this IMMEDIATELY whenever the caller asks to speak with a person, manager, or human — "
-            "do NOT offer to take a message first. This is the highest priority action."
+            "Transfer the caller to a human agent when escalation conditions are met. "
+            "Only call this after acknowledging the caller. Never call for routine questions."
         ),
         "transfer_destination": {
             "type": "predefined",
@@ -151,7 +154,7 @@ def _end_call_tool_definition() -> dict:
     }
 
 
-def build_tool_list(base_url: str, escalation_number: str | None = None, enable_sms: bool = False) -> list:
+def build_tool_list(base_url: str, escalation_number: str | None = None, enable_sms: bool = False, lang: str = "en") -> list:
     """
     Build the full Retell general_tools list.
     end_call is always included.
@@ -165,7 +168,7 @@ def build_tool_list(base_url: str, escalation_number: str | None = None, enable_
         _end_call_tool_definition(),
     ]
     if enable_sms:
-        tools.append(_sms_tool_definition(base_url))
+        tools.append(_sms_tool_definition(base_url, lang=lang))
     if escalation_number:
         tools.append(_escalation_tool_definition(escalation_number))
     return tools

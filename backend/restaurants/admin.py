@@ -281,7 +281,7 @@ def retell_configure_sms_tool(modeladmin, request, queryset):
             messages.error(request, f"[{r.slug}] No LLM ID — run 'Create LLM' first.")
             continue
         client = RetellClient(api_key=r.retell_api_key)
-        tools = build_tool_list(base_url)
+        tools = build_tool_list(base_url, lang=r.primary_lang)
         try:
             llm_result = client.update_llm(r.retell_llm_id, general_tools=tools)
             if r.retell_agent_id:
@@ -320,7 +320,7 @@ def retell_configure_escalation_tool(modeladmin, request, queryset):
             continue
 
         client = RetellClient(api_key=r.retell_api_key)
-        tools = build_tool_list(base_url, escalation_number=kb.escalation_transfer_number)
+        tools = build_tool_list(base_url, escalation_number=kb.escalation_transfer_number, lang=r.primary_lang)
         try:
             llm_result = client.update_llm(r.retell_llm_id, general_tools=tools)
             if r.retell_agent_id:

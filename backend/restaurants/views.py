@@ -1889,7 +1889,12 @@ def _sync_retell_tools(request, restaurant: Restaurant, kb: RestaurantKnowledgeB
         return
 
     escalation_number = kb.escalation_transfer_number if kb.escalation_enabled else None
-    tools = build_tool_list(base_url, escalation_number=escalation_number, enable_sms=restaurant.enable_sms)
+    tools = build_tool_list(
+        base_url,
+        escalation_number=escalation_number,
+        enable_sms=restaurant.enable_sms,
+        lang=restaurant.primary_lang
+    )
 
     try:
         from .admin import _build_agent_prompt

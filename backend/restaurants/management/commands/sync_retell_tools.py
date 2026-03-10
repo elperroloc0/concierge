@@ -54,6 +54,7 @@ class Command(BaseCommand):
                 base_url,
                 escalation_number=escalation_number,
                 enable_sms=r.enable_sms,
+                lang=r.primary_lang,
             )
             prompt = _build_agent_prompt(r)
 
