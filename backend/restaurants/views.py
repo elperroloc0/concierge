@@ -2160,8 +2160,8 @@ def portal_billing_checkout(request, slug):
     restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
     sub = _get_or_create_subscription(restaurant)
 
-    if not settings.STRIPE_SECRET_KEY:
-        messages.error(request, "Stripe is not configured yet. Please contact support.")
+    if not settings.STRIPE_SECRET_KEY or not settings.STRIPE_PRICE_ID:
+        messages.error(request, "Stripe Subscription is not configured yet. Please contact support.")
         return redirect("portal_billing", slug=slug)
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
