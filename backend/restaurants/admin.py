@@ -604,6 +604,7 @@ class RestaurantAdmin(admin.ModelAdmin):
         "contact_email", "created_at", "public_id",
     )
     list_filter = ("is_active", "phone_mode", "primary_lang", "timezone")
+    actions = ["clear_call_history"]
     search_fields = (
         "name", "slug", "retell_agent_id", "retell_phone_number",
         "contact_email", "contact_phone", "address_full",
@@ -637,4 +638,17 @@ class RestaurantAdmin(admin.ModelAdmin):
         retell_create_agent, retell_update_agent_voice, retell_update_agent_webhook, retell_update_agent_events_webhook,
         retell_create_phone,
         reprocess_call_events,
+        "clear_call_history",
     ]
+
+    @admin.action(description="Danger: Clear ALL Call & SMS History")
+    def clear_call_history(self, request, queryset):
+        from .models import CallEvent, SmsLog
+        total_events = CallEvent.objects.filter(restaurant__in=queryset).count()
+        total_sms = SmsLog.objects.filter(restaurant__in=queryset).count()
+
+        # CallEvent deletion cascades to CallDetail
+        CallEvent.objects.filter(restaurant__in=queryset).delete()
+        SmsLog.objects.filter(restaurant__in=queryset).delete()
+
+        self.message_user(request, f"Successfully deleted {total_events} call events and {total_sms} SMS logs for {queryset.count()} restaurants.")
