@@ -5,16 +5,24 @@ from django.contrib import admin, messages
 
 logger = logging.getLogger(__name__)
 
-from .models import CallDetail, CallEvent, Restaurant, RestaurantKnowledgeBase, SmsLog, Subscription
+from .models import (
+    CallDetail,
+    CallEvent,
+    Restaurant,
+    RestaurantKnowledgeBase,
+    SmsLog,
+    Subscription,
+)
 from .services.retell_client import RetellClient
 from .services.retell_tools import (
-    _sms_tool_definition,
-    _save_caller_info_tool_definition,
+    _escalation_tool_definition,
     _get_info_tool_definition,
     _resolve_date_tool_definition,
-    _escalation_tool_definition,
+    _save_caller_info_tool_definition,
+    _sms_tool_definition,
     build_tool_list,
 )
+
 LANG_MAP = {"es": "es-419", "en": "en-US", "other": "multi"}
 
 AGENT_SYSTEM_PROMPT = """{{account_status_directive}}
@@ -30,6 +38,8 @@ You handle calls naturally and efficiently, exactly like a great human reception
 - Avoid robotic phrases. Never say "How may I assist you today?" if you already greeted them.
 - When reading times/dates, use natural speech (e.g., "7 PM", not "19:00").
 - Do not make up information. Always use your tools.
+- When saying the website, always say EXACTLY: {{website_domain_spoken}} — never read a raw URL.
+- When saying the email, always say EXACTLY: {{contact_email_spoken}} — never read a raw email address.
 
 ### RESTAURANT CONTEXT
 - Name: {{restaurant_name}}
@@ -452,8 +462,8 @@ def retell_create_phone(modeladmin, request, queryset):
 
 @admin.action(description="Call Log: Re-process all completed events (rebuilds CallDetail date/time)")
 def reprocess_call_events(modeladmin, request, queryset):
-    from restaurants.views import _build_call_detail_from_payload
     from restaurants.models import CallEvent
+    from restaurants.views import _build_call_detail_from_payload
     ok = err = 0
     for restaurant in queryset:
         events = CallEvent.objects.filter(restaurant=restaurant, detail__isnull=False)
@@ -640,6 +650,14 @@ class RestaurantAdmin(admin.ModelAdmin):
     @admin.action(description="Danger: Clear ALL Call & SMS History")
     def clear_call_history(self, request, queryset):
         from .models import CallEvent, SmsLog
+        total_events = CallEvent.objects.filter(restaurant__in=queryset).count()
+        total_sms = SmsLog.objects.filter(restaurant__in=queryset).count()
+
+        # CallEvent deletion cascades to CallDetail
+        CallEvent.objects.filter(restaurant__in=queryset).delete()
+        SmsLog.objects.filter(restaurant__in=queryset).delete()
+
+        self.message_user(request, f"Successfully deleted {total_events} call events and {total_sms} SMS logs for {queryset.count()} restaurants.")
         total_events = CallEvent.objects.filter(restaurant__in=queryset).count()
         total_sms = SmsLog.objects.filter(restaurant__in=queryset).count()
 
