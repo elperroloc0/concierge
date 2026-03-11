@@ -227,6 +227,18 @@ class CallDetail(models.Model):
     follow_up_needed = models.BooleanField(default=True)
     notes            = models.TextField(blank=True, default="")
 
+    # Reservation confirmation (manually set by staff)
+    RESERVATION_STATUS_CHOICES = [
+        ("pending",   "Pending"),
+        ("confirmed", "Confirmed"),
+        ("lost",      "Lost"),
+    ]
+    reservation_status = models.CharField(
+        max_length=16, choices=RESERVATION_STATUS_CHOICES, default="pending",
+        help_text="Staff-confirmed outcome for reservation leads."
+    )
+    reservation_confirmed_at = models.DateTimeField(null=True, blank=True)
+
     # Cost tracking
     call_cost = models.DecimalField(
         max_digits=8, decimal_places=4, null=True, blank=True,
@@ -342,6 +354,12 @@ class RestaurantKnowledgeBase(models.Model):
     dietary_options    = models.TextField(
         blank=True, default="",
         help_text="Vegan, gluten-free, nut-free, and other dietary options available."
+    )
+
+    # ── ROI / Business Metrics ────────────────────────────────────────────
+    avg_revenue_per_cover = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True,
+        help_text="Average revenue per guest per visit (e.g. 45.00). Used to estimate ROI on the dashboard."
     )
 
     # ── Billing & Payments ────────────────────────────────────────────────

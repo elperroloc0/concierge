@@ -702,13 +702,17 @@ def retell_inbound_webhook(request, rest_id):
 
     raw_bytes = request.body
     raw_str = raw_bytes.decode("utf-8")
-    logger.info("Retell inbound webhook | Raw payload: %s", raw_str)
 
     try:
         payload = json.loads(raw_str)
     except json.JSONDecodeError:
         logger.error("Retell inbound webhook | Invalid JSON payload")
         return JsonResponse({"detail": "invalid json"}, status=400)
+
+    _from = payload.get("from_number") or payload.get("call_inbound", {}).get("from_number", "?")
+    _to = payload.get("to_number") or payload.get("call_inbound", {}).get("to_number", "?")
+    _cid = payload.get("call_id") or payload.get("call_inbound", {}).get("call_id", "?")
+    logger.info("Retell inbound | call_id=%s | from=%s → to=%s", _cid, _from, _to)
 
     restaurant = Restaurant.objects.filter(id=rest_id).first()
 
@@ -748,8 +752,7 @@ def retell_inbound_webhook(request, rest_id):
     if to_number != restaurant.retell_phone_number:
         return JsonResponse({"detail": "unknown number"}, status=404)
 
-    logger.warning("Retell inbound webhook | restaurant=%s | to_number=%r | payload_keys=%s",
-                   restaurant.slug, to_number, list(payload.keys()))
+    logger.info("Retell inbound | restaurant=%s | active=True → building dynamic vars", restaurant.slug)
 
     dyn_vars = _build_dynamic_variables(restaurant)
     dyn_vars["account_status"] = "active"
@@ -1058,13 +1061,20 @@ def retell_events_webhook(request):
 
     raw = request.body.decode("utf-8")
     sig = request.headers.get("x-retell-signature", "")
-    logger.info("Retell events webhook | Raw payload: %s", raw)
 
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
         logger.error("Retell events webhook | Invalid JSON payload")
         return JsonResponse({"detail": "invalid json"}, status=400)
+
+    _call = data.get("call", {})
+    _evt = data.get("event", "?")
+    _cid = _call.get("call_id", "?")
+    _from = _call.get("from_number", "?")
+    _to = _call.get("to_number", "?")
+    _dur = f" | duration={round(_call['duration_ms']/1000)}s" if "duration_ms" in _call else ""
+    logger.info("Retell event=%s | call_id=%s | from=%s → to=%s%s", _evt, _cid, _from, _to, _dur)
 
     to_number = (data.get("to_number") or data.get("call", {}).get("to_number") or "").strip()
     restaurant = Restaurant.objects.filter(retell_phone_number=to_number, is_active=True).first()
@@ -1150,14 +1160,14 @@ def retell_events_webhook(request):
                     markup = sub.communication_markup or Decimal("1.30")
                     marked_up_cost = (raw_cost_usd * markup).quantize(Decimal("0.0001"))
             except Exception:
-                pass
+                logger.exception(
+                    "call_analyzed: failed to calculate marked_up_cost | call_event=%s | raw_cents=%s",
+                    call_event.pk, combined_cost_cents,
+                )
 
         if marked_up_cost is not None:
             try:
-                detail = getattr(call_event, "detail", None)
-                if detail:
-                    detail.call_cost = marked_up_cost
-                    detail.save(update_fields=["call_cost"])
+                CallDetail.objects.filter(call_event=call_event).update(call_cost=marked_up_cost)
             except Exception:
                 logger.exception("Failed to store call_cost for CallEvent pk=%s", call_event.pk)
 
@@ -1724,6 +1734,7 @@ def portal_login(request):
             try:
                 return redirect("portal_dashboard", slug=user.restaurant.slug)
             except Exception:
+                logger.warning("portal_login: user=%s has no restaurant linked — redirecting to login", user.username)
                 return redirect("portal_login")
         error = "Invalid email or password."
 
@@ -1781,7 +1792,7 @@ def portal_account(request, slug):
                     )
                     messages.success(request, f"A confirmation email has been sent to {new_email}. Please check your inbox.")
                 except Exception as e:
-                    logger.error(f"Failed to send email confirmation: {e}")
+                    logger.exception("Failed to send email confirmation")
                     messages.error(request, "Failed to send confirmation email. Please ensure the system's email settings are configured correctly.")
                     pending.delete()
 
@@ -1862,7 +1873,7 @@ def portal_confirm_email(request, token):
             fail_silently=True,
         )
     except Exception:
-        pass
+        logger.warning("portal_confirm_email: failed to send confirmation mail | new_email=%s", new_email)
 
     return render(request, "portal/email_confirmed.html", {
         "success": True,
@@ -1875,38 +1886,153 @@ def portal_confirm_email(request, token):
 def portal_dashboard(request, slug):
     restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
 
-    thirty_days_ago = timezone.now() - timedelta(days=30)
-    ended_events = CallEvent.objects.filter(
-        restaurant=restaurant, detail__isnull=False, created_at__gte=thirty_days_ago
-    ).order_by("created_at")
+    from django.db.models import Sum
 
-    total_calls = ended_events.count()
+    now = timezone.now()
+    thirty_days_ago = now - timedelta(days=30)
+    sixty_days_ago = now - timedelta(days=60)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = today_start - timedelta(days=1)
+
+    # Current 30d events
+    ended_events = list(
+        CallEvent.objects.filter(
+            restaurant=restaurant, detail__isnull=False, created_at__gte=thirty_days_ago
+        ).order_by("created_at")
+    )
+
+    # Previous 30d events (for trend comparison)
+    prev_events = list(
+        CallEvent.objects.filter(
+            restaurant=restaurant, detail__isnull=False,
+            created_at__gte=sixty_days_ago, created_at__lt=thirty_days_ago,
+        )
+    )
+
     caller_numbers = []
     topic_counter = Counter()
     outcome_counter = Counter()
     calls_by_day = defaultdict(int)
+    heatmap = [[0] * 24 for _ in range(7)]   # [weekday 0=Mon][hour]
+    topic_outcome = defaultdict(Counter)       # topic -> {outcome: count}
 
     for event in ended_events:
         call_data = event.payload.get("call", {})
-        from_num = call_data.get("from_number", "Unknown")
-        caller_numbers.append(from_num)
+        caller_numbers.append(call_data.get("from_number", "Unknown"))
 
         topics, outcome, _ = _classify_call(event.payload)
         topic_counter.update(topics)
         outcome_counter[outcome] += 1
+        calls_by_day[event.created_at.strftime("%b %d")] += 1
+        heatmap[event.created_at.weekday()][event.created_at.hour] += 1
+        for topic in topics:
+            topic_outcome[topic][outcome] += 1
 
-        day_key = event.created_at.strftime("%b %d")
-        calls_by_day[day_key] += 1
-
+    total_calls = len(ended_events)
     unique_callers = len(set(caller_numbers))
     repeat_callers = sum(1 for _, c in Counter(caller_numbers).items() if c > 1)
 
-    today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    # Previous period baseline for trends
+    prev_caller_numbers = [
+        e.payload.get("call", {}).get("from_number", "Unknown") for e in prev_events
+    ]
+    prev_total_calls = len(prev_events)
+    prev_unique_callers = len(set(prev_caller_numbers))
+    prev_repeat_callers = sum(1 for _, c in Counter(prev_caller_numbers).items() if c > 1)
+
+    # Leads
     leads_today = CallDetail.objects.filter(
+        call_event__restaurant=restaurant, wants_reservation=True, created_at__gte=today_start,
+    ).count()
+    leads_yesterday = CallDetail.objects.filter(
+        call_event__restaurant=restaurant, wants_reservation=True,
+        created_at__gte=yesterday_start, created_at__lt=today_start,
+    ).count()
+    leads_30d = CallDetail.objects.filter(
+        call_event__restaurant=restaurant, wants_reservation=True, created_at__gte=thirty_days_ago,
+    ).count()
+
+    # Cost / ROI
+    cost_agg = CallDetail.objects.filter(
+        call_event__restaurant=restaurant, call_event__created_at__gte=thirty_days_ago,
+    ).aggregate(total=Sum("call_cost"))
+    total_cost_30d = float(cost_agg["total"] or 0)
+    resolved_count = outcome_counter.get("Resolved", 0)
+    cost_per_lead = round(total_cost_30d / leads_30d, 4) if leads_30d > 0 else None
+    cost_per_resolved = round(total_cost_30d / resolved_count, 4) if resolved_count > 0 else None
+
+    # ROI estimate — based on staff-confirmed reservations only
+    kb = getattr(restaurant, "knowledge_base", None)
+    avg_cover = float(kb.avg_revenue_per_cover) if kb and kb.avg_revenue_per_cover else None
+
+    confirmed_qs = CallDetail.objects.filter(
+        call_event__restaurant=restaurant,
+        reservation_status="confirmed",
+        reservation_confirmed_at__gte=thirty_days_ago,
+    )
+    confirmed_count = confirmed_qs.count()
+    pending_leads = CallDetail.objects.filter(
         call_event__restaurant=restaurant,
         wants_reservation=True,
-        created_at__gte=today_start,
+        reservation_status="pending",
+        created_at__gte=thirty_days_ago,
     ).count()
+
+    roi_data = None
+    if avg_cover and confirmed_count > 0 and total_cost_30d > 0:
+        party_sizes = list(confirmed_qs.filter(party_size__isnull=False).values_list("party_size", flat=True))
+        avg_party = round(sum(party_sizes) / len(party_sizes), 1) if party_sizes else 2.0
+        estimated_revenue = confirmed_count * avg_party * avg_cover
+        roi_multiplier = round(estimated_revenue / total_cost_30d, 1)
+        roi_data = {
+            "estimated_revenue": round(estimated_revenue, 2),
+            "avg_party": avg_party,
+            "avg_cover": avg_cover,
+            "roi_multiplier": roi_multiplier,
+            "total_cost": round(total_cost_30d, 2),
+            "confirmed_count": confirmed_count,
+        }
+
+    # Trend helper: returns {'pct': int, 'up': bool} or None
+    def _trend(current, previous):
+        if previous == 0:
+            return None
+        pct = round((current - previous) / previous * 100)
+        return {"pct": abs(pct), "up": pct >= 0}
+
+    trends = {
+        "calls":  _trend(total_calls, prev_total_calls),
+        "unique": _trend(unique_callers, prev_unique_callers),
+        "repeat": _trend(repeat_callers, prev_repeat_callers),
+        "leads":  _trend(leads_today, leads_yesterday),
+    }
+
+    # Heatmap: pre-compute opacity (0.0–1.0) for template
+    heatmap_max = max((heatmap[d][h] for d in range(7) for h in range(24)), default=1) or 1
+    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    heatmap_rows = [
+        {
+            "day": day_names[d],
+            "hours": [
+                {"count": heatmap[d][h], "opacity": round(heatmap[d][h] / heatmap_max, 2)}
+                for h in range(24)
+            ],
+        }
+        for d in range(7)
+    ]
+
+    # Topic × Outcome table (sorted by volume)
+    topic_outcome_table = [
+        {
+            "topic": topic,
+            "resolved":   topic_outcome[topic].get("Resolved", 0),
+            "escalated":  topic_outcome[topic].get("Escalated", 0),
+            "incomplete": topic_outcome[topic].get("Incomplete", 0),
+            "total":      sum(topic_outcome[topic].values()),
+        }
+        for topic in sorted(topic_outcome, key=lambda t: -sum(topic_outcome[t].values()))
+    ]
+
     recent_reservation_inquiries = (
         CallDetail.objects
         .filter(call_event__restaurant=restaurant, wants_reservation=True)
@@ -1921,6 +2047,8 @@ def portal_dashboard(request, slug):
         "unique_callers": unique_callers,
         "repeat_callers": repeat_callers,
         "leads_today": leads_today,
+        "leads_30d": leads_30d,
+        "trends": trends,
         "recent_reservation_inquiries": recent_reservation_inquiries,
         "calls_by_day_labels": json.dumps(list(calls_by_day.keys())),
         "calls_by_day_data": json.dumps(list(calls_by_day.values())),
@@ -1930,6 +2058,16 @@ def portal_dashboard(request, slug):
         "outcome_data": json.dumps(list(outcome_counter.values())),
         "kb_score": kb_score,
         "kb_missing": kb_missing,
+        "heatmap_rows": heatmap_rows,
+        "topic_outcome_table": topic_outcome_table,
+        "total_cost_30d": total_cost_30d,
+        "cost_per_lead": cost_per_lead,
+        "cost_per_resolved": cost_per_resolved,
+        "resolved_count": resolved_count,
+        "roi_data": roi_data,
+        "avg_cover_set": avg_cover is not None,
+        "confirmed_count": confirmed_count,
+        "pending_leads": pending_leads,
     }
     return render(request, "portal/dashboard.html", context)
 
@@ -1982,7 +2120,7 @@ def _sync_retell_tools(request, restaurant: Restaurant, kb: RestaurantKnowledgeB
         else:
             messages.info(request, "Call transfer deactivated.")
     except Exception as exc:
-        logger.error("Failed to sync Retell tools for %s: %s", restaurant.slug, exc)
+        logger.exception("Failed to sync Retell tools for %s", restaurant.slug)
         messages.error(request, f"Settings saved, but failed to sync call transfer with Retell: {exc}")
 
 
@@ -2044,9 +2182,10 @@ def portal_calls(request, slug):
     )
 
     # ── Unfiltered stats (always reflect totals, not current filter) ───────────
-    total_calls         = base_qs.count()
-    reservation_intents = base_qs.filter(detail__wants_reservation=True).count()
-    follow_ups_pending  = base_qs.filter(detail__follow_up_needed=True).count()
+    total_calls          = base_qs.count()
+    reservation_intents  = base_qs.filter(detail__wants_reservation=True).count()
+    reservations_pending = base_qs.filter(detail__wants_reservation=True, detail__reservation_status="pending").count()
+    follow_ups_pending   = base_qs.filter(detail__follow_up_needed=True).count()
     sms_sent            = SmsLog.objects.filter(
         call_event__restaurant=restaurant, status="sent"
     ).count()
@@ -2114,7 +2253,8 @@ def portal_calls(request, slug):
         "phone_filter":        phone_filter,
         # stats
         "total_calls":         total_calls,
-        "reservation_intents": reservation_intents,
+        "reservation_intents":  reservation_intents,
+        "reservations_pending": reservations_pending,
         "follow_ups_pending":  follow_ups_pending,
         "sms_sent":            sms_sent,
     })
@@ -2132,6 +2272,26 @@ def portal_resolve_followup(request, slug, event_pk):
     except CallDetail.DoesNotExist:
         pass
     return JsonResponse({"ok": True})
+
+
+@login_required
+def portal_reservation_status(request, slug, event_pk):
+    """AJAX: set reservation_status on a CallDetail (confirmed / lost / pending)."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    event = get_object_or_404(CallEvent, pk=event_pk, restaurant=restaurant)
+    status = request.POST.get("status", "")
+    if status not in ("confirmed", "lost", "pending"):
+        return JsonResponse({"ok": False, "error": "Invalid status"}, status=400)
+    try:
+        detail = event.detail
+        detail.reservation_status = status
+        detail.reservation_confirmed_at = timezone.now() if status == "confirmed" else None
+        detail.save(update_fields=["reservation_status", "reservation_confirmed_at"])
+        return JsonResponse({"ok": True, "status": status})
+    except CallDetail.DoesNotExist:
+        return JsonResponse({"ok": False, "error": "No detail"}, status=404)
 
 
 @login_required
@@ -2352,8 +2512,10 @@ def stripe_webhook(request):
             payload, sig, settings.STRIPE_WEBHOOK_SECRET
         )
     except stripe.errors.SignatureVerificationError:
+        logger.warning("Stripe webhook: invalid signature")
         return JsonResponse({"detail": "invalid signature"}, status=400)
     except Exception:
+        logger.exception("Stripe webhook: failed to parse payload")
         return JsonResponse({"detail": "invalid payload"}, status=400)
 
     data = event["data"]["object"]

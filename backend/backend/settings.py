@@ -186,7 +186,7 @@ LOGGING = {
     "disable_existing_loggers": False,
     "formatters": {
         "verbose": {
-            "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
+            "format": "{levelname} {asctime} {module} {message}",
             "style": "{",
         },
         "simple": {
@@ -209,7 +209,7 @@ LOGGING = {
             "formatter": "verbose",
         },
         "error_file": {
-            "level": "WARNING",
+            "level": "ERROR",
             "class": "logging.handlers.RotatingFileHandler",
             "filename": LOGS_DIR / "error.log",
             "maxBytes": 1024 * 1024 * 5,  # 5MB
@@ -229,7 +229,7 @@ LOGGING = {
         "django": {
             "handlers": ["console", "django_file"],
             "level": "INFO",
-            "propagate": True,
+            "propagate": False,
         },
         "restaurants": {
             "handlers": ["console", "app_file", "error_file"],

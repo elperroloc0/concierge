@@ -7,35 +7,84 @@
 <h4 class="fw-bold mb-1">Welcome back</h4>
 <p class="text-muted mb-4">Last 30 days — {{ restaurant.name }}</p>
 
-<!-- Stat cards -->
+<!-- ── Stat cards ─────────────────────────────────────────────────────────── -->
 <div class="row g-3 mb-4">
+
+  <!-- Total Calls -->
   <div class="col-sm-3">
     <div class="card stat-card shadow-sm p-3 h-100">
-      <div class="text-muted small mb-1"><i class="bi bi-telephone-fill me-1"></i>Total Calls</div>
+      <div class="d-flex justify-content-between align-items-start mb-1">
+        <div class="text-muted small"><i class="bi bi-telephone-fill me-1"></i>Total Calls</div>
+        {% if trends.calls %}
+          {% if trends.calls.up %}
+            <span class="badge rounded-pill" style="background:#dcfce7;color:#15803d;font-size:.7rem;">↑ {{ trends.calls.pct }}%</span>
+          {% else %}
+            <span class="badge rounded-pill" style="background:#fee2e2;color:#b91c1c;font-size:.7rem;">↓ {{ trends.calls.pct }}%</span>
+          {% endif %}
+        {% endif %}
+      </div>
       <div class="fs-2 fw-bold">{{ total_calls }}</div>
+      <div class="text-muted" style="font-size:.72rem;">vs prev 30 days</div>
     </div>
   </div>
+
+  <!-- Unique Callers -->
   <div class="col-sm-3">
     <div class="card stat-card shadow-sm p-3 h-100">
-      <div class="text-muted small mb-1"><i class="bi bi-people-fill me-1"></i>Unique Callers</div>
+      <div class="d-flex justify-content-between align-items-start mb-1">
+        <div class="text-muted small"><i class="bi bi-people-fill me-1"></i>Unique Callers</div>
+        {% if trends.unique %}
+          {% if trends.unique.up %}
+            <span class="badge rounded-pill" style="background:#dcfce7;color:#15803d;font-size:.7rem;">↑ {{ trends.unique.pct }}%</span>
+          {% else %}
+            <span class="badge rounded-pill" style="background:#fee2e2;color:#b91c1c;font-size:.7rem;">↓ {{ trends.unique.pct }}%</span>
+          {% endif %}
+        {% endif %}
+      </div>
       <div class="fs-2 fw-bold">{{ unique_callers }}</div>
+      <div class="text-muted" style="font-size:.72rem;">vs prev 30 days</div>
     </div>
   </div>
+
+  <!-- Repeat Callers -->
   <div class="col-sm-3">
     <div class="card stat-card shadow-sm p-3 h-100">
-      <div class="text-muted small mb-1"><i class="bi bi-arrow-repeat me-1"></i>Repeat Callers</div>
+      <div class="d-flex justify-content-between align-items-start mb-1">
+        <div class="text-muted small"><i class="bi bi-arrow-repeat me-1"></i>Repeat Callers</div>
+        {% if trends.repeat %}
+          {% if trends.repeat.up %}
+            <span class="badge rounded-pill" style="background:#dcfce7;color:#15803d;font-size:.7rem;">↑ {{ trends.repeat.pct }}%</span>
+          {% else %}
+            <span class="badge rounded-pill" style="background:#fee2e2;color:#b91c1c;font-size:.7rem;">↓ {{ trends.repeat.pct }}%</span>
+          {% endif %}
+        {% endif %}
+      </div>
       <div class="fs-2 fw-bold">{{ repeat_callers }}</div>
+      <div class="text-muted" style="font-size:.72rem;">vs prev 30 days</div>
     </div>
   </div>
+
+  <!-- Reservation Leads Today -->
   <div class="col-sm-3">
     <div class="card stat-card shadow-sm p-3 h-100" style="border-left: 3px solid #3b82f6;">
-      <div class="text-muted small mb-1"><i class="bi bi-calendar-check-fill me-1"></i>Reservation Leads Today</div>
+      <div class="d-flex justify-content-between align-items-start mb-1">
+        <div class="text-muted small"><i class="bi bi-calendar-check-fill me-1"></i>Reservation Leads Today</div>
+        {% if trends.leads %}
+          {% if trends.leads.up %}
+            <span class="badge rounded-pill" style="background:#dcfce7;color:#15803d;font-size:.7rem;">↑ {{ trends.leads.pct }}%</span>
+          {% else %}
+            <span class="badge rounded-pill" style="background:#fee2e2;color:#b91c1c;font-size:.7rem;">↓ {{ trends.leads.pct }}%</span>
+          {% endif %}
+        {% endif %}
+      </div>
       <div class="fs-2 fw-bold text-primary">{{ leads_today }}</div>
+      <div class="text-muted" style="font-size:.72rem;">vs yesterday &middot; {{ leads_30d }} this month</div>
     </div>
   </div>
+
 </div>
 
-<!-- KB Health card -->
+<!-- ── KB Health ──────────────────────────────────────────────────────────── -->
 <div class="row g-3 mb-4">
   <div class="col-12">
     <div class="card hover-lift p-3">
@@ -76,16 +125,16 @@
   </div>
 </div>
 
-<!-- Charts row -->
+<!-- ── Charts row ────────────────────────────────────────────────────────── -->
 <div class="row g-3 mb-4">
-  <!-- Calls per day -->
   <div class="col-lg-7">
-    <div class="card hover-lift p-3 h-100">
+    <div class="card hover-lift p-3 h-100 d-flex flex-column">
       <h6 class="fw-semibold mb-3">Calls per Day</h6>
-      <canvas id="callsChart" height="120"></canvas>
+      <div class="flex-grow-1" style="position:relative; min-height:180px;">
+        <canvas id="callsChart"></canvas>
+      </div>
     </div>
   </div>
-  <!-- Topic breakdown -->
   <div class="col-lg-5">
     <div class="card hover-lift p-3 h-100">
       <h6 class="fw-semibold mb-3">Topics</h6>
@@ -94,16 +143,228 @@
   </div>
 </div>
 
-<!-- Outcome breakdown -->
-<div class="row g-3">
-  <div class="col-lg-5">
-    <div class="card hover-lift p-3">
-      <h6 class="fw-semibold mb-3">Call Outcomes</h6>
-      <canvas id="outcomeChart" height="120"></canvas>
+<!-- ── ROI / Cost cards ───────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+
+  <div class="col-sm-6">
+    <div class="card shadow-sm p-3 h-100" style="border-left: 3px solid #f72585;">
+      <div class="text-muted small mb-1">
+        <i class="bi bi-calendar-heart me-1"></i>Cost per Reservation Lead
+        <span class="tip-anchor ms-1" data-tip="How much you spend on AI per every caller who wanted a reservation">
+          <i class="bi bi-info-circle" style="cursor:default;"></i>
+        </span>
+      </div>
+      {% if cost_per_lead %}
+        <div class="fs-2 fw-bold">${{ cost_per_lead }}</div>
+        <div class="text-muted" style="font-size:.72rem;">{{ leads_30d }} leads this month</div>
+      {% else %}
+        <div class="fs-4 fw-bold text-muted">—</div>
+        <div class="text-muted" style="font-size:.72rem;">No reservation leads yet</div>
+      {% endif %}
     </div>
   </div>
+
+  <div class="col-sm-6">
+    <div class="card shadow-sm p-3 h-100" style="border-left: 3px solid #2dc653;">
+      <div class="text-muted small mb-1">
+        <i class="bi bi-check-circle-fill me-1"></i>Cost per Resolved Call
+        <span class="tip-anchor ms-1" data-tip="How much you spend on AI per every call fully handled without transferring to staff">
+          <i class="bi bi-info-circle" style="cursor:default;"></i>
+        </span>
+      </div>
+      {% if cost_per_resolved %}
+        <div class="fs-2 fw-bold">${{ cost_per_resolved }}</div>
+        <div class="text-muted" style="font-size:.72rem;">{{ resolved_count }} resolved this month</div>
+      {% else %}
+        <div class="fs-4 fw-bold text-muted">—</div>
+        <div class="text-muted" style="font-size:.72rem;">No resolved calls yet</div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- ── ROI estimate ───────────────────────────────────────────────────────── -->
+{% if roi_data %}
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="card p-3" style="border-left: 4px solid #4361ee; background: linear-gradient(135deg,#f0f4ff 0%,#fff 100%);">
+      <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+        <div>
+          <div class="text-muted small mb-1 fw-semibold text-uppercase" style="letter-spacing:.05em; font-size:.68rem;">
+            <i class="bi bi-graph-up-arrow me-1"></i>ROI — Last 30 Days
+          </div>
+          <div class="d-flex align-items-baseline gap-3 flex-wrap">
+            <div>
+              <span class="fs-1 fw-bold text-primary">{{ roi_data.roi_multiplier }}×</span>
+              <span class="text-muted small ms-1">return on AI spend</span>
+            </div>
+            <div class="text-muted small">
+              <span class="fw-semibold text-dark">${{ roi_data.estimated_revenue }}</span> estimated revenue
+              vs <span class="fw-semibold text-dark">${{ roi_data.total_cost }}</span> AI cost
+            </div>
+          </div>
+          <div class="text-muted mt-1" style="font-size:.72rem;">
+            {{ roi_data.confirmed_count }} confirmed reservation{{ roi_data.confirmed_count|pluralize }} × {{ roi_data.avg_party }} avg guests × ${{ roi_data.avg_cover }}/cover
+            {% if pending_leads %}&middot; <a href="{% url 'portal_calls' restaurant.slug %}?reservation=1" class="text-warning fw-semibold">{{ pending_leads }} lead{{ pending_leads|pluralize }} pending review</a>{% endif %}
+          </div>
+        </div>
+        <a href="{% url 'portal_kb' restaurant.slug %}#roi-settings" class="btn btn-sm btn-outline-primary align-self-center">
+          <i class="bi bi-pencil me-1"></i>Update avg check
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="card p-3" style="border: 2px dashed #cbd5e1; background: #f8fafc;">
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <i class="bi bi-graph-up-arrow fs-3 text-muted"></i>
+        <div class="flex-grow-1">
+          <div class="fw-semibold small">ROI not yet available</div>
+          {% if not avg_cover_set %}
+            <div class="text-muted small">Set your average revenue per cover to enable ROI tracking.</div>
+          {% elif confirmed_count == 0 and pending_leads > 0 %}
+            <div class="text-muted small">
+              {{ pending_leads }} reservation lead{{ pending_leads|pluralize }} waiting — confirm them in Call History to calculate ROI.
+            </div>
+          {% else %}
+            <div class="text-muted small">No confirmed reservations this month yet.</div>
+          {% endif %}
+        </div>
+        {% if not avg_cover_set %}
+          <a href="{% url 'portal_kb' restaurant.slug %}#roi-settings" class="btn btn-sm btn-dark">Set avg check <i class="bi bi-arrow-right ms-1"></i></a>
+        {% elif pending_leads > 0 %}
+          <a href="{% url 'portal_calls' restaurant.slug %}?reservation=1" class="btn btn-sm btn-dark">Review leads <i class="bi bi-arrow-right ms-1"></i></a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Heatmap ────────────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="card hover-lift p-3">
+      <h6 class="fw-semibold mb-3"><i class="bi bi-grid-3x3-gap-fill me-1 text-secondary"></i>Call Volume by Hour &amp; Day of Week</h6>
+      <div style="overflow-x: auto;">
+        <table class="table table-borderless mb-0" style="min-width: 700px; table-layout: fixed;">
+          <thead>
+            <tr>
+              <th style="width: 42px;"></th>
+              {% for h in "0123456789" %}
+                <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">{{ h }}</th>
+              {% endfor %}
+              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">10</th>
+              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">11</th>
+              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">12</th>
+              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">13</th>
+              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">14</th>
+              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">15</th>
+              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">16</th>
+              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">17</th>
+              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">18</th>
+              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">19</th>
+              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">20</th>
+              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">21</th>
+              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">22</th>
+              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">23</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in heatmap_rows %}
+            <tr style="height: 22px;">
+              <td class="pe-2 text-end align-middle" style="font-size:.7rem;color:#666;font-weight:500;white-space:nowrap;">{{ row.day }}</td>
+              {% for cell in row.hours %}
+              <td class="p-0 align-middle" style="height:22px;">
+                <div title="{{ cell.count }} call{{ cell.count|pluralize }}"
+                     style="height:18px;border-radius:3px;margin:1px;
+                            background:rgba(67,97,238,{{ cell.opacity }});
+                            {% if cell.count == 0 %}background:#f3f4f6;{% endif %}">
+                </div>
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="d-flex align-items-center gap-2 mt-2" style="font-size:.7rem;color:#999;">
+          <span>Low</span>
+          <div style="width:60px;height:8px;border-radius:4px;background:linear-gradient(to right, #f3f4f6, rgba(67,97,238,1));"></div>
+          <span>High</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Topic × Outcome + Outcomes donut ──────────────────────────────────── -->
+<div class="row g-3 mb-4">
+
+  <!-- Topic × Outcome table -->
   <div class="col-lg-7">
     <div class="card hover-lift p-3 h-100">
+      <h6 class="fw-semibold mb-3"><i class="bi bi-table me-1 text-secondary"></i>Topic × Outcome</h6>
+      {% if topic_outcome_table %}
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0" style="font-size:.82rem;">
+          <thead class="table-light">
+            <tr>
+              <th>Topic</th>
+              <th class="text-center" style="color:#2dc653;">Resolved</th>
+              <th class="text-center" style="color:#f72585;">Escalated</th>
+              <th class="text-center" style="color:#e2b96f;">Incomplete</th>
+              <th class="text-center text-muted">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in topic_outcome_table %}
+            <tr>
+              <td class="fw-semibold">{{ row.topic }}</td>
+              <td class="text-center">
+                {% if row.resolved %}
+                  <span class="badge rounded-pill" style="background:#dcfce7;color:#15803d;">{{ row.resolved }}</span>
+                {% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+              <td class="text-center">
+                {% if row.escalated %}
+                  <span class="badge rounded-pill" style="background:#fee2e2;color:#b91c1c;">{{ row.escalated }}</span>
+                {% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+              <td class="text-center">
+                {% if row.incomplete %}
+                  <span class="badge rounded-pill" style="background:#fef9c3;color:#854d0e;">{{ row.incomplete }}</span>
+                {% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+              <td class="text-center text-muted fw-semibold">{{ row.total }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-muted small mb-0">No call data yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Call Outcomes donut -->
+  <div class="col-lg-5">
+    <div class="card hover-lift p-3 h-100">
+      <h6 class="fw-semibold mb-3">Call Outcomes</h6>
+      <canvas id="outcomeChart" height="140"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Recent Reservation Inquiries ──────────────────────────────────────── -->
+<div class="row g-3">
+  <div class="col-12">
+    <div class="card hover-lift p-3">
       <div class="d-flex align-items-center justify-content-between mb-3">
         <h6 class="fw-semibold mb-0">Recent Reservation Inquiries</h6>
         <a href="{% url 'portal_guests' restaurant.slug %}?reason=reservation" class="btn btn-sm btn-dark">
@@ -142,6 +403,27 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<style>
+.tip-anchor { position: relative; display: inline-block; }
+.tip-anchor::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  color: #f8fafc;
+  font-size: .72rem;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 5px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s;
+  z-index: 9999;
+}
+.tip-anchor:hover::after { opacity: 1; }
+</style>
 <script>
 const CHART_COLORS = ["#4361ee","#3f37c9","#7209b7","#f72585","#4cc9f0","#e2b96f","#2dc653"];
 
@@ -157,7 +439,7 @@ new Chart(document.getElementById("callsChart"), {
       borderRadius: 4,
     }]
   },
-  options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+  options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
 });
 
 // Topics donut

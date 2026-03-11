@@ -98,6 +98,8 @@ class KnowledgeBaseForm(forms.ModelForm):
             # Agent (owner-facing: call transfer + sister locations)
             "escalation_enabled", "escalation_conditions", "escalation_transfer_number",
             "affiliated_restaurants",
+            # ROI
+            "avg_revenue_per_cover",
             # Custom info
             "owner_notes",
         ]
@@ -153,6 +155,8 @@ class KnowledgeBaseForm(forms.ModelForm):
             "escalation_enabled":         forms.CheckboxInput(attrs=_CHECK),
             "escalation_conditions":      forms.Textarea(attrs={**_ta(3), "placeholder": "Caller asks to speak with a manager.\nCaller reports an emergency on-site."}),
             "escalation_transfer_number": forms.TextInput(attrs={**_TEXT, "placeholder": "+17865551234"}),
+            # ROI
+            "avg_revenue_per_cover": forms.NumberInput(attrs={**_TEXT, "placeholder": "45.00", "step": "0.01", "min": "0"}),
             # Custom info
             "owner_notes": forms.Textarea(attrs={
                 **_ta(6),

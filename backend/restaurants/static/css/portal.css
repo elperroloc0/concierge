@@ -63,6 +63,12 @@ p {
   box-shadow: var(--shadow-md);
 }
 
+.card.card-clickable:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(99,102,241,.25);
+  border-color: #6366f1 !important;
+}
+
 .stat-card {
   border: none;
   border-radius: var(--radius-xl);

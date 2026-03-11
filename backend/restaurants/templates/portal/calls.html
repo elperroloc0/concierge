@@ -74,25 +74,34 @@
 <!-- ── Stats bar ── -->
 <div class="row g-3 mb-4">
   <div class="col-6 col-md-3">
-    <div class="card hover-lift p-3 h-100 stat-accent-blue">
+    <div class="card p-3 h-100 stat-accent-blue">
       <div class="text-muted small mb-1"><i class="bi bi-telephone-fill me-1"></i>Total Calls</div>
       <div class="stat-num">{{ total_calls }}</div>
     </div>
   </div>
   <div class="col-6 col-md-3">
-    <div class="card hover-lift p-3 h-100 stat-accent-indigo">
-      <div class="text-muted small mb-1"><i class="bi bi-calendar-check me-1"></i>Reservation Intents</div>
-      <div class="stat-num text-primary">{{ reservation_intents }}</div>
-    </div>
+    <a href="?reservation=1" class="text-decoration-none">
+      <div class="card hover-lift card-clickable p-3 h-100 stat-accent-indigo {% if reservation_filter == '1' %}border-primary{% endif %}" style="cursor:pointer;">
+        <div class="d-flex justify-content-between align-items-start">
+          <div class="text-muted small"><i class="bi bi-calendar-check me-1"></i>Reservation Intents</div>
+          {% if reservations_pending > 0 %}
+            <span class="badge rounded-pill" style="background:#fef9c3;color:#92400e;font-size:.65rem;">
+              {{ reservations_pending }} pending
+            </span>
+          {% endif %}
+        </div>
+        <div class="stat-num text-primary">{{ reservation_intents }}</div>
+      </div>
+    </a>
   </div>
   <div class="col-6 col-md-3">
-    <div class="card hover-lift p-3 h-100 stat-accent-amber">
+    <div class="card p-3 h-100 stat-accent-amber">
       <div class="text-muted small mb-1"><i class="bi bi-bell-fill me-1"></i>Follow-ups Pending</div>
       <div class="stat-num" style="color:#b45309;">{{ follow_ups_pending }}</div>
     </div>
   </div>
   <div class="col-6 col-md-3">
-    <div class="card hover-lift p-3 h-100 stat-accent-green">
+    <div class="card p-3 h-100 stat-accent-green">
       <div class="text-muted small mb-1"><i class="bi bi-chat-dots-fill me-1"></i>SMS Sent</div>
       <div class="stat-num text-success">{{ sms_sent }}</div>
     </div>
@@ -100,7 +109,7 @@
 </div>
 
 <!-- ── Filter bar ── -->
-<div class="card hover-lift mb-3 p-3">
+<div class="card mb-3 p-3">
   <form method="get" class="row g-2 align-items-end">
     <div class="col-auto">
       <label class="form-label small text-muted mb-1">Reason</label>
@@ -146,7 +155,7 @@
 
 {% if enriched %}
 <!-- ── Call table ── -->
-<div class="card hover-lift">
+<div class="card">
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0" style="font-size:.85rem;">
       <thead class="table-light">
@@ -221,15 +230,35 @@
             {% endif %}
           </td>
 
-          <!-- Reservation summary -->
+          <!-- Reservation summary + confirmation buttons -->
           <td style="font-size:.8rem;">
             {% if c.detail and c.detail.wants_reservation %}
-              {% if c.detail.party_size %}<span class="text-muted"><i class="bi bi-people me-1"></i>{{ c.detail.party_size }}</span>{% endif %}
-              {% if c.detail.reservation_date %}<span class="ms-1">{{ c.detail.reservation_date|date:"D, M j" }}</span>{% endif %}
-              {% if c.detail.reservation_time %}<span class="text-muted ms-1">{{ c.detail.reservation_time|time:"g:i A" }}</span>{% endif %}
-              {% if not c.detail.party_size and not c.detail.reservation_date and not c.detail.reservation_time %}
-                <span class="text-primary" style="font-size:.72rem;"><i class="bi bi-check-circle-fill me-1"></i>Intent</span>
-              {% endif %}
+              <div class="mb-1">
+                {% if c.detail.party_size %}<span class="text-muted"><i class="bi bi-people me-1"></i>{{ c.detail.party_size }}</span>{% endif %}
+                {% if c.detail.reservation_date %}<span class="ms-1">{{ c.detail.reservation_date|date:"D, M j" }}</span>{% endif %}
+                {% if c.detail.reservation_time %}<span class="text-muted ms-1">{{ c.detail.reservation_time|time:"g:i A" }}</span>{% endif %}
+                {% if not c.detail.party_size and not c.detail.reservation_date and not c.detail.reservation_time %}
+                  <span class="text-primary" style="font-size:.72rem;"><i class="bi bi-check-circle-fill me-1"></i>Intent</span>
+                {% endif %}
+              </div>
+              <div class="res-status-widget" data-event-pk="{{ c.event.pk }}" data-url="{% url 'portal_reservation_status' restaurant.slug c.event.pk %}" data-status="{{ c.detail.reservation_status }}" onclick="event.stopPropagation()">
+                {% if c.detail.reservation_status == "confirmed" %}
+                  <span class="badge res-badge-confirmed" style="background:#dcfce7;color:#15803d;cursor:pointer;" title="Click to undo">
+                    <i class="bi bi-check-circle-fill me-1"></i>Confirmed
+                  </span>
+                {% elif c.detail.reservation_status == "lost" %}
+                  <span class="badge res-badge-lost" style="background:#fee2e2;color:#b91c1c;cursor:pointer;" title="Click to undo">
+                    <i class="bi bi-x-circle-fill me-1"></i>Lost
+                  </span>
+                {% else %}
+                  <button class="btn btn-xs res-btn-confirm py-0 px-2 me-1" style="font-size:.7rem;background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;">
+                    <i class="bi bi-check-lg"></i> Confirm
+                  </button>
+                  <button class="btn btn-xs res-btn-lost py-0 px-2" style="font-size:.7rem;background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;">
+                    <i class="bi bi-x-lg"></i> Lost
+                  </button>
+                {% endif %}
+              </div>
             {% else %}
               <span class="text-muted">—</span>
             {% endif %}
@@ -440,6 +469,44 @@ document.querySelectorAll('.resolve-followup-btn').forEach(btn => {
       btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Mark Follow-up Resolved';
     }
   });
+});
+
+// Reservation status confirmation (AJAX)
+async function setReservationStatus(widget, status) {
+  const url = widget.dataset.url;
+  const body = new URLSearchParams({ status });
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  if (!res.ok) { alert('Could not save — please try again.'); return; }
+  widget.dataset.status = status;
+  if (status === 'confirmed') {
+    widget.innerHTML = `<span class="badge res-badge-confirmed" style="background:#dcfce7;color:#15803d;cursor:pointer;" title="Click to undo"><i class="bi bi-check-circle-fill me-1"></i>Confirmed</span>`;
+    widget.querySelector('.res-badge-confirmed').addEventListener('click', () => setReservationStatus(widget, 'pending'));
+  } else if (status === 'lost') {
+    widget.innerHTML = `<span class="badge res-badge-lost" style="background:#fee2e2;color:#b91c1c;cursor:pointer;" title="Click to undo"><i class="bi bi-x-circle-fill me-1"></i>Lost</span>`;
+    widget.querySelector('.res-badge-lost').addEventListener('click', () => setReservationStatus(widget, 'pending'));
+  } else {
+    widget.innerHTML = `
+      <button class="btn btn-xs res-btn-confirm py-0 px-2 me-1" style="font-size:.7rem;background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;"><i class="bi bi-check-lg"></i> Confirm</button>
+      <button class="btn btn-xs res-btn-lost py-0 px-2" style="font-size:.7rem;background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;"><i class="bi bi-x-lg"></i> Lost</button>`;
+    widget.querySelector('.res-btn-confirm').addEventListener('click', () => setReservationStatus(widget, 'confirmed'));
+    widget.querySelector('.res-btn-lost').addEventListener('click', () => setReservationStatus(widget, 'lost'));
+  }
+}
+
+document.querySelectorAll('.res-status-widget').forEach(widget => {
+  const status = widget.dataset.status;
+  if (status === 'confirmed') {
+    widget.querySelector('.res-badge-confirmed')?.addEventListener('click', () => setReservationStatus(widget, 'pending'));
+  } else if (status === 'lost') {
+    widget.querySelector('.res-badge-lost')?.addEventListener('click', () => setReservationStatus(widget, 'pending'));
+  } else {
+    widget.querySelector('.res-btn-confirm')?.addEventListener('click', () => setReservationStatus(widget, 'confirmed'));
+    widget.querySelector('.res-btn-lost')?.addEventListener('click', () => setReservationStatus(widget, 'lost'));
+  }
 });
 </script>
 {% endblock %}
