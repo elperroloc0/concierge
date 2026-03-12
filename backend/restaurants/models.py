@@ -197,6 +197,8 @@ class CallDetail(models.Model):
         ("reservation",   "Reservation"),
         ("hours",         "Hours / Schedule"),
         ("menu",          "Menu / Food"),
+        ("bar_menu",      "Bar Menu / Drinks"),
+        ("happy_hour",    "Happy Hour"),
         ("billing",       "Billing / Payment"),
         ("parking",       "Parking / Valet"),
         ("private_event", "Private Event"),

@@ -1025,6 +1025,28 @@ def _send_post_call_sms(call_event: CallEvent, restaurant: Restaurant) -> None:
     elif detail and detail.call_reason == "menu":
         menu_url = (kb.food_menu_url if kb else "") or restaurant.website or ""
         message  = f"{greeting} Here's the {restaurant.name} menu: {menu_url}"
+    elif detail and detail.call_reason == "parking":
+        address = restaurant.address_full or ""
+        valet_cost = (kb.valet_cost if kb else "") or ""
+        valet_part = f" Valet parking available{f' — {valet_cost}' if valet_cost else ''}. Street parking also nearby."
+        message = f"{greeting} {restaurant.name} is located at {address}.{valet_part}"
+    elif detail and detail.call_reason == "private_event":
+        contact = restaurant.contact_email or (kb.press_contact if kb else "") or ""
+        message = (
+            f"{greeting} Thank you for your interest in hosting a private event at {restaurant.name}."
+            + (f" For availability and packages, please contact us at: {contact}" if contact else "")
+        )
+    elif detail and detail.call_reason == "bar_menu":
+        bar_url = (kb.bar_menu_url if kb else "") or restaurant.website or ""
+        message = f"{greeting} Here's the {restaurant.name} drinks menu: {bar_url}"
+    elif detail and detail.call_reason == "happy_hour":
+        hh = (kb.happy_hour_details if kb else "") or ""
+        website = restaurant.website or ""
+        message = (
+            f"{greeting} {restaurant.name} happy hour: {hh}"
+            if hh else
+            f"{greeting} Check out {restaurant.name} happy hour details at: {website}"
+        )
     else:
         # No actionable reason — skip the post-call SMS entirely.
         return
@@ -2235,7 +2257,10 @@ def portal_calls(request, slug):
             "outcome":      outcome,
             "transcript":   call_data.get("transcript", ""),
             "detail":       detail,
-            "sms_logs":     list(event.sms_logs.all()),
+            "sms_logs":     list(
+            SmsLog.objects.filter(call_event__payload__call__call_id=call_data["call_id"])
+            if call_data.get("call_id") else event.sms_logs.all()
+        ),
             "call_count":   repeat_phones.get(phone, 1) if phone else 1,
         })
 
