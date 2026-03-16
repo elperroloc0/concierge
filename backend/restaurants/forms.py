@@ -1,5 +1,6 @@
 import re
 import urllib.parse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django import forms
 from django.contrib.auth import get_user_model
@@ -58,6 +59,17 @@ class RestaurantBasicForm(forms.ModelForm):
 
     def clean_website(self):
         return _normalize_url(self.cleaned_data.get("website", ""))
+
+    def clean_timezone(self):
+        value = self.cleaned_data.get("timezone", "").strip()
+        if value:
+            try:
+                ZoneInfo(value)
+            except (ZoneInfoNotFoundError, KeyError):
+                raise forms.ValidationError(
+                    "Invalid timezone. Use a valid IANA name (e.g. America/New_York)."
+                )
+        return value
 
 
 class KnowledgeBaseForm(forms.ModelForm):

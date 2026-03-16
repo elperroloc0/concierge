@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+import urllib.parse
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -45,10 +46,8 @@ def _friendly_url(url: str) -> str:
     """Return just the domain for spoken use: 'https://foo.com/menu' → 'foo.com'"""
     if not url:
         return ""
-    return (
-        url.replace("https://", "").replace("http://", "").replace("www.", "")
-        .split("/")[0].strip()
-    )
+    parsed = urllib.parse.urlparse(url)
+    return parsed.netloc.removeprefix("www.")
 
 
 def _camel_split(s: str) -> str:

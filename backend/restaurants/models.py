@@ -1,6 +1,6 @@
 import uuid
 
-from django.contrib.auth import authenticate, get_user_model, login, logout
+from django.contrib.auth import get_user_model
 from django.db import models
 from django.db.models import JSONField
 from django.forms import ValidationError
@@ -29,12 +29,12 @@ class Restaurant(models.Model):
     # location
     address_full = models.CharField(max_length=512, blank=True, default="")
     location_reference = models.TextField(blank=True, default="")
-    website =  models.URLField(blank=True,default="")
+    website = models.URLField(blank=True, default="")
     timezone = models.CharField(max_length=100, default="America/New_York")
 
     # user prefs
-    primary_lang =  models.CharField(max_length=16, default="es", choices=[("es", "Spanish"), ("en", "English"), ("other", "other"),])
-    conversation_tone =  models.CharField(max_length=16, default="friendly", choices=[("formal", "Formal"), ("friendly", "Friendly"), ("adaptive", "Adaptive")],)
+    primary_lang = models.CharField(max_length=16, default="es", choices=[("es", "Spanish"), ("en", "English"), ("other", "other"),])
+    conversation_tone = models.CharField(max_length=16, default="friendly", choices=[("formal", "Formal"), ("friendly", "Friendly"), ("adaptive", "Adaptive")],)
     welcome_phrase = models.TextField(blank=True, default="")
     phone_mode = models.CharField(
         max_length=16,
@@ -213,7 +213,7 @@ class CallDetail(models.Model):
     # Caller identity
     caller_name  = models.CharField(max_length=255, blank=True, default="")
     caller_phone = models.CharField(max_length=32,  blank=True, default="")
-    caller_email = models.CharField(max_length=255, blank=True, default="")
+    caller_email = models.EmailField(max_length=255, blank=True, default="")
 
     # Intent
     call_reason       = models.CharField(max_length=32, blank=True, default="other", choices=CALL_REASON_CHOICES)
@@ -282,7 +282,7 @@ class SmsLog(models.Model):
     message       = models.TextField()
     status        = models.CharField(max_length=16, default=STATUS_PENDING, choices=STATUS_CHOICES)
     twilio_sid    = models.CharField(max_length=64, blank=True, db_index=True)
-    error_message = models.TextField(blank=True)
+    error_message = models.TextField(blank=True, default="")
     delivered_at  = models.DateTimeField(null=True, blank=True)
     created_at    = models.DateTimeField(auto_now_add=True)
 
@@ -481,8 +481,8 @@ class PendingEmailChange(models.Model):
     expires_at = models.DateTimeField()
 
     def save(self, *args, **kwargs):
-        if not self.expires_at:
-            # Token expires in 24 hours
+        if not self.pk:
+            # Token expires in 24 hours from creation
             self.expires_at = timezone.now() + timezone.timedelta(hours=24)
         super().save(*args, **kwargs)
 
