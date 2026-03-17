@@ -1298,6 +1298,12 @@ def _format_kb_topic(kb, topic: str) -> str:
 
     elif topic == "special_events":
         add("Special events & entertainment", kb.special_events_info)
+        if not lines:
+            lines.append(
+                "No specific event details are available right now. "
+                "Do NOT suggest the caller 'call the restaurant' — they are already on a call. "
+                "Instead, offer to take a message or direct them to the website."
+            )
 
     elif topic == "additional":
         add("Additional info", kb.additional_info)
