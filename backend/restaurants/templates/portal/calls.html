@@ -8,55 +8,55 @@
   /* ── Reason badges ── */
   .reason-badge {
     font-size: .72rem; font-weight: 600;
-    padding: .22em .6em; border-radius: 999px;
+    padding: .22em .6em; border-radius: var(--radius-pill);
     white-space: nowrap; display: inline-block;
   }
-  .reason-reservation   { background: #dbeafe; color: #1d4ed8; }
-  .reason-hours         { background: #dcfce7; color: #166534; }
+  .reason-reservation   { background: var(--color-info-light);    color: var(--color-info-text); }
+  .reason-hours         { background: var(--color-success-light);  color: var(--color-success-text); }
   .reason-menu          { background: #ffedd5; color: #c2410c; }
   .reason-billing       { background: #fce7f3; color: #9d174d; }
   .reason-parking       { background: #f3e8ff; color: #6b21a8; }
-  .reason-private_event { background: #e0e7ff; color: #3730a3; }
-  .reason-complaint     { background: #fee2e2; color: #b91c1c; }
-  .reason-other         { background: #f3f4f6; color: #374151; }
+  .reason-private_event { background: var(--color-primary-100);   color: var(--color-primary-800); }
+  .reason-complaint     { background: var(--color-danger-light);   color: var(--color-danger-text); }
+  .reason-other         { background: var(--color-neutral-100);    color: var(--color-neutral-700); }
 
   /* ── Outcome ── */
-  .outcome-resolved   { color: #16a34a; font-weight: 600; }
-  .outcome-escalated  { color: #dc2626; font-weight: 600; }
-  .outcome-incomplete { color: #d97706; font-weight: 600; }
+  .outcome-resolved   { color: var(--color-success); font-weight: 600; }
+  .outcome-escalated  { color: var(--color-danger);  font-weight: 600; }
+  .outcome-incomplete { color: var(--color-warning); font-weight: 600; }
 
   /* ── Follow-up badge ── */
   .followup-badge {
     font-size: .7rem; font-weight: 600;
-    padding: .2em .5em; border-radius: 999px;
-    background: #fef3c7; color: #92400e;
+    padding: .2em .5em; border-radius: var(--radius-pill);
+    background: var(--color-warning-light); color: var(--color-warning-text);
   }
 
   /* ── Table row ── */
   tr.call-row { cursor: pointer; }
-  tr.call-row:hover td { background: #f1f3ff; }
+  tr.call-row:hover td { background: var(--color-primary-50); }
   tr.call-row td { vertical-align: middle; }
 
   /* ── Expand panel ── */
-  .expand-panel { background: #f8f9fc; }
+  .expand-panel { background: var(--color-neutral-50); }
   .transcript-box {
-    background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+    background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius-sm);
     padding: .85rem 1rem; font-size: .8rem; white-space: pre-wrap;
     max-height: 240px; overflow-y: auto; line-height: 1.5;
   }
   .sms-entry {
-    background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+    background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius-sm);
     padding: .6rem .85rem; font-size: .78rem; margin-bottom: .5rem;
   }
-  .sms-entry .sms-time { color: #9ca3af; font-size: .7rem; }
-  .sms-entry .sms-status-sent   { color: #16a34a; }
-  .sms-entry .sms-status-failed { color: #dc2626; }
+  .sms-entry .sms-time           { color: var(--color-text-tertiary); font-size: .7rem; }
+  .sms-entry .sms-status-sent    { color: var(--color-success); }
+  .sms-entry .sms-status-failed  { color: var(--color-danger); }
 
   /* ── Stat card accent lines ── */
-  .stat-accent-blue   { border-left: 3px solid #6366f1; }
-  .stat-accent-indigo { border-left: 3px solid #3b82f6; }
-  .stat-accent-amber  { border-left: 3px solid #f59e0b; }
-  .stat-accent-green  { border-left: 3px solid #10b981; }
+  .stat-accent-blue   { border-left: 3px solid var(--color-primary-500); }
+  .stat-accent-indigo { border-left: 3px solid var(--color-primary-400); }
+  .stat-accent-amber  { border-left: 3px solid var(--color-warning); }
+  .stat-accent-green  { border-left: 3px solid var(--color-success); }
   .stat-num { font-size: 1.55rem; font-weight: 700; line-height: 1.1; }
 </style>
 {% endblock %}

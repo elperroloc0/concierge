@@ -12,14 +12,14 @@
 
   <!-- Total Calls -->
   <div class="col-sm-3">
-    <div class="card stat-card shadow-sm p-3 h-100">
+    <div class="card stat-card p-3 h-100">
       <div class="d-flex justify-content-between align-items-start mb-1">
         <div class="text-muted small"><i class="bi bi-telephone-fill me-1"></i>Total Calls</div>
         {% if trends.calls %}
           {% if trends.calls.up %}
-            <span class="badge rounded-pill" style="background:#dcfce7;color:#15803d;font-size:.7rem;">↑ {{ trends.calls.pct }}%</span>
+            <span class="badge rounded-pill trend-up">↑ {{ trends.calls.pct }}%</span>
           {% else %}
-            <span class="badge rounded-pill" style="background:#fee2e2;color:#b91c1c;font-size:.7rem;">↓ {{ trends.calls.pct }}%</span>
+            <span class="badge rounded-pill trend-dn">↓ {{ trends.calls.pct }}%</span>
           {% endif %}
         {% endif %}
       </div>
@@ -30,14 +30,14 @@
 
   <!-- Unique Callers -->
   <div class="col-sm-3">
-    <div class="card stat-card shadow-sm p-3 h-100">
+    <div class="card stat-card p-3 h-100">
       <div class="d-flex justify-content-between align-items-start mb-1">
         <div class="text-muted small"><i class="bi bi-people-fill me-1"></i>Unique Callers</div>
         {% if trends.unique %}
           {% if trends.unique.up %}
-            <span class="badge rounded-pill" style="background:#dcfce7;color:#15803d;font-size:.7rem;">↑ {{ trends.unique.pct }}%</span>
+            <span class="badge rounded-pill trend-up">↑ {{ trends.unique.pct }}%</span>
           {% else %}
-            <span class="badge rounded-pill" style="background:#fee2e2;color:#b91c1c;font-size:.7rem;">↓ {{ trends.unique.pct }}%</span>
+            <span class="badge rounded-pill trend-dn">↓ {{ trends.unique.pct }}%</span>
           {% endif %}
         {% endif %}
       </div>
@@ -48,14 +48,14 @@
 
   <!-- Repeat Callers -->
   <div class="col-sm-3">
-    <div class="card stat-card shadow-sm p-3 h-100">
+    <div class="card stat-card p-3 h-100">
       <div class="d-flex justify-content-between align-items-start mb-1">
         <div class="text-muted small"><i class="bi bi-arrow-repeat me-1"></i>Repeat Callers</div>
         {% if trends.repeat %}
           {% if trends.repeat.up %}
-            <span class="badge rounded-pill" style="background:#dcfce7;color:#15803d;font-size:.7rem;">↑ {{ trends.repeat.pct }}%</span>
+            <span class="badge rounded-pill trend-up">↑ {{ trends.repeat.pct }}%</span>
           {% else %}
-            <span class="badge rounded-pill" style="background:#fee2e2;color:#b91c1c;font-size:.7rem;">↓ {{ trends.repeat.pct }}%</span>
+            <span class="badge rounded-pill trend-dn">↓ {{ trends.repeat.pct }}%</span>
           {% endif %}
         {% endif %}
       </div>
@@ -66,14 +66,14 @@
 
   <!-- Reservation Leads Today -->
   <div class="col-sm-3">
-    <div class="card stat-card shadow-sm p-3 h-100" style="border-left: 3px solid #3b82f6;">
+    <div class="card stat-card p-3 h-100" style="border-left: 3px solid var(--color-primary-400);">
       <div class="d-flex justify-content-between align-items-start mb-1">
         <div class="text-muted small"><i class="bi bi-calendar-check-fill me-1"></i>Reservation Leads Today</div>
         {% if trends.leads %}
           {% if trends.leads.up %}
-            <span class="badge rounded-pill" style="background:#dcfce7;color:#15803d;font-size:.7rem;">↑ {{ trends.leads.pct }}%</span>
+            <span class="badge rounded-pill trend-up">↑ {{ trends.leads.pct }}%</span>
           {% else %}
-            <span class="badge rounded-pill" style="background:#fee2e2;color:#b91c1c;font-size:.7rem;">↓ {{ trends.leads.pct }}%</span>
+            <span class="badge rounded-pill trend-dn">↓ {{ trends.leads.pct }}%</span>
           {% endif %}
         {% endif %}
       </div>
@@ -147,7 +147,7 @@
 <div class="row g-3 mb-4">
 
   <div class="col-sm-6">
-    <div class="card shadow-sm p-3 h-100" style="border-left: 3px solid #f72585;">
+    <div class="card p-3 h-100" style="border-left: 3px solid var(--color-danger);">
       <div class="text-muted small mb-1">
         <i class="bi bi-calendar-heart me-1"></i>Cost per Reservation Lead
         <span class="tip-anchor ms-1" data-tip="How much you spend on AI per every caller who wanted a reservation">
@@ -165,7 +165,7 @@
   </div>
 
   <div class="col-sm-6">
-    <div class="card shadow-sm p-3 h-100" style="border-left: 3px solid #2dc653;">
+    <div class="card p-3 h-100" style="border-left: 3px solid var(--color-success);">
       <div class="text-muted small mb-1">
         <i class="bi bi-check-circle-fill me-1"></i>Cost per Resolved Call
         <span class="tip-anchor ms-1" data-tip="How much you spend on AI per every call fully handled without transferring to staff">
@@ -188,7 +188,7 @@
 {% if roi_data %}
 <div class="row g-3 mb-4">
   <div class="col-12">
-    <div class="card p-3" style="border-left: 4px solid #4361ee; background: linear-gradient(135deg,#f0f4ff 0%,#fff 100%);">
+    <div class="card p-3" style="border-left: 4px solid var(--color-primary-500); background: linear-gradient(135deg, var(--color-primary-50) 0%, #fff 100%);">
       <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
         <div>
           <div class="text-muted small mb-1 fw-semibold text-uppercase" style="letter-spacing:.05em; font-size:.68rem;">
@@ -219,7 +219,7 @@
 {% else %}
 <div class="row g-3 mb-4">
   <div class="col-12">
-    <div class="card p-3" style="border: 2px dashed #cbd5e1; background: #f8fafc;">
+    <div class="card p-3" style="border: 2px dashed var(--color-border); background: var(--color-neutral-50);">
       <div class="d-flex align-items-center gap-3 flex-wrap">
         <i class="bi bi-graph-up-arrow fs-3 text-muted"></i>
         <div class="flex-grow-1">
@@ -283,7 +283,7 @@
                 <div title="{{ cell.count }} call{{ cell.count|pluralize }}"
                      style="height:18px;border-radius:3px;margin:1px;
                             background:rgba(67,97,238,{{ cell.opacity }});
-                            {% if cell.count == 0 %}background:#f3f4f6;{% endif %}">
+                            {% if cell.count == 0 %}background:var(--color-neutral-100);{% endif %}">
                 </div>
               </td>
               {% endfor %}
@@ -314,9 +314,9 @@
           <thead class="table-light">
             <tr>
               <th>Topic</th>
-              <th class="text-center" style="color:#2dc653;">Resolved</th>
-              <th class="text-center" style="color:#f72585;">Escalated</th>
-              <th class="text-center" style="color:#e2b96f;">Incomplete</th>
+              <th class="text-center" style="color:var(--color-success);">Resolved</th>
+              <th class="text-center" style="color:var(--color-danger);">Escalated</th>
+              <th class="text-center" style="color:var(--color-warning);">Incomplete</th>
               <th class="text-center text-muted">Total</th>
             </tr>
           </thead>
@@ -326,17 +326,17 @@
               <td class="fw-semibold">{{ row.topic }}</td>
               <td class="text-center">
                 {% if row.resolved %}
-                  <span class="badge rounded-pill" style="background:#dcfce7;color:#15803d;">{{ row.resolved }}</span>
+                  <span class="badge rounded-pill" style="background:var(--color-success-light);color:var(--color-success-text);">{{ row.resolved }}</span>
                 {% else %}<span class="text-muted">—</span>{% endif %}
               </td>
               <td class="text-center">
                 {% if row.escalated %}
-                  <span class="badge rounded-pill" style="background:#fee2e2;color:#b91c1c;">{{ row.escalated }}</span>
+                  <span class="badge rounded-pill" style="background:var(--color-danger-light);color:var(--color-danger-text);">{{ row.escalated }}</span>
                 {% else %}<span class="text-muted">—</span>{% endif %}
               </td>
               <td class="text-center">
                 {% if row.incomplete %}
-                  <span class="badge rounded-pill" style="background:#fef9c3;color:#854d0e;">{{ row.incomplete }}</span>
+                  <span class="badge rounded-pill" style="background:var(--color-warning-light);color:var(--color-warning-text);">{{ row.incomplete }}</span>
                 {% else %}<span class="text-muted">—</span>{% endif %}
               </td>
               <td class="text-center text-muted fw-semibold">{{ row.total }}</td>
@@ -402,28 +402,33 @@
 </div>
 {% endblock %}
 
-{% block extra_scripts %}
+{% block extra_head %}
 <style>
-.tip-anchor { position: relative; display: inline-block; }
-.tip-anchor::after {
-  content: attr(data-tip);
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: #1e293b;
-  color: #f8fafc;
-  font-size: .72rem;
-  white-space: nowrap;
-  padding: 4px 8px;
-  border-radius: 5px;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity .15s;
-  z-index: 9999;
-}
-.tip-anchor:hover::after { opacity: 1; }
+  .trend-up { background: var(--color-success-light); color: var(--color-success-text); font-size: .7rem; }
+  .trend-dn { background: var(--color-danger-light);  color: var(--color-danger-text);  font-size: .7rem; }
+  .tip-anchor { position: relative; display: inline-block; }
+  .tip-anchor::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--color-neutral-800);
+    color: var(--color-neutral-50);
+    font-size: .72rem;
+    white-space: nowrap;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .15s;
+    z-index: 9999;
+  }
+  .tip-anchor:hover::after { opacity: 1; }
 </style>
+{% endblock %}
+
+{% block extra_scripts %}
 <script>
 const CHART_COLORS = ["#4361ee","#3f37c9","#7209b7","#f72585","#4cc9f0","#e2b96f","#2dc653"];
 

@@ -5,8 +5,6 @@
 
 {% block extra_head %}
 <style>
-  .plan-card { border-radius: 16px; border: 2px solid #e9ecef; }
-  .plan-card.active-plan { border-color: #4361ee; }
   .status-badge { font-size: .8rem; padding: .35em .75em; border-radius: 20px; font-weight: 600; }
   .status-active   { background: #d4edda; color: #155724; }
   .status-trialing { background: #d1ecf1; color: #0c5460; }
@@ -19,7 +17,6 @@
 {% endblock %}
 
 {% block content %}
-<h4 class="fw-bold mb-1">Billing & Subscription</h4>
 <p class="text-muted mb-4">Manage your Concierge AI plan for {{ restaurant.name }}.</p>
 
 {% if request.GET.success %}
@@ -45,7 +42,7 @@
 
   <!-- Column 1: AI Agent Subscription -->
   <div class="col-lg-6">
-    <div class="card plan-card {% if sub.is_active %}active-plan{% endif %} p-4 h-100 shadow-sm border-2">
+    <div class="card hover-lift p-4 h-100 {% if sub.is_active %}border border-2 border-primary{% endif %}">
       <div class="d-flex align-items-center justify-content-between mb-3">
         <h5 class="fw-bold mb-0">AI Agent Subscription</h5>
         <span class="status-badge status-{{ sub.status }}">
@@ -98,12 +95,12 @@
 
   <!-- Column 2: Communication Credits -->
   <div class="col-lg-6">
-    <div class="card p-4 h-100 shadow-sm border-2" style="border-radius:16px; border: 2px solid #e9ecef;">
-      <h5 class="fw-bold mb-3">Communication Credits</h5>
+    <div class="card hover-lift p-4 h-100">
+      <h5 class="fw-bold mb-2">Communication Credits</h5>
       <p class="text-muted small mb-4">Pay-as-you-go balance for AI voice minutes, LLM processing, and SMS delivery.</p>
 
-      <div class="bg-light rounded-4 p-4 text-center mb-4 border border-dashed">
-        <label class="text-muted small mb-1 d-block text-uppercase tracking-wider">Current Balance</label>
+      <div class="bg-light rounded-3 p-4 text-center mb-4">
+        <label class="text-muted small mb-1 d-block text-uppercase">Current Balance</label>
         <div class="h1 fw-bold mb-0 {% if sub.communication_balance < 5.00 %}text-danger{% else %}text-primary{% endif %}">
           ${{ sub.communication_balance|floatformat:2 }}
         </div>
@@ -114,7 +111,6 @@
         {% endif %}
       </div>
 
-      <!-- Expense stats -->
       <div class="row g-0 mb-3 border rounded-3 overflow-hidden">
         <div class="col-6 expense-stat border-end bg-light">
           <div class="value text-dark">${{ expenses_7d|floatformat:2 }}</div>
@@ -130,7 +126,7 @@
         <p class="small text-muted mb-3"><i class="bi bi-info-circle me-1"></i> Costs are deducted in real-time after each call.</p>
         <form method="post" action="{% url 'portal_billing_topup' restaurant.slug %}">
           {% csrf_token %}
-          <button type="submit" class="btn btn-primary w-100 fw-bold py-2 shadow-sm">
+          <button type="submit" class="btn btn-primary w-100 fw-bold py-2">
             <i class="bi bi-plus-circle-dotted me-1"></i> Add Credits ($20.00)
           </button>
         </form>
@@ -140,9 +136,9 @@
 
   <!-- Recent Expenses Table -->
   {% if recent_calls %}
-  <div class="col-12 mt-2">
-    <div class="card shadow-sm border-0" style="border-radius:16px;">
-      <div class="card-header bg-white border-0 py-3">
+  <div class="col-12">
+    <div class="card hover-lift">
+      <div class="card-header bg-white border-0 py-3 px-4">
         <h6 class="fw-bold mb-0"><i class="bi bi-receipt me-2"></i>Recent Communication Expenses</h6>
       </div>
       <div class="table-responsive">
@@ -170,8 +166,8 @@
   {% endif %}
 
   <!-- Included Features -->
-  <div class="col-12 mt-2">
-    <div class="card p-4 border-0" style="border-radius:20px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
+  <div class="col-12">
+    <div class="card p-4 bg-light">
       <h6 class="fw-bold mb-3">Everything included in your Concierge plan</h6>
       <div class="row g-2">
         {% for item in features %}
