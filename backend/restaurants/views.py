@@ -1015,12 +1015,11 @@ def _send_post_call_sms(call_event: CallEvent, restaurant: Restaurant) -> None:
         parts = []
         if detail.party_size:        parts.append(f"{detail.party_size} guests")
         if detail.reservation_date:  parts.append(detail.reservation_date.strftime("%a %b %-d"))
-        if detail.reservation_time:  parts.append(f"at {detail.reservation_time.strftime('%-I:%M %p')}")
-        if parts:
-            summary = ", ".join(parts)
-            message = f"{greeting} Your request at {restaurant.name} ({summary}) is noted. Book instantly: {website}"
-        else:
-            message = f"{greeting} Thanks for calling {restaurant.name}! Reserve your table at {website}"
+        if detail.reservation_time and detail.reservation_date:  parts.append(f"at {detail.reservation_time.strftime('%-I:%M %p')}")
+        if not parts:
+            return  # не отправлять SMS если нет конкретных деталей бронирования
+        summary = ", ".join(parts)
+        message = f"{greeting} Your request at {restaurant.name} ({summary}) is noted. Book instantly: {website}"
     elif detail and detail.call_reason == "menu":
         menu_url = (kb.food_menu_url if kb else "") or restaurant.website or ""
         message  = f"{greeting} Here's the {restaurant.name} menu: {menu_url}"
@@ -1270,10 +1269,11 @@ def _format_kb_topic(kb, topic: str) -> str:
             lines.append("Auto-gratuity: Yes")
         add("Service charge", f"{kb.service_charge_pct} ({kb.get_service_charge_scope_display()})" if kb.service_charge_pct else None)
         add("Max cards to split", str(kb.max_cards_to_split) if kb.max_cards_to_split else None)
+        add("Cover / show charge", kb.cover_charge)
+        add("No-show fee", kb.no_show_fee)
 
     elif topic == "reservations":
         add("Grace period", f"{kb.reservation_grace_min} minutes" if kb.reservation_grace_min else None)
-        add("No-show fee", kb.no_show_fee)
         add("Large party threshold", f"{kb.large_party_min_guests}+ guests" if kb.large_party_min_guests else None)
 
     elif topic == "private_events":
@@ -1289,7 +1289,7 @@ def _format_kb_topic(kb, topic: str) -> str:
             add("Party vibe starts", kb.party_vibe_start_time)
         add("Noise level", kb.get_noise_level_display() if kb.noise_level else None)
         add("Dress code", kb.dress_code)
-        add("Cover charge", kb.cover_charge)
+        add("Special events & entertainment", kb.special_events_info)
 
     elif topic == "facilities":
         lines.append(f"Terrace: {'Yes' if kb.has_terrace else 'No'}")
@@ -1297,6 +1297,9 @@ def _format_kb_topic(kb, topic: str) -> str:
         lines.append(f"Stroller-friendly: {'Yes' if kb.stroller_friendly else 'No'}")
 
     elif topic == "special_events":
+        # Redirects to ambience — entertainment info is now stored there
+        if kb.has_live_music:
+            add("Live music", kb.live_music_details)
         add("Special events & entertainment", kb.special_events_info)
         if not lines:
             lines.append(

@@ -161,8 +161,8 @@
     </li>
     <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-billing">Billing</button></li>
     <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-reservations">Reservations</button></li>
-    <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-events">Events</button></li>
-    <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-ambience">Ambience</button></li>
+    <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-events">Private Events</button></li>
+    <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-ambience">Ambience &amp; Entertainment</button></li>
     <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-facilities">Facilities</button></li>
     <li class="nav-item">
       <button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-agent">
@@ -491,6 +491,14 @@
             <label class="form-label">{{ kb_form.max_cards_to_split.label }}</label>
             {{ kb_form.max_cards_to_split }}
           </div>
+          <div class="col-md-4">
+            <label class="form-label">{{ kb_form.cover_charge.label }}</label>
+            {{ kb_form.cover_charge }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">{{ kb_form.no_show_fee.label }}</label>
+            {{ kb_form.no_show_fee }}
+          </div>
         </div>
       </div>
 
@@ -519,10 +527,6 @@
           <div class="col-md-4">
             <label class="form-label">{{ kb_form.reservation_grace_min.label }}</label>
             {{ kb_form.reservation_grace_min }}
-          </div>
-          <div class="col-md-4">
-            <label class="form-label">{{ kb_form.no_show_fee.label }}</label>
-            {{ kb_form.no_show_fee }}
           </div>
           <div class="col-md-4">
             <label class="form-label">{{ kb_form.large_party_min_guests.label }}</label>
@@ -560,20 +564,11 @@
             <label class="form-label">{{ kb_form.press_contact.label }}</label>
             {{ kb_form.press_contact }}
           </div>
-          <div class="col-12">
-            <label class="form-label">
-              {{ kb_form.special_events_info.label }}
-              <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
-            </label>
-            <small class="text-muted d-block mb-1">{{ kb_form.special_events_info.field.help_text }}</small>
-            <div class="char-counter" id="ctr-special_events_info"></div>
-            {{ kb_form.special_events_info }}
-          </div>
         </div>
       </div>
     </div>
 
-    <!-- AMBIENCE -->
+    <!-- AMBIENCE & ENTERTAINMENT -->
     <div class="tab-pane fade" id="tab-ambience">
       <div class="card hover-lift p-4">
         <div class="row g-3">
@@ -600,9 +595,14 @@
             <label class="form-label">{{ kb_form.dress_code.label }}</label>
             {{ kb_form.dress_code }}
           </div>
-          <div class="col-md-4">
-            <label class="form-label">{{ kb_form.cover_charge.label }}</label>
-            {{ kb_form.cover_charge }}
+          <div class="col-12">
+            <label class="form-label">
+              {{ kb_form.special_events_info.label }}
+              <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
+            </label>
+            <small class="text-muted d-block mb-1">{{ kb_form.special_events_info.field.help_text }}</small>
+            <div class="char-counter" id="ctr-special_events_info"></div>
+            {{ kb_form.special_events_info }}
           </div>
         </div>
       </div>
@@ -750,10 +750,10 @@ const TAB_FIELDS = {
   "tab-basic":        ["id_name","id_website","id_address_full","id_location_reference","id_welcome_phrase","id_contact_phone","id_contact_email"],
   "tab-hours":        ["id_hours_of_operation","id_kitchen_closing_time","id_holiday_closure_notes","id_private_event_closures"],
   "tab-menu":         ["id_food_menu_url","id_menu_cuisine_type","id_menu_best_sellers","id_menu_price_range","id_menu_categories","id_bar_menu_url","id_bar_concept","id_bar_signature_drinks","id_bar_wine_beer","id_happy_hour_details","id_dietary_options"],
-  "tab-billing":      ["id_service_charge_pct","id_max_cards_to_split"],
-  "tab-reservations": ["id_reservation_grace_min","id_no_show_fee","id_large_party_min_guests"],
-  "tab-events":       ["id_private_dining_min_spend","id_press_contact","id_special_events_info"],
-  "tab-ambience":     ["id_live_music_details","id_party_vibe_start_time","id_dress_code","id_cover_charge"],
+  "tab-billing":      ["id_service_charge_pct","id_max_cards_to_split","id_cover_charge","id_no_show_fee"],
+  "tab-reservations": ["id_reservation_grace_min","id_large_party_min_guests"],
+  "tab-events":       ["id_private_dining_min_spend","id_press_contact"],
+  "tab-ambience":     ["id_live_music_details","id_party_vibe_start_time","id_dress_code","id_special_events_info"],
   "tab-facilities":   ["id_valet_cost","id_free_parking_info"],
   "tab-agent":        ["id_escalation_transfer_number","id_escalation_conditions","id_affiliated_restaurants"],
   "tab-other":        ["id_owner_notes"],
