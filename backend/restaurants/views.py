@@ -2102,6 +2102,20 @@ def portal_dashboard(request, slug):
     return render(request, "portal/dashboard.html", context)
 
 
+@login_required
+def portal_update_avg_cover(request, slug):
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    if request.method == "POST":
+        value = request.POST.get("avg_revenue_per_cover", "").strip()
+        try:
+            kb = restaurant.knowledge_base
+            kb.avg_revenue_per_cover = value if value else None
+            kb.save(update_fields=["avg_revenue_per_cover"])
+        except Exception:
+            pass
+    return redirect("portal_dashboard", slug=slug)
+
+
 def _sync_retell_tools(request, restaurant: Restaurant, kb: RestaurantKnowledgeBase) -> None:
     """Push the current tool list (with or without escalation) to Retell after KB save."""
     base_url = settings.RETELL_WEBHOOK_BASE_URL

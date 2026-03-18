@@ -23,4 +23,5 @@ urlpatterns = [
     path("<slug:slug>/billing/cancel/",     views.portal_cancel_subscription,    name="portal_cancel_subscription"),
     path("<slug:slug>/notifications/",      views.portal_notifications,          name="portal_notifications"),
     path("<slug:slug>/account/",            views.portal_account,                name="portal_account"),
+    path("<slug:slug>/update-avg-cover/",   views.portal_update_avg_cover,       name="portal_update_avg_cover"),
 ]

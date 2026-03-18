@@ -5,67 +5,179 @@
 
 {% block extra_head %}
 <style>
-  .form-label { font-weight: 600; font-size: .875rem; }
-  .nav-tabs .nav-link { color: #495057; }
-  .nav-tabs .nav-link.active { font-weight: 600; }
-  .section-hint { font-size: .8rem; color: #6c757d; margin-bottom: 1.25rem; }
-  .form-control, .form-select { font-size: .9rem; }
+  /* ── Labels & typography ────────────────────────────────────────────── */
+  .kb-label {
+    display: block;
+    font-size: .78rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: .35rem;
+    letter-spacing: .01em;
+  }
+  .kb-section-title {
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: #9ca3af;
+    margin-bottom: .85rem;
+    padding-bottom: .4rem;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  .kb-hint {
+    font-size: .73rem;
+    color: #9ca3af;
+    margin-top: .25rem;
+    margin-bottom: 0;
+    line-height: 1.4;
+  }
 
-  /* Empty field state */
+  /* ── Form controls ──────────────────────────────────────────────────── */
+  .form-control, .form-select {
+    font-size: .875rem;
+    border-color: #e5e7eb;
+    border-radius: 8px;
+    padding: .45rem .7rem;
+  }
+  .form-control:focus, .form-select:focus {
+    border-color: #374151;
+    box-shadow: 0 0 0 3px rgba(55,65,81,.08);
+  }
+  textarea.form-control { line-height: 1.6; }
+
+  /* ── Tab navigation ─────────────────────────────────────────────────── */
+  .kb-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 1.5rem;
+  }
+  .kb-tabs .nav-item { margin-bottom: -1px; }
+  .kb-tabs .nav-link {
+    font-size: .8rem;
+    font-weight: 500;
+    color: #6b7280;
+    padding: .55rem 1rem;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: none;
+    transition: color .15s, border-color .15s;
+    white-space: nowrap;
+  }
+  .kb-tabs .nav-link:hover { color: #111827; }
+  .kb-tabs .nav-link.active {
+    color: #111827;
+    font-weight: 600;
+    border-bottom-color: #111827;
+    background: none;
+  }
+
+  /* ── Cards ──────────────────────────────────────────────────────────── */
+  .kb-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 1.75rem;
+    margin-bottom: 1rem;
+  }
+
+  /* ── Grouped section blocks ─────────────────────────────────────────── */
+  .kb-group { margin-bottom: 1.4rem; }
+  .kb-group:last-child { margin-bottom: 0; }
+
+  /* ── Toggle row ─────────────────────────────────────────────────────── */
+  .kb-toggle {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .65rem 1rem;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+  }
+  .kb-toggle .form-check-label {
+    font-size: .875rem;
+    font-weight: 500;
+    color: #374151;
+    margin: 0;
+    cursor: pointer;
+  }
+
+  /* ── Empty field state ──────────────────────────────────────────────── */
   .field-empty {
-    border-color: #dee2e6 !important;
+    border-color: #d1d5db !important;
     border-style: dashed !important;
     background: #fafafa !important;
   }
 
-  /* Example hint row */
+  /* ── Example hint ───────────────────────────────────────────────────── */
   .example-hint {
     display: flex; align-items: baseline; gap: 6px;
     flex-wrap: wrap; margin-top: 4px;
   }
-  .example-hint em { color: #6c757d; font-size: .75rem; font-style: normal; }
+  .example-hint em { color: #9ca3af; font-size: .72rem; font-style: normal; }
   .example-hint .use-btn {
-    font-size: .72rem; color: #0d6efd; background: none; border: none;
-    padding: 0; cursor: pointer; white-space: nowrap;
+    font-size: .70rem; color: #374151; background: none; border: none;
+    padding: 0; cursor: pointer; white-space: nowrap; text-decoration: underline;
+    text-underline-offset: 2px;
   }
-  .example-hint .use-btn:hover { text-decoration: underline; }
+  .example-hint .use-btn:hover { color: #111827; }
 
-  /* Tab completion badge */
+  /* ── Tab completion badge ────────────────────────────────────────────── */
   .tab-count {
-    font-size: .65rem; padding: 2px 5px;
+    font-size: .6rem; padding: 2px 5px;
     border-radius: 10px; margin-left: 5px; vertical-align: middle;
   }
 
-  /* Dot indicators (lint errors/warnings) */
+  /* ── Lint dots ──────────────────────────────────────────────────────── */
   .tab-dot {
-    display: inline-block; width: 7px; height: 7px;
+    display: inline-block; width: 6px; height: 6px;
     border-radius: 50%; margin-left: 4px; vertical-align: middle;
   }
-  .tab-dot-error   { background: #dc3545; }
-  .tab-dot-warning { background: #ffc107; }
+  .tab-dot-error   { background: #ef4444; }
+  .tab-dot-warning { background: #f59e0b; }
 
-  /* Voice badge */
+  /* ── Voice / SMS badges ─────────────────────────────────────────────── */
   .voice-badge {
     display: inline-flex; align-items: center; gap: 3px;
-    font-size: .7rem; font-weight: 600; color: #0dcaf0;
-    background: rgba(13,202,240,.12); border-radius: 4px;
-    padding: 1px 6px; margin-left: 6px; vertical-align: middle;
+    font-size: .65rem; font-weight: 600; color: #0891b2;
+    background: rgba(8,145,178,.1); border-radius: 4px;
+    padding: 1px 6px; margin-left: 5px; vertical-align: middle;
+  }
+  .sms-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: .65rem; font-weight: 600; color: #059669;
+    background: rgba(5,150,105,.1); border-radius: 4px;
+    padding: 1px 6px; margin-left: 5px; vertical-align: middle;
   }
 
-  /* Char counter */
-  .char-counter { font-size: .75rem; float: right; margin-top: 2px; }
-  .char-counter.ok     { color: #198754; }
-  .char-counter.warn   { color: #fd7e14; }
-  .char-counter.danger { color: #dc3545; font-weight: 600; }
+  /* ── Char counter ───────────────────────────────────────────────────── */
+  .char-counter { font-size: .7rem; float: right; margin-top: 2px; color: #9ca3af; }
+  .char-counter.ok     { color: #10b981; }
+  .char-counter.warn   { color: #f59e0b; }
+  .char-counter.danger { color: #ef4444; font-weight: 600; }
 
-  /* Menu sub-tabs */
-  .menu-nav { margin-bottom: 1.25rem; }
-  .menu-nav .nav-link { font-size: .82rem; padding: 5px 14px; color: #495057; }
-  .menu-nav .nav-link.active { background: #0d6efd; color: #fff; border-radius: 6px; }
+  /* ── Menu sub-tabs ──────────────────────────────────────────────────── */
+  .menu-nav { margin-bottom: 1.5rem; gap: 4px; }
+  .menu-nav .nav-link {
+    font-size: .8rem; padding: 5px 14px; color: #6b7280;
+    border-radius: 20px; border: 1px solid transparent;
+    background: none;
+  }
+  .menu-nav .nav-link:hover { background: #f3f4f6; color: #111827; }
+  .menu-nav .nav-link.active {
+    background: #111827; color: #fff; border-color: #111827;
+  }
 
-  /* Dish row builder */
-  .dish-table th { font-size: .75rem; font-weight: 600; color: #6c757d; padding: 4px 6px; border-bottom: 1px solid #dee2e6; }
-  .dish-table td { vertical-align: middle; padding: 3px 4px; }
+  /* ── Dish table ─────────────────────────────────────────────────────── */
+  .dish-table th {
+    font-size: .68rem; font-weight: 700; color: #9ca3af;
+    text-transform: uppercase; letter-spacing: .05em;
+    padding: 6px 6px; border-bottom: 1px solid #e5e7eb; background: #f9fafb;
+  }
+  .dish-table td { vertical-align: middle; padding: 4px 4px; }
   .dish-table input.form-control-sm { font-size: .82rem; }
   .dish-star { width: 36px; text-align: center; }
   .dish-remove { width: 36px; text-align: center; }
@@ -73,13 +185,14 @@
 {% endblock %}
 
 {% block content %}
+
 <div class="d-flex align-items-center justify-content-between mb-4">
   <div>
-    <h4 class="fw-bold mb-0">Knowledge Base</h4>
-    <p class="text-muted small mb-0">This information is used by the AI agent to answer caller questions.</p>
+    <h5 class="fw-bold mb-0" style="color:#111827;">Knowledge Base</h5>
+    <p class="mb-0" style="font-size:.8rem; color:#6b7280; margin-top:2px;">Information your AI agent uses to answer caller questions.</p>
   </div>
-  <button form="kb-form" type="submit" class="btn btn-primary fw-semibold px-4" onclick="this.classList.add('btn-loading');">
-    <i class="bi bi-floppy-fill me-1"></i> Save Changes
+  <button form="kb-form" type="submit" class="btn btn-dark fw-semibold px-4" onclick="this.classList.add('btn-loading');">
+    <i class="bi bi-floppy-fill me-1"></i> Save
   </button>
 </div>
 
@@ -103,21 +216,18 @@
   <i class="bi bi-exclamation-circle-fill fs-5 mt-1 flex-shrink-0"></i>
   <div>
     <strong>Required fields missing — the agent may not function correctly:</strong>
-    <ul class="mb-0 mt-1">
-      {% for msg in lint.errors %}<li>{{ msg }}</li>{% endfor %}
-    </ul>
+    <ul class="mb-0 mt-1">{% for msg in lint.errors %}<li>{{ msg }}</li>{% endfor %}</ul>
   </div>
 </div>
 {% endif %}
+
 {% if lint.warnings %}
-<button type="button"
-  class="btn btn-warning btn-sm mb-3 d-flex align-items-center gap-2"
-  data-bs-toggle="modal" data-bs-target="#lint-warnings-modal">
+<button type="button" class="btn btn-warning btn-sm mb-3 d-flex align-items-center gap-2"
+        data-bs-toggle="modal" data-bs-target="#lint-warnings-modal">
   <i class="bi bi-exclamation-triangle-fill"></i>
   Optimization suggestions
   <span class="badge bg-dark ms-1">{{ lint.warnings|length }}</span>
 </button>
-
 <div class="modal fade" id="lint-warnings-modal" tabindex="-1" aria-labelledby="lint-warnings-label" aria-hidden="true">
   <div class="modal-dialog modal-dialog-scrollable">
     <div class="modal-content">
@@ -128,9 +238,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <ul class="mb-0 ps-3">
-          {% for msg in lint.warnings %}<li class="mb-1">{{ msg }}</li>{% endfor %}
-        </ul>
+        <ul class="mb-0 ps-3">{% for msg in lint.warnings %}<li class="mb-1">{{ msg }}</li>{% endfor %}</ul>
       </div>
     </div>
   </div>
@@ -140,23 +248,20 @@
 <form id="kb-form" method="post" novalidate>
   {% csrf_token %}
 
-  <ul class="nav nav-tabs mb-3 custom-scrollbar" id="kbTabs" role="tablist">
+  <ul class="nav kb-tabs" id="kbTabs" role="tablist">
     <li class="nav-item">
       <button type="button" class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-basic">
-        Restaurant
-        {% if "basic" in lint.error_tabs %}<span class="tab-dot tab-dot-error"></span>{% elif "basic" in lint.warning_tabs %}<span class="tab-dot tab-dot-warning"></span>{% endif %}
+        Restaurant{% if "basic" in lint.error_tabs %}<span class="tab-dot tab-dot-error"></span>{% elif "basic" in lint.warning_tabs %}<span class="tab-dot tab-dot-warning"></span>{% endif %}
       </button>
     </li>
     <li class="nav-item">
       <button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-hours">
-        Hours
-        {% if "hours" in lint.error_tabs %}<span class="tab-dot tab-dot-error"></span>{% elif "hours" in lint.warning_tabs %}<span class="tab-dot tab-dot-warning"></span>{% endif %}
+        Hours{% if "hours" in lint.error_tabs %}<span class="tab-dot tab-dot-error"></span>{% elif "hours" in lint.warning_tabs %}<span class="tab-dot tab-dot-warning"></span>{% endif %}
       </button>
     </li>
     <li class="nav-item">
       <button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-menu">
-        Menu
-        {% if "menu" in lint.error_tabs %}<span class="tab-dot tab-dot-error"></span>{% elif "menu" in lint.warning_tabs %}<span class="tab-dot tab-dot-warning"></span>{% endif %}
+        Menu{% if "menu" in lint.error_tabs %}<span class="tab-dot tab-dot-error"></span>{% elif "menu" in lint.warning_tabs %}<span class="tab-dot tab-dot-warning"></span>{% endif %}
       </button>
     </li>
     <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-billing">Billing</button></li>
@@ -166,191 +271,196 @@
     <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-facilities">Facilities</button></li>
     <li class="nav-item">
       <button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-agent">
-        Agent
-        {% if "agent" in lint.error_tabs %}<span class="tab-dot tab-dot-error"></span>{% elif "agent" in lint.warning_tabs %}<span class="tab-dot tab-dot-warning"></span>{% endif %}
+        Agent{% if "agent" in lint.error_tabs %}<span class="tab-dot tab-dot-error"></span>{% elif "agent" in lint.warning_tabs %}<span class="tab-dot tab-dot-warning"></span>{% endif %}
       </button>
     </li>
     <li class="nav-item">
       <button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-other">
-        Custom Info
-        {% if "other" in lint.error_tabs %}<span class="tab-dot tab-dot-error"></span>{% elif "other" in lint.warning_tabs %}<span class="tab-dot tab-dot-warning"></span>{% endif %}
+        Custom Info{% if "other" in lint.error_tabs %}<span class="tab-dot tab-dot-error"></span>{% elif "other" in lint.warning_tabs %}<span class="tab-dot tab-dot-warning"></span>{% endif %}
       </button>
     </li>
   </ul>
 
   <div class="tab-content">
 
-    <!-- RESTAURANT BASICS -->
+    <!-- ── RESTAURANT ─────────────────────────────────────────────────── -->
     <div class="tab-pane fade show active" id="tab-basic">
-      <div class="card hover-lift p-4">
-        <div class="row g-3">
+      <div class="kb-card">
+
+        <p class="kb-section-title">Identity</p>
+        <div class="row g-3 mb-4">
           <div class="col-md-6">
-            <label class="form-label">{{ basic_form.name.label }}</label>
+            <label class="kb-label">{{ basic_form.name.label }}</label>
             {{ basic_form.name }}
           </div>
           <div class="col-md-6">
-            <label class="form-label">{{ basic_form.website.label }}</label>
+            <label class="kb-label">{{ basic_form.website.label }}</label>
             {{ basic_form.website }}
           </div>
           <div class="col-12">
-            <label class="form-label">{{ basic_form.address_full.label }}</label>
+            <label class="kb-label">{{ basic_form.address_full.label }}</label>
             {{ basic_form.address_full }}
           </div>
           <div class="col-12">
-            <label class="form-label">{{ basic_form.location_reference.label }}</label>
+            <label class="kb-label">{{ basic_form.location_reference.label }}</label>
             {{ basic_form.location_reference }}
+            <p class="kb-hint">Used when callers ask for directions or nearby landmarks.</p>
           </div>
+        </div>
+
+        <p class="kb-section-title">Voice &amp; Language</p>
+        <div class="row g-3 mb-4">
           <div class="col-md-6">
-            <label class="form-label">{{ basic_form.timezone.label }}</label>
+            <label class="kb-label">{{ basic_form.timezone.label }}</label>
             {{ basic_form.timezone }}
           </div>
           <div class="col-md-3">
-            <label class="form-label">{{ basic_form.primary_lang.label }}</label>
+            <label class="kb-label">{{ basic_form.primary_lang.label }}</label>
             {{ basic_form.primary_lang }}
           </div>
           <div class="col-md-3">
-            <label class="form-label">{{ basic_form.conversation_tone.label }}</label>
+            <label class="kb-label">{{ basic_form.conversation_tone.label }}</label>
             {{ basic_form.conversation_tone }}
           </div>
           <div class="col-12">
-            <label class="form-label">
+            <label class="kb-label">
               {{ basic_form.welcome_phrase.label }}
               <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
             </label>
             {{ basic_form.welcome_phrase }}
+            <p class="kb-hint">First thing the agent says when answering a call.</p>
           </div>
+        </div>
+
+        <p class="kb-section-title">Contact</p>
+        <div class="row g-3">
           <div class="col-md-6">
-            <label class="form-label">{{ basic_form.contact_phone.label }}</label>
+            <label class="kb-label">{{ basic_form.contact_phone.label }}</label>
             {{ basic_form.contact_phone }}
           </div>
           <div class="col-md-6">
-            <label class="form-label">{{ basic_form.contact_email.label }}</label>
+            <label class="kb-label">{{ basic_form.contact_email.label }}</label>
             {{ basic_form.contact_email }}
           </div>
           <div class="col-12">
-            <label class="form-label">
+            <label class="kb-label">
               {{ kb_form.contact_email_spoken.label }}
               <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
             </label>
-            <small class="text-muted d-block mb-1">{{ kb_form.contact_email_spoken.field.help_text }}</small>
+            <p class="kb-hint mb-1">{{ kb_form.contact_email_spoken.field.help_text }}</p>
             {{ kb_form.contact_email_spoken }}
           </div>
         </div>
+
       </div>
     </div>
 
-    <!-- HOURS -->
+    <!-- ── HOURS ──────────────────────────────────────────────────────── -->
     <div class="tab-pane fade" id="tab-hours">
-      <div class="card hover-lift p-4">
-        <p class="section-hint">The AI uses these to answer "are you open?" and similar questions.</p>
-        <div class="mb-3">
-          <label class="form-label">
+      <div class="kb-card">
+
+        <div class="kb-group">
+          <label class="kb-label">
             {{ kb_form.hours_of_operation.label }}
             <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
           </label>
           <div class="char-counter" id="ctr-hours_of_operation"></div>
           {{ kb_form.hours_of_operation }}
+          <p class="kb-hint">The agent uses this to answer "are you open?" and similar questions.</p>
         </div>
-        <div class="mb-3">
-          <label class="form-label">{{ kb_form.kitchen_closing_time.label }}</label>
+
+        <div class="kb-group">
+          <label class="kb-label">{{ kb_form.kitchen_closing_time.label }}</label>
           {{ kb_form.kitchen_closing_time }}
         </div>
-        <div class="mb-3 form-check">
-          {{ kb_form.closes_on_holidays }}
-          <label class="form-check-label">{{ kb_form.closes_on_holidays.label }}</label>
+
+        <div class="kb-group">
+          <div class="kb-toggle" style="width:fit-content;">
+            {{ kb_form.closes_on_holidays }}
+            <label class="form-check-label" style="font-size:.875rem; font-weight:500; color:#374151; cursor:pointer;">{{ kb_form.closes_on_holidays.label }}</label>
+          </div>
         </div>
-        <div class="mb-3">
-          <label class="form-label">{{ kb_form.holiday_closure_notes.label }}</label>
+
+        <div class="kb-group">
+          <label class="kb-label">{{ kb_form.holiday_closure_notes.label }}</label>
           {{ kb_form.holiday_closure_notes }}
         </div>
-        <div class="mb-3">
-          <label class="form-label">
+
+        <div class="kb-group">
+          <label class="kb-label">
             {{ kb_form.private_event_closures.label }}
             <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
           </label>
-          <div class="alert alert-warning py-1 px-2 mb-2" style="font-size:.78rem;">
+          <div class="alert alert-warning py-1 px-2 mb-2" style="font-size:.78rem; border-radius:8px;">
             <i class="bi bi-calendar-event"></i>
             <strong>Date format:</strong> use <code>Month D, YYYY</code> — one entry per line.
             Example: <em>March 15, 2026: closed for private event.</em>
           </div>
           <div class="char-counter" id="ctr-private_event_closures"></div>
           {{ kb_form.private_event_closures }}
-          <div class="form-text">{{ kb_form.private_event_closures.field.help_text }}</div>
+          <p class="kb-hint">{{ kb_form.private_event_closures.field.help_text }}</p>
         </div>
+
       </div>
     </div>
 
-    <!-- MENU -->
+    <!-- ── MENU ───────────────────────────────────────────────────────── -->
     <div class="tab-pane fade" id="tab-menu">
-      <div class="card hover-lift p-4">
+      <div class="kb-card">
 
-        <!-- Menu sub-tab navigation -->
-        <ul class="nav nav-pills menu-nav custom-scrollbar mb-3" id="menuSubTab" role="tablist">
+        <ul class="nav nav-pills menu-nav d-flex custom-scrollbar" id="menuSubTab" role="tablist">
           <li class="nav-item" role="presentation">
             <button class="nav-link active" id="msub-food-tab" data-bs-toggle="pill"
-                    data-bs-target="#msub-food" type="button" role="tab">
-              🍽 Food Menu
-            </button>
+                    data-bs-target="#msub-food" type="button" role="tab">🍽 Food Menu</button>
           </li>
           <li class="nav-item" role="presentation">
             <button class="nav-link" id="msub-bar-tab" data-bs-toggle="pill"
-                    data-bs-target="#msub-bar" type="button" role="tab">
-              🍹 Bar &amp; Drinks
-            </button>
+                    data-bs-target="#msub-bar" type="button" role="tab">🍹 Bar &amp; Drinks</button>
           </li>
           <li class="nav-item" role="presentation">
             <button class="nav-link" id="msub-hh-tab" data-bs-toggle="pill"
-                    data-bs-target="#msub-hh" type="button" role="tab">
-              ⏰ Happy Hour &amp; Dietary
-            </button>
+                    data-bs-target="#msub-hh" type="button" role="tab">⏰ Happy Hour &amp; Dietary</button>
           </li>
         </ul>
 
         <div class="tab-content">
 
-          <!-- ── Food Menu ── -->
+          <!-- Food Menu -->
           <div class="tab-pane fade show active" id="msub-food" role="tabpanel">
             <div class="row g-3">
-
               <div class="col-12">
-                <label class="form-label">
+                <label class="kb-label">
                   Food menu link
-                  <span class="voice-badge" style="color:#198754;"><i class="bi bi-chat-dots-fill"></i> SMS</span>
+                  <span class="sms-badge"><i class="bi bi-chat-dots-fill"></i> SMS</span>
                 </label>
                 {{ kb_form.food_menu_url }}
-                <div class="form-text">Sent via text when callers ask for the menu.</div>
+                <p class="kb-hint">Sent via text when callers ask for the menu.</p>
               </div>
-
               <div class="col-12">
-                <label class="form-label">
+                <label class="kb-label">
                   Cuisine &amp; concept
                   <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
                 </label>
                 {{ kb_form.menu_cuisine_type }}
-                <div class="form-text">Describe your food style in 1–2 sentences. The agent reads this when callers ask "what kind of food do you serve?"</div>
+                <p class="kb-hint">Describe your food style in 1–2 sentences. The agent reads this when callers ask "what kind of food do you serve?"</p>
               </div>
-
               <div class="col-md-4">
-                <label class="form-label">Price range</label>
+                <label class="kb-label">Price range</label>
                 {{ kb_form.menu_price_range }}
-                <div class="form-text">e.g. $15–$35 per dish</div>
+                <p class="kb-hint">e.g. $15–$35 per dish</p>
               </div>
               <div class="col-md-8">
-                <label class="form-label">Menu sections</label>
+                <label class="kb-label">Menu sections</label>
                 {{ kb_form.menu_categories }}
-                <div class="form-text">e.g. Starters, Dumplings, Wok &amp; fried rice, Mains, Sides</div>
+                <p class="kb-hint">e.g. Starters, Dumplings, Wok &amp; fried rice, Mains, Sides</p>
               </div>
-
-              <!-- Signature dish row builder -->
               <div class="col-12">
-                <label class="form-label">
+                <label class="kb-label">
                   Signature &amp; must-try dishes
                   <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
                 </label>
-                <p class="section-hint mb-2">Add your top 5–8 dishes. The agent leads with these when callers ask for recommendations.</p>
+                <p class="kb-hint mb-2">Add your top 5–8 dishes. The agent leads with these when callers ask for recommendations.</p>
                 <div class="char-counter" id="ctr-menu_best_sellers"></div>
-
-                <!-- Row builder UI -->
                 <div class="table-responsive">
                   <table class="table table-sm dish-table mb-2" id="dish-table-food">
                     <thead>
@@ -365,49 +475,40 @@
                     <tbody id="dish-tbody-food"></tbody>
                   </table>
                 </div>
-                <button type="button" class="btn btn-sm btn-dark"
-                        onclick="addDishRow('food')">
+                <button type="button" class="btn btn-sm btn-dark" onclick="addDishRow('food')">
                   <i class="bi bi-plus-lg"></i> Add dish
                 </button>
-
-                <!-- Hidden textarea Django submits -->
                 <div class="d-none">{{ kb_form.menu_best_sellers }}</div>
               </div>
-
             </div>
           </div><!-- /msub-food -->
 
-          <!-- ── Bar & Drinks ── -->
+          <!-- Bar & Drinks -->
           <div class="tab-pane fade" id="msub-bar" role="tabpanel">
             <div class="row g-3">
-
               <div class="col-12">
-                <label class="form-label">
+                <label class="kb-label">
                   Bar / drinks menu link
-                  <span class="voice-badge" style="color:#198754;"><i class="bi bi-chat-dots-fill"></i> SMS</span>
+                  <span class="sms-badge"><i class="bi bi-chat-dots-fill"></i> SMS</span>
                 </label>
                 {{ kb_form.bar_menu_url }}
-                <div class="form-text">Sent via text when callers ask for the drinks menu.</div>
+                <p class="kb-hint">Sent via text when callers ask for the drinks menu.</p>
               </div>
-
               <div class="col-12">
-                <label class="form-label">
+                <label class="kb-label">
                   Bar concept
                   <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
                 </label>
                 {{ kb_form.bar_concept }}
-                <div class="form-text">Describe your bar style in 1 sentence. e.g. "Craft cocktails with an extensive rum &amp; mezcal selection."</div>
+                <p class="kb-hint">Describe your bar style in 1 sentence. e.g. "Craft cocktails with an extensive rum &amp; mezcal selection."</p>
               </div>
-
-              <!-- Signature drink row builder -->
               <div class="col-12">
-                <label class="form-label">
+                <label class="kb-label">
                   Signature cocktails
                   <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
                 </label>
-                <p class="section-hint mb-2">Add your top cocktails. Keep it to 5–6 so the agent can describe them concisely.</p>
+                <p class="kb-hint mb-2">Add your top cocktails. Keep it to 5–6 so the agent can describe them concisely.</p>
                 <div class="char-counter" id="ctr-bar_signature_drinks"></div>
-
                 <div class="table-responsive">
                   <table class="table table-sm dish-table mb-2" id="dish-table-bar">
                     <thead>
@@ -422,46 +523,39 @@
                     <tbody id="dish-tbody-bar"></tbody>
                   </table>
                 </div>
-                <button type="button" class="btn btn-sm btn-dark"
-                        onclick="addDishRow('bar')">
+                <button type="button" class="btn btn-sm btn-dark" onclick="addDishRow('bar')">
                   <i class="bi bi-plus-lg"></i> Add drink
                 </button>
-
                 <div class="d-none">{{ kb_form.bar_signature_drinks }}</div>
               </div>
-
               <div class="col-12">
-                <label class="form-label">
+                <label class="kb-label">
                   Wine, beer &amp; other selections
                   <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
                 </label>
                 <div class="char-counter" id="ctr-bar_wine_beer"></div>
                 {{ kb_form.bar_wine_beer }}
-                <div class="form-text">{{ kb_form.bar_wine_beer.help_text }}</div>
+                <p class="kb-hint">{{ kb_form.bar_wine_beer.help_text }}</p>
               </div>
-
             </div>
           </div><!-- /msub-bar -->
 
-          <!-- ── Happy Hour & Dietary ── -->
+          <!-- Happy Hour & Dietary -->
           <div class="tab-pane fade" id="msub-hh" role="tabpanel">
             <div class="row g-3">
-
               <div class="col-12">
-                <label class="form-label">
+                <label class="kb-label">
                   {{ kb_form.happy_hour_details.label }}
                   <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
                 </label>
                 <div class="char-counter" id="ctr-happy_hour_details"></div>
                 {{ kb_form.happy_hour_details }}
               </div>
-
               <div class="col-12">
-                <label class="form-label">{{ kb_form.dietary_options.label }}</label>
+                <label class="kb-label">{{ kb_form.dietary_options.label }}</label>
                 {{ kb_form.dietary_options }}
-                <div class="form-text">{{ kb_form.dietary_options.help_text }}</div>
+                <p class="kb-hint">{{ kb_form.dietary_options.help_text }}</p>
               </div>
-
             </div>
           </div><!-- /msub-hh -->
 
@@ -469,222 +563,248 @@
       </div><!-- /card -->
     </div><!-- /tab-menu -->
 
-    <!-- BILLING -->
+    <!-- ── BILLING ────────────────────────────────────────────────────── -->
     <div class="tab-pane fade" id="tab-billing">
-      <div class="card hover-lift p-4">
-        <div class="row g-3">
-          <div class="col-auto">
-            <div class="form-check mt-2">
+      <div class="kb-card">
+
+        <p class="kb-section-title">Service Charge</p>
+        <div class="row g-3 mb-4">
+          <div class="col-12">
+            <div class="kb-toggle" style="width:fit-content;">
               {{ kb_form.auto_gratuity }}
-              <label class="form-check-label">{{ kb_form.auto_gratuity.label }}</label>
+              <label class="form-check-label" style="font-size:.875rem; font-weight:500; color:#374151; cursor:pointer;">{{ kb_form.auto_gratuity.label }}</label>
             </div>
           </div>
           <div class="col-md-3">
-            <label class="form-label">{{ kb_form.service_charge_pct.label }}</label>
+            <label class="kb-label">{{ kb_form.service_charge_pct.label }}</label>
             {{ kb_form.service_charge_pct }}
           </div>
-          <div class="col-md-4">
-            <label class="form-label">{{ kb_form.service_charge_scope.label }}</label>
+          <div class="col-md-5">
+            <label class="kb-label">{{ kb_form.service_charge_scope.label }}</label>
             {{ kb_form.service_charge_scope }}
           </div>
-          <div class="col-md-3">
-            <label class="form-label">{{ kb_form.max_cards_to_split.label }}</label>
+          <div class="col-md-4">
+            <label class="kb-label">{{ kb_form.max_cards_to_split.label }}</label>
             {{ kb_form.max_cards_to_split }}
           </div>
-          <div class="col-md-4">
-            <label class="form-label">{{ kb_form.cover_charge.label }}</label>
+        </div>
+
+        <p class="kb-section-title">Fees</p>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="kb-label">{{ kb_form.cover_charge.label }}</label>
             {{ kb_form.cover_charge }}
+            <p class="kb-hint">e.g. "$20 cover after 10pm on Fri–Sat featuring live band"</p>
           </div>
-          <div class="col-md-4">
-            <label class="form-label">{{ kb_form.no_show_fee.label }}</label>
+          <div class="col-md-6">
+            <label class="kb-label">{{ kb_form.no_show_fee.label }}</label>
             {{ kb_form.no_show_fee }}
+            <p class="kb-hint">e.g. "$50 per person for parties of 6 or more"</p>
           </div>
         </div>
-      </div>
 
-      <div class="card hover-lift p-4 mt-3" id="roi-settings">
-        <h6 class="fw-semibold mb-1"><i class="bi bi-graph-up-arrow me-1 text-primary"></i>ROI Estimate</h6>
-        <p class="section-hint mb-3">
-          Used on the dashboard to estimate revenue generated by AI reservation leads.
-          Enter your typical revenue per guest per visit (food + drinks, before tax &amp; tip).
-        </p>
-        <div class="row g-3">
-          <div class="col-md-4">
-            <label class="form-label" for="{{ kb_form.avg_revenue_per_cover.id_for_label }}">
-              Avg revenue per cover ($)
-            </label>
-            {{ kb_form.avg_revenue_per_cover }}
-            <div class="form-text">e.g. 45.00 — average spend per guest per visit</div>
-          </div>
-        </div>
       </div>
     </div>
 
-    <!-- RESERVATIONS -->
+    <!-- ── RESERVATIONS ───────────────────────────────────────────────── -->
     <div class="tab-pane fade" id="tab-reservations">
-      <div class="card hover-lift p-4">
+      <div class="kb-card">
         <div class="row g-3">
           <div class="col-md-4">
-            <label class="form-label">{{ kb_form.reservation_grace_min.label }}</label>
+            <label class="kb-label">{{ kb_form.reservation_grace_min.label }}</label>
             {{ kb_form.reservation_grace_min }}
+            <p class="kb-hint">Minutes before the reservation is considered a no-show.</p>
           </div>
           <div class="col-md-4">
-            <label class="form-label">{{ kb_form.large_party_min_guests.label }}</label>
+            <label class="kb-label">{{ kb_form.large_party_min_guests.label }}</label>
             {{ kb_form.large_party_min_guests }}
+            <p class="kb-hint">Minimum guests to be treated as a large group.</p>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- PRIVATE EVENTS -->
+    <!-- ── PRIVATE EVENTS ─────────────────────────────────────────────── -->
     <div class="tab-pane fade" id="tab-events">
-      <div class="card hover-lift p-4">
-        <div class="row g-3">
-          <div class="col-auto">
-            <div class="form-check mt-2">
+      <div class="kb-card">
+
+        <p class="kb-section-title">Private Dining</p>
+        <div class="row g-3 mb-4">
+          <div class="col-12">
+            <div class="kb-toggle" style="width:fit-content;">
               {{ kb_form.has_private_dining }}
-              <label class="form-check-label">{{ kb_form.has_private_dining.label }}</label>
+              <label class="form-check-label" style="font-size:.875rem; font-weight:500; color:#374151; cursor:pointer;">{{ kb_form.has_private_dining.label }}</label>
             </div>
           </div>
-          <div class="col-md-5">
-            <label class="form-label">{{ kb_form.private_dining_min_spend.label }}</label>
+          <div class="col-md-6">
+            <label class="kb-label">{{ kb_form.private_dining_min_spend.label }}</label>
             {{ kb_form.private_dining_min_spend }}
           </div>
-          <div class="col-auto">
-            <div class="form-check mt-2">
+        </div>
+
+        <p class="kb-section-title">Decorations</p>
+        <div class="row g-3 mb-4">
+          <div class="col-12">
+            <div class="kb-toggle" style="width:fit-content;">
               {{ kb_form.allows_decorations }}
-              <label class="form-check-label">{{ kb_form.allows_decorations.label }}</label>
+              <label class="form-check-label" style="font-size:.875rem; font-weight:500; color:#374151; cursor:pointer;">{{ kb_form.allows_decorations.label }}</label>
             </div>
           </div>
-          <div class="col-md-5">
-            <label class="form-label">{{ kb_form.decoration_cleaning_fee.label }}</label>
+          <div class="col-md-6">
+            <label class="kb-label">{{ kb_form.decoration_cleaning_fee.label }}</label>
             {{ kb_form.decoration_cleaning_fee }}
           </div>
+        </div>
+
+        <p class="kb-section-title">Press &amp; Partnerships</p>
+        <div class="row g-3">
           <div class="col-12">
-            <label class="form-label">{{ kb_form.press_contact.label }}</label>
+            <label class="kb-label">{{ kb_form.press_contact.label }}</label>
             {{ kb_form.press_contact }}
           </div>
         </div>
+
       </div>
     </div>
 
-    <!-- AMBIENCE & ENTERTAINMENT -->
+    <!-- ── AMBIENCE & ENTERTAINMENT ───────────────────────────────────── -->
     <div class="tab-pane fade" id="tab-ambience">
-      <div class="card hover-lift p-4">
-        <div class="row g-3">
-          <div class="col-auto">
-            <div class="form-check mt-2">
+      <div class="kb-card">
+
+        <p class="kb-section-title">Live Music</p>
+        <div class="row g-3 mb-4">
+          <div class="col-12">
+            <div class="kb-toggle" style="width:fit-content;">
               {{ kb_form.has_live_music }}
-              <label class="form-check-label">{{ kb_form.has_live_music.label }}</label>
+              <label class="form-check-label" style="font-size:.875rem; font-weight:500; color:#374151; cursor:pointer;">{{ kb_form.has_live_music.label }}</label>
             </div>
           </div>
           <div class="col-12">
-            <label class="form-label">{{ kb_form.live_music_details.label }}</label>
+            <label class="kb-label">{{ kb_form.live_music_details.label }}</label>
             <div class="char-counter" id="ctr-live_music_details"></div>
             {{ kb_form.live_music_details }}
           </div>
           <div class="col-md-4">
-            <label class="form-label">{{ kb_form.party_vibe_start_time.label }}</label>
+            <label class="kb-label">{{ kb_form.party_vibe_start_time.label }}</label>
             {{ kb_form.party_vibe_start_time }}
           </div>
+        </div>
+
+        <p class="kb-section-title">Atmosphere</p>
+        <div class="row g-3 mb-4">
           <div class="col-md-4">
-            <label class="form-label">{{ kb_form.noise_level.label }}</label>
+            <label class="kb-label">{{ kb_form.noise_level.label }}</label>
             {{ kb_form.noise_level }}
           </div>
-          <div class="col-md-4">
-            <label class="form-label">{{ kb_form.dress_code.label }}</label>
+          <div class="col-md-8">
+            <label class="kb-label">{{ kb_form.dress_code.label }}</label>
             {{ kb_form.dress_code }}
           </div>
+        </div>
+
+        <p class="kb-section-title">Special Events</p>
+        <div class="row g-3">
           <div class="col-12">
-            <label class="form-label">
+            <label class="kb-label">
               {{ kb_form.special_events_info.label }}
               <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
             </label>
-            <small class="text-muted d-block mb-1">{{ kb_form.special_events_info.field.help_text }}</small>
+            <p class="kb-hint mb-1">{{ kb_form.special_events_info.field.help_text }}</p>
             <div class="char-counter" id="ctr-special_events_info"></div>
             {{ kb_form.special_events_info }}
           </div>
         </div>
+
       </div>
     </div>
 
-    <!-- FACILITIES -->
+    <!-- ── FACILITIES ─────────────────────────────────────────────────── -->
     <div class="tab-pane fade" id="tab-facilities">
-      <div class="card hover-lift p-4">
-        <div class="row g-3">
-          <div class="col-auto">
-            <div class="form-check mt-2">{{ kb_form.has_terrace }}<label class="form-check-label">{{ kb_form.has_terrace.label }}</label></div>
+      <div class="kb-card">
+
+        <p class="kb-section-title">Features</p>
+        <div class="row g-3 mb-4">
+          <div class="col-md-4">
+            <div class="kb-toggle">
+              {{ kb_form.has_terrace }}
+              <label class="form-check-label" style="font-size:.875rem; font-weight:500; color:#374151; cursor:pointer;">{{ kb_form.has_terrace.label }}</label>
+            </div>
           </div>
-          <div class="col-auto">
-            <div class="form-check mt-2">{{ kb_form.stroller_friendly }}<label class="form-check-label">{{ kb_form.stroller_friendly.label }}</label></div>
+          <div class="col-md-4">
+            <div class="kb-toggle">
+              {{ kb_form.stroller_friendly }}
+              <label class="form-check-label" style="font-size:.875rem; font-weight:500; color:#374151; cursor:pointer;">{{ kb_form.stroller_friendly.label }}</label>
+            </div>
           </div>
-          <div class="col-auto">
-            <div class="form-check mt-2">{{ kb_form.has_valet }}<label class="form-check-label">{{ kb_form.has_valet.label }}</label></div>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">{{ kb_form.ac_intensity.label }}</label>
+          <div class="col-md-4">
+            <label class="kb-label">{{ kb_form.ac_intensity.label }}</label>
             {{ kb_form.ac_intensity }}
           </div>
-          <div class="col-md-3">
-            <label class="form-label">{{ kb_form.valet_cost.label }}</label>
+        </div>
+
+        <p class="kb-section-title">Parking</p>
+        <div class="row g-3">
+          <div class="col-12">
+            <div class="kb-toggle" style="width:fit-content;">
+              {{ kb_form.has_valet }}
+              <label class="form-check-label" style="font-size:.875rem; font-weight:500; color:#374151; cursor:pointer;">{{ kb_form.has_valet.label }}</label>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label class="kb-label">{{ kb_form.valet_cost.label }}</label>
             {{ kb_form.valet_cost }}
           </div>
           <div class="col-12">
-            <label class="form-label">{{ kb_form.free_parking_info.label }}</label>
+            <label class="kb-label">{{ kb_form.free_parking_info.label }}</label>
             {{ kb_form.free_parking_info }}
           </div>
         </div>
+
       </div>
     </div>
 
-    <!-- AGENT BEHAVIOR -->
+    <!-- ── AGENT ──────────────────────────────────────────────────────── -->
     <div class="tab-pane fade" id="tab-agent">
 
-      <!-- Call Transfer -->
-      <div class="card hover-lift p-4 mb-3">
-        <h6 class="fw-semibold mb-1">Call Transfer</h6>
-        <p class="section-hint mb-3">When enabled, the agent can connect the caller to a staff member instead of handling the call itself.</p>
+      <div class="kb-card mb-3">
+        <p class="kb-section-title">Call Transfer</p>
+        <p class="kb-hint mb-3">When enabled, the agent can connect the caller to a staff member instead of handling the call itself.</p>
 
-        <div class="mb-4 p-3 rounded" style="background:#f8f9fa; border:1px solid #dee2e6;">
-          <div class="form-check form-switch">
-            {{ kb_form.escalation_enabled }}
-            <label class="form-check-label fw-semibold" for="{{ kb_form.escalation_enabled.id_for_label }}">
-              Enable live call transfer to staff
-            </label>
+        <div class="kb-toggle mb-4">
+          {{ kb_form.escalation_enabled }}
+          <label class="form-check-label fw-semibold" for="{{ kb_form.escalation_enabled.id_for_label }}" style="font-size:.875rem; color:#374151; cursor:pointer;">
+            Enable live call transfer to staff
+          </label>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-5">
+            <label class="kb-label">Transfer to number</label>
+            {{ kb_form.escalation_transfer_number }}
+            <p class="kb-hint">International format — e.g. +17865551234</p>
           </div>
-          <div class="form-text mt-1">The agent will offer to transfer the call when the conditions below are met.</div>
+          <div class="col-12">
+            <label class="kb-label">Transfer when</label>
+            {{ kb_form.escalation_conditions }}
+            <p class="kb-hint">One condition per line. The agent will offer to transfer when any condition is clearly met.</p>
+          </div>
         </div>
-
-        <div class="mb-3">
-          <label class="form-label">Transfer to number</label>
-          {{ kb_form.escalation_transfer_number }}
-          <div class="form-text">International format — e.g. +17865551234</div>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">Transfer when</label>
-          {{ kb_form.escalation_conditions }}
-          <div class="form-text">One condition per line. The agent will offer to transfer when any condition is clearly met.</div>
-        </div>
-
       </div>
 
-      <!-- Sister Locations -->
-      <div class="card hover-lift p-4">
-        <h6 class="fw-semibold mb-1">Sister Locations</h6>
-        <p class="section-hint mb-3">Other restaurants you own. The agent will mention these names if a caller asks, but won't provide details about them.</p>
-        <div class="mb-0">
-          {{ kb_form.affiliated_restaurants }}
-          <div class="form-text">One restaurant name per line.</div>
-        </div>
+      <div class="kb-card">
+        <p class="kb-section-title">Sister Locations</p>
+        <p class="kb-hint mb-3">Other restaurants you own. The agent will mention these names if a caller asks, but won't provide details about them.</p>
+        {{ kb_form.affiliated_restaurants }}
+        <p class="kb-hint mt-2">One restaurant name per line.</p>
       </div>
 
     </div>
 
-    <!-- OTHER -->
+    <!-- ── CUSTOM INFO ────────────────────────────────────────────────── -->
     <div class="tab-pane fade" id="tab-other">
-      <div class="card hover-lift p-4">
-        <label class="form-label" for="{{ kb_form.owner_notes.id_for_label }}">Custom Info</label>
-        <p class="section-hint mb-2">
+      <div class="kb-card">
+        <label class="kb-label" for="{{ kb_form.owner_notes.id_for_label }}">Custom Info</label>
+        <p class="kb-hint mb-3">
           Anything your agent should know that doesn't fit the other tabs —
           gift cards, Wi-Fi password, capacity, corkage fee, birthday policy, etc.
           One fact per line works well.
@@ -692,8 +812,6 @@
         {{ kb_form.owner_notes }}
       </div>
     </div>
-
-    <!-- ESCALATION -->
 
   </div><!-- /.tab-content -->
 </form>
