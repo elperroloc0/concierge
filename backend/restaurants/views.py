@@ -755,6 +755,7 @@ def retell_inbound_webhook(request, rest_id):
 
     dyn_vars = _build_dynamic_variables(restaurant)
     dyn_vars["account_status"] = "active"
+    dyn_vars["caller_from_number"] = _from if _from != "?" else ""
     dyn_response = {"call_inbound": {"dynamic_variables": dyn_vars}}
 
     # Verify Retell signature
@@ -805,8 +806,10 @@ def _send_call_alert_email(
     caller_phone       = (call_payload.get("from_number") or "").strip()
     caller_name        = detail.caller_name  if detail else ""
     caller_email_val   = detail.caller_email if detail else ""
+    full_analysis      = call_payload.get("call_analysis") or {}
+    call_summary       = (full_analysis.get("call_summary") or "").strip()
     transcript_raw     = call_payload.get("transcript", "") or ""
-    transcript_snippet = transcript_raw[-400:].strip() if transcript_raw else ""
+    transcript_snippet = call_summary or (transcript_raw[-400:].strip() if transcript_raw else "")
     call_dt = localtime(call_event.created_at).strftime("%b %-d, %Y at %-I:%M %p")
 
     ctx = {
@@ -1161,6 +1164,15 @@ def retell_events_webhook(request):
             _build_call_detail_from_payload(call_event)
         except Exception:
             logger.exception("Failed to build CallDetail for CallEvent pk=%s", call_event.pk)
+
+        # Always clean up call_in_progress placeholders for this call_id,
+        # even if _build_call_detail_from_payload raised an exception.
+        _analyzed_call_id = data.get("call", {}).get("call_id", "")
+        if _analyzed_call_id:
+            CallEvent.objects.filter(
+                event_type="call_in_progress",
+                payload__call__call_id=_analyzed_call_id,
+            ).exclude(pk=call_event.pk).delete()
 
         # Calculate marked-up cost again just to store it on the detail record
         call_payload = data.get("call", {})
@@ -1945,12 +1957,14 @@ def portal_dashboard(request, slug):
     calls_by_day = defaultdict(int)
     heatmap = [[0] * 24 for _ in range(7)]   # [weekday 0=Mon][hour]
     topic_outcome = defaultdict(Counter)       # topic -> {outcome: count}
+    total_duration_sec = 0
 
     for event in ended_events:
         call_data = event.payload.get("call", {})
         caller_numbers.append(call_data.get("from_number", "Unknown"))
 
-        topics, outcome, _ = _classify_call(event.payload)
+        topics, outcome, duration = _classify_call(event.payload)
+        total_duration_sec += duration
         topic_counter.update(topics)
         outcome_counter[outcome] += 1
         calls_by_day[event.created_at.strftime("%b %d")] += 1
@@ -1961,6 +1975,7 @@ def portal_dashboard(request, slug):
     total_calls = len(ended_events)
     unique_callers = len(set(caller_numbers))
     repeat_callers = sum(1 for _, c in Counter(caller_numbers).items() if c > 1)
+    total_minutes = round(total_duration_sec / 60)
 
     # Previous period baseline for trends
     prev_caller_numbers = [
@@ -2074,6 +2089,7 @@ def portal_dashboard(request, slug):
     context = {
         "restaurant": restaurant,
         "total_calls": total_calls,
+        "total_minutes": total_minutes,
         "unique_callers": unique_callers,
         "repeat_callers": repeat_callers,
         "leads_today": leads_today,

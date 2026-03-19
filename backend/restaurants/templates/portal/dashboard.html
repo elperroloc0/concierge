@@ -10,8 +10,19 @@
 <!-- ── Stat cards ─────────────────────────────────────────────────────────── -->
 <div class="row g-3 mb-4">
 
+  <!-- Call Minutes -->
+  <div class="col-6 col-sm">
+    <div class="card stat-card p-3 h-100">
+      <div class="d-flex justify-content-between align-items-start mb-1">
+        <div class="text-muted small"><i class="bi bi-clock-fill me-1"></i>Call Minutes</div>
+      </div>
+      <div class="fs-2 fw-bold">{{ total_minutes }}</div>
+      <div class="text-muted" style="font-size:.72rem;">last 30 days</div>
+    </div>
+  </div>
+
   <!-- Total Calls -->
-  <div class="col-sm-3">
+  <div class="col-6 col-sm">
     <div class="card stat-card p-3 h-100">
       <div class="d-flex justify-content-between align-items-start mb-1">
         <div class="text-muted small"><i class="bi bi-telephone-fill me-1"></i>Total Calls</div>
@@ -29,7 +40,7 @@
   </div>
 
   <!-- Unique Callers -->
-  <div class="col-sm-3">
+  <div class="col-6 col-sm">
     <div class="card stat-card p-3 h-100">
       <div class="d-flex justify-content-between align-items-start mb-1">
         <div class="text-muted small"><i class="bi bi-people-fill me-1"></i>Unique Callers</div>
@@ -47,7 +58,7 @@
   </div>
 
   <!-- Repeat Callers -->
-  <div class="col-sm-3">
+  <div class="col-6 col-sm">
     <div class="card stat-card p-3 h-100">
       <div class="d-flex justify-content-between align-items-start mb-1">
         <div class="text-muted small"><i class="bi bi-arrow-repeat me-1"></i>Repeat Callers</div>
@@ -65,7 +76,7 @@
   </div>
 
   <!-- Reservation Leads Today -->
-  <div class="col-sm-3">
+  <div class="col-6 col-sm">
     <div class="card stat-card p-3 h-100" style="border-left: 3px solid var(--color-primary-400);">
       <div class="d-flex justify-content-between align-items-start mb-1">
         <div class="text-muted small"><i class="bi bi-calendar-check-fill me-1"></i>Reservation Leads Today</div>

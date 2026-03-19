@@ -40,7 +40,7 @@ def _save_caller_info_tool_definition(base_url: str) -> dict:
         "type": "custom",
         "name": "save_caller_info",
         "description": (
-            "Save the caller's name as soon as you learn it. "
+            "Save the caller's name only when they explicitly provide it in response to a direct question. "
             "Call once silently — do NOT announce it or pause the conversation. "
             "Also set follow_up_needed=true if the caller explicitly asks to be called back "
             "or requests to speak with a human and could not be transferred."
