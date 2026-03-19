@@ -23,7 +23,7 @@ from .services.retell_tools import (
     build_tool_list,
 )
 
-LANG_MAP = {"es": "es-419", "en": "en-US", "other": "multi"}
+LANG_MAP = {"es": "multi", "en": "en-US", "other": "multi"}
 
 AGENT_SYSTEM_PROMPT = """{{account_status_directive}}
 
@@ -31,7 +31,7 @@ You are the professional, friendly, and human-like voice assistant for {{restaur
 You handle calls naturally and efficiently, exactly like a great human receptionist.
 
 ### VOICE & BEHAVIOR
-- Language: {{primary_lang}}. Mirror the caller if they switch.
+- Language: Default to {{primary_lang}}. Respond in whichever language the caller is predominantly using — if they speak English, reply in English; if Spanish, reply in Spanish. Do not force one language if the caller is clearly more comfortable in another.
 - Tone: {{conversation_tone}}. Warm, hospitable, and conversational.
 - Brand Voice & Style Notes: {{brand_voice_notes}}
 - Keep responses short (1-2 sentences). Allow the caller to speak.
@@ -61,13 +61,16 @@ You handle calls naturally and efficiently, exactly like a great human reception
 - Complaints/Disputes: If a caller complains about a bad experience, charge dispute, or fee: do NOT argue and do NOT promise refunds. Apologize sincerely and immediately offer to take a message for management (State 4).
 - Loops: If the caller asks the same thing 3 times and you don't have the answer, politely offer to take a message (State 4) or direct them to the website.
 - Ambiguous utterances: If the caller says a single ambiguous word, short phrase, or a statement that seems incoherent or out of context, do NOT respond to it literally. Ask the caller to repeat: "Disculpa, ¿podrías repetirlo?" and wait.
+- Contact info collection: Never ask for information the caller already gave. If their name was already mentioned during the call, use it — do not ask again. For their contact number, always confirm: "¿Podemos contactarte en el número desde el que llamas?" ({{caller_from_number}}) — only ask for a different number if they decline or if the number is unavailable.
+- Escalation: ONLY call `transfer_to_human` when {{escalation_conditions}} is completely and explicitly satisfied. Never call it for any other reason.
+{{non_customer_call_rules}}
 
 ### CONVERSATION STATES (STATE MACHINE)
 Guide the conversation through these states based on the caller's intent:
 
 [STATE 1: GREETING]
-- Action: Start the call exactly by saying: "{{welcome_phrase}}"
-- Next: Listen to the caller's request and naturally transition to the appropriate state.
+- The opening greeting "{{welcome_phrase}}" has already been spoken to the caller via the system — do NOT repeat it.
+- Action: Listen to the caller's first response and naturally transition to the appropriate state.
 
 [STATE 2: ANSWERING QUESTIONS]
 - Trigger: Caller asks about hours, menu, parking, dress code, billing, etc.
@@ -79,7 +82,7 @@ Guide the conversation through these states based on the caller's intent:
 [STATE 3: BOOKING RESERVATION]
 - Trigger: Caller explicitly and clearly asks to book a table or asks about availability.
 - Action: You need 6 details: Date, Time, Party Size, Name, Phone, and Special Requests.
-- Step-by-step collection: Ask for missing details naturally, one at a time.
+- Step-by-step collection: Ask for missing details naturally, one at a time. For Name and Phone, follow the contact info rule in GUARDRAILS.
 - Crucial Tool Calls during booking:
   1. When they say a date ("tomorrow", "Friday"), immediately call `resolve_date` to get the calendar date.
   2. Call `get_info("hours")` to verify the restaurant is open on their requested date and time.
@@ -88,7 +91,7 @@ Guide the conversation through these states based on the caller's intent:
 
 [STATE 4: ROUTING / MESSAGES]
 - Trigger: Caller has a complaint, wants to speak to a manager, asks for callback, or asks something out of scope/unknown.
-- Action: Ask for their name. For contact number: offer "the number you're calling from ({{caller_from_number}})" first — only ask for a different one if they decline. Then call `save_caller_info`.
+- Action: Collect caller info following the contact info rule (see GUARDRAILS). Then call `save_caller_info`.
 - Next: Transition to WRAP UP.
 
 
@@ -97,7 +100,7 @@ Guide the conversation through these states based on the caller's intent:
 - Action:
   1. If coming from State 3, close it explicitly: "Let me set the table reservation aside — our events team will coordinate everything for you."
   2. Call get_info("private_events") to retrieve contact and event details.
-  3. Ask for: name, contact number (offer {{caller_from_number}} first), and a brief description — occasion, date, approximate group size.
+  3. Collect: name and contact number (following the contact info rule in GUARDRAILS), plus a brief description — occasion, date, approximate group size.
   4. Call save_caller_info with follow_up_needed=true.
   5. If SMS is available, offer to send the Party Inquiry link by text.
 - Next: Confirm the events team will follow up and transition to WRAP UP.
@@ -124,8 +127,13 @@ POST_CALL_ANALYSIS_FIELDS = [
     {
         "name": "call_reason",
         "type": "enum",
-        "description": "Primary reason the caller contacted the restaurant.",
-        "choices": ["reservation", "hours", "menu", "billing", "parking", "private_event", "complaint", "other"],
+        "description": (
+            "Primary reason the caller contacted the restaurant. "
+            "Use 'non_customer' when the caller was clearly not a guest — e.g. a vendor, supplier, delivery rep, "
+            "sales/marketing caller, press/media, external service provider, collection agency, or robocall. "
+            "Use the most specific option for all other calls."
+        ),
+        "choices": ["reservation", "hours", "menu", "billing", "parking", "private_event", "complaint", "non_customer", "other"],
     },
     {
         "name": "wants_reservation",
@@ -234,7 +242,7 @@ def retell_create_llm(modeladmin, request, queryset):
 
         client = RetellClient(api_key=r.retell_api_key)
         prompt = _build_agent_prompt(r)
-        llm = client.create_retell_llm(general_prompt=prompt)
+        llm = client.create_retell_llm(general_prompt=prompt, begin_message="{{welcome_phrase}}")
         r.retell_llm_id = llm.llm_id
         r.save(update_fields=["retell_llm_id"])
         messages.success(request, f"[{r.slug}] LLM created: {r.retell_llm_id}")
@@ -256,7 +264,7 @@ def retell_update_llm_prompt(modeladmin, request, queryset):
         llm_result = client.update_llm(
             r.retell_llm_id,
             general_prompt=prompt,
-            begin_message=r.welcome_phrase
+            begin_message="{{welcome_phrase}}"
         )
         if r.retell_agent_id:
             client.point_agent_to_llm_version(r.retell_agent_id, r.retell_llm_id, llm_result.version)
@@ -404,7 +412,23 @@ def retell_create_agent(modeladmin, request, queryset):
         messages.success(request, f"[{r.slug}] Agent created: {r.retell_agent_id} | events → {events_url}")
 
 
-@admin.action(description="Retell: 2b — Update Agent voice settings (speed + temperature)")
+@admin.action(description="Retell: 2b — Update Agent language to multilingual (fixes Spanish/English switching)")
+def retell_update_agent_language(modeladmin, request, queryset):
+    """Set language='multi' on the Retell agent so TTS auto-detects Spanish/English per utterance."""
+    for r in queryset:
+        if not r.retell_api_key:
+            messages.error(request, f"[{r.slug}] API key is empty.")
+            continue
+        if not r.retell_agent_id:
+            messages.error(request, f"[{r.slug}] No Agent ID — run 'Create Agent' first.")
+            continue
+        lang = LANG_MAP.get(r.primary_lang, "multi")
+        client = RetellClient(api_key=r.retell_api_key)
+        client.update_agent(r.retell_agent_id, language=lang)
+        messages.success(request, f"[{r.slug}] Agent language set to '{lang}'.")
+
+
+@admin.action(description="Retell: 2c — Update Agent voice settings (speed + temperature)")
 def retell_update_agent_voice(modeladmin, request, queryset):
     """Push voice_speed=1.05 and voice_temperature=1.2 to fix flat/sad-sounding agent."""
     for r in queryset:
@@ -531,6 +555,19 @@ class KnowledgeBaseInline(admin.StackedInline):
         ("Agent Behavior", {"fields": (
             "affiliated_restaurants", "collect_guest_info", "guest_info_to_collect", "brand_voice_notes",
         )}),
+        ("Non-Customer Call Handling", {"fields": (
+            "partner_companies", "partner_call_handling", "partner_call_ask_urgency",
+            "vendor_call_handling", "vendor_call_ask_urgency",
+            "press_call_handling", "press_call_ask_urgency",
+            "service_call_handling", "service_call_ask_urgency",
+            "sales_call_handling",
+            "financial_call_handling",
+            "spam_call_handling",
+            "urgent_call_action",
+        )}),
+        ("Human Escalation", {"fields": (
+            "escalation_enabled", "escalation_conditions", "escalation_transfer_number",
+        )}),
         ("Other / Additional Info", {"fields": (
             "owner_notes", "additional_info",
         )}),
@@ -655,7 +692,7 @@ class RestaurantAdmin(admin.ModelAdmin):
     actions = [
         retell_create_llm, retell_update_llm_prompt, retell_configure_call_analysis,
         retell_configure_sms_tool, retell_configure_escalation_tool,
-        retell_create_agent, retell_update_agent_voice, retell_update_agent_webhook, retell_update_agent_events_webhook,
+        retell_create_agent, retell_update_agent_language, retell_update_agent_voice, retell_update_agent_webhook, retell_update_agent_events_webhook,
         retell_create_phone,
         reprocess_call_events,
         "clear_call_history",

@@ -122,6 +122,145 @@ def _spoken_address(address: str, lang: str = "en") -> str:
     return spoken
 
 
+def _build_non_customer_rules(kb) -> str:
+    """
+    Assemble the NON-CUSTOMER CALL HANDLING block injected into the agent prompt.
+    Returns an empty string if all categories are set to 'ignore' / defaults.
+    """
+    lines = []
+
+    urgent_outcome = (
+        "transfer the call to a staff member"
+        if kb.urgent_call_action == "transfer"
+        else "take an urgent message — get their name, company, and reason, then call save_caller_info with follow_up_needed=true"
+    )
+
+    # Natural offer of options (adapt phrasing to the caller's language)
+    urgent_offer = (
+        "Before applying the default action, naturally offer two options in whatever language the caller is using — "
+        "something like: 'If it's something time-sensitive I can connect you with a team member right away, "
+        "or I can take a note and someone will get back to you — whichever works best.' "
+        f"If they want the urgent option, {urgent_outcome}. "
+        "If they prefer a callback or it's not urgent, apply the default action for this category."
+    )
+
+    def cap(s: str) -> str:
+        """Capitalize only the first character, leaving the rest untouched."""
+        return s[0].upper() + s[1:] if s else s
+
+    def urgency_clause(ask: bool, action: str) -> str:
+        # No point asking if the default action already escalates
+        if not ask or action == "transfer":
+            return ""
+        return " If urgency is not already apparent from context, offer the two options before acting."
+
+    # Partner companies
+    if kb.partner_call_handling != "ignore":
+        partners = ", ".join(
+            p.strip() for p in kb.partner_companies.splitlines() if p.strip()
+        ) if kb.partner_companies.strip() else "your known business partners"
+        action_map = {
+            "message":  "take a message — get their name, company, and reason, then call save_caller_info with follow_up_needed=true",
+            "transfer": "transfer the call to a staff member",
+        }
+        action = action_map.get(kb.partner_call_handling, "take a message")
+        lines.append(
+            f"- Partner companies ({partners}): Recognize callers from these companies by name. {cap(action)}.{urgency_clause(kb.partner_call_ask_urgency, kb.partner_call_handling)}"
+        )
+
+    # Vendors / Suppliers
+    if kb.vendor_call_handling != "ignore":
+        action_map = {
+            "decline":  "politely inform them the owner handles supplier relationships directly and is unavailable on this line — suggest they reach out via email or call back another time, then end the call",
+            "message":  "take a message — get their name, company, and reason, then call save_caller_info with follow_up_needed=true",
+            "transfer": "transfer the call to a staff member",
+        }
+        action = action_map.get(kb.vendor_call_handling, "take a message")
+        lines.append(
+            f"- Vendors/suppliers (delivery, orders, accounts, distribution): {cap(action)}.{urgency_clause(kb.vendor_call_ask_urgency, kb.vendor_call_handling)}"
+        )
+
+    # Press / Media / Influencers
+    if kb.press_call_handling != "ignore":
+        action_map = {
+            "give_contact": "retrieve the press contact via get_info(\"private_events\") and provide it. Offer to take a message if they need a follow-up",
+            "message":      "take a message — get their name, outlet, and purpose, then call save_caller_info with follow_up_needed=true",
+            "transfer":     "transfer the call to a staff member",
+        }
+        action = action_map.get(kb.press_call_handling, "take a message")
+        lines.append(
+            f"- Press/media/influencers (journalists, bloggers, content creators): {cap(action)}.{urgency_clause(kb.press_call_ask_urgency, kb.press_call_handling)}"
+        )
+
+    # External services
+    if kb.service_call_handling != "ignore":
+        action_map = {
+            "decline":  "politely inform them the owner is unavailable and suggest they try again later or contact via email, then end the call",
+            "message":  "take a message — get their name, company, and what they needed, then call save_caller_info with follow_up_needed=true",
+            "transfer": "transfer the call to a staff member",
+        }
+        action = action_map.get(kb.service_call_handling, "take a message")
+        lines.append(
+            f"- External service providers (plumbers, cleaners, pest control, maintenance): {cap(action)}.{urgency_clause(kb.service_call_ask_urgency, kb.service_call_handling)}"
+        )
+
+    # Sales / Marketing
+    if kb.sales_call_handling != "ignore":
+        action_map = {
+            "decline": "politely inform them the owner is not available for this type of call and suggest they reach out via email, then end the call",
+            "message": "take a message — get their name, company, and offer, then call save_caller_info with follow_up_needed=true",
+        }
+        action = action_map.get(kb.sales_call_handling, "decline")
+        lines.append(
+            f"- Sales/marketing calls (unsolicited offers, promotions, SEO, advertising): {cap(action)}."
+        )
+
+    # Financial / Legal / Collections
+    if kb.financial_call_handling != "ignore":
+        action_map = {
+            "message":  "take a message — get their name, company, and reason, then call save_caller_info with follow_up_needed=true",
+            "transfer": "transfer the call to a staff member",
+        }
+        action = action_map.get(kb.financial_call_handling, "take a message")
+        lines.append(
+            f"- Financial/legal/collection calls (banks, attorneys, collection agencies): {cap(action)}."
+        )
+
+    # Spam / Robocalls
+    spam_map = {
+        "decline":  "politely but briefly inform them this line is for restaurant guests only, then end the call",
+        "end_call": "end the call immediately without engaging further",
+    }
+    spam_action = spam_map.get(kb.spam_call_handling, "end the call immediately without engaging further")
+    lines.append(f"- Robocalls/spam (automated voices, sweepstakes, generic mass marketing): {cap(spam_action)}.")
+
+    if not lines:
+        return ""
+
+    # Build the passive urgency detection instruction (only if any category uses urgency)
+    any_urgency = any([
+        kb.partner_call_handling  != "ignore" and kb.partner_call_ask_urgency,
+        kb.vendor_call_handling   != "ignore" and kb.vendor_call_ask_urgency,
+        kb.press_call_handling    != "ignore" and kb.press_call_ask_urgency,
+        kb.service_call_handling  != "ignore" and kb.service_call_ask_urgency,
+    ])
+    passive_detection = (
+        f"Throughout the conversation, also watch passively for urgency signals — phrases like "
+        f"'right now', 'today', 'in X hours', 'we're waiting outside', 'it's urgent', 'emergency', "
+        f"'same-day', or visible stress in the caller's tone. "
+        f"If you detect these signals, proactively offer the two options without waiting to be asked: {urgent_offer}\n"
+    ) if any_urgency else ""
+
+    header = (
+        "NON-CUSTOMER CALL HANDLING\n"
+        "Identify non-customer callers by context: they introduce themselves as a company representative, "
+        "mention deliveries, orders, accounts, services, or are clearly automated. "
+        f"{passive_detection}"
+        "Apply the matching rule below:\n"
+    )
+    return header + "\n".join(lines)
+
+
 def _build_dynamic_variables(restaurant):
     """Build the full dynamic_variables dict from Restaurant + KnowledgeBase."""
     kb = getattr(restaurant, "knowledge_base", None)
@@ -165,25 +304,27 @@ def _build_dynamic_variables(restaurant):
         # Pre-compute effective menu URLs: use KB-specific URL if set, else fall back to restaurant website
         _site = restaurant.website or ""
         dyn.update({
-            "affiliated_restaurants": kb.affiliated_restaurants,
-            "reservation_grace_min":  str(kb.reservation_grace_min) if kb.reservation_grace_min else "N/A",
-            "large_party_min_guests": str(kb.large_party_min_guests) if kb.large_party_min_guests else "N/A",
-            "escalation_enabled":     "yes" if kb.escalation_enabled else "no",
-            "escalation_conditions":  kb.escalation_conditions or "",
-            "food_menu_url":          kb.food_menu_url or _site,
-            "bar_menu_url":           kb.bar_menu_url  or _site,
-            "brand_voice_notes":      kb.brand_voice_notes or "",
+            "affiliated_restaurants":   kb.affiliated_restaurants,
+            "reservation_grace_min":    str(kb.reservation_grace_min) if kb.reservation_grace_min else "N/A",
+            "large_party_min_guests":   str(kb.large_party_min_guests) if kb.large_party_min_guests else "N/A",
+            "escalation_enabled":       "yes" if kb.escalation_enabled else "no",
+            "escalation_conditions":    kb.escalation_conditions or "",
+            "food_menu_url":            kb.food_menu_url or _site,
+            "bar_menu_url":             kb.bar_menu_url  or _site,
+            "brand_voice_notes":        kb.brand_voice_notes or "",
+            "non_customer_call_rules":  _build_non_customer_rules(kb),
         })
     else:
         dyn.update({
-            "affiliated_restaurants": "",
-            "reservation_grace_min":  "N/A",
-            "large_party_min_guests": "N/A",
-            "escalation_enabled":     "no",
-            "escalation_conditions":  "",
-            "food_menu_url":          restaurant.website or "",
-            "bar_menu_url":           restaurant.website or "",
-            "brand_voice_notes":      "",
+            "affiliated_restaurants":   "",
+            "reservation_grace_min":    "N/A",
+            "large_party_min_guests":   "N/A",
+            "escalation_enabled":       "no",
+            "escalation_conditions":    "",
+            "food_menu_url":            restaurant.website or "",
+            "bar_menu_url":             restaurant.website or "",
+            "brand_voice_notes":        "",
+            "non_customer_call_rules":  "",
         })
     return dyn
 
@@ -892,6 +1033,19 @@ def _send_complaint_alert_email(call_event: CallEvent, restaurant: Restaurant) -
     )
 
 
+def _send_non_customer_alert_email(call_event: CallEvent, restaurant: Restaurant) -> None:
+    """Send a business-call alert when a non-customer call is identified."""
+    if not restaurant.notify_on_non_customer:
+        return
+    _send_call_alert_email(
+        call_event, restaurant,
+        subject_prefix="📞 Business Call",
+        reason_display="Non-Customer / Business Call",
+        reason_bg="#f3f4f6", reason_color="#374151", reason_border="#d1d5db",
+        text_body_extra="The AI identified this call as a non-customer business call (vendor, press, sales, service, etc.).\n",
+    )
+
+
 def _send_low_balance_email(restaurant: Restaurant, balance, level: str) -> None:
     """Send a low-balance alert email to the restaurant owner."""
     from django.core.mail import EmailMultiAlternatives
@@ -1207,12 +1361,15 @@ def retell_events_webhook(request):
         try:
             detail = getattr(call_event, "detail", None)
             if detail:
-                if detail.follow_up_needed:
-                    _send_followup_alert_email(call_event, restaurant)
-                if detail.wants_reservation:
-                    _send_reservation_alert_email(call_event, restaurant)
-                if detail.call_reason == "complaint":
-                    _send_complaint_alert_email(call_event, restaurant)
+                if detail.call_reason == "non_customer":
+                    _send_non_customer_alert_email(call_event, restaurant)
+                else:
+                    if detail.follow_up_needed:
+                        _send_followup_alert_email(call_event, restaurant)
+                    if detail.wants_reservation:
+                        _send_reservation_alert_email(call_event, restaurant)
+                    if detail.call_reason == "complaint":
+                        _send_complaint_alert_email(call_event, restaurant)
         except Exception:
             logger.exception("Failed to send alert email(s) for CallEvent pk=%s", call_event.pk)
 
@@ -2158,7 +2315,8 @@ def _sync_retell_tools(request, restaurant: Restaurant, kb: RestaurantKnowledgeB
         llm_result = client.update_llm(
             restaurant.retell_llm_id,
             general_tools=tools,
-            general_prompt=prompt
+            general_prompt=prompt,
+            begin_message="{{welcome_phrase}}",
         )
 
         if restaurant.retell_agent_id:
@@ -2546,11 +2704,12 @@ def portal_notifications(request, slug):
         restaurant.notify_on_reservation  = "notify_on_reservation" in request.POST
         restaurant.notify_on_complaint    = "notify_on_complaint" in request.POST
         restaurant.notify_on_followup     = "notify_on_followup" in request.POST
+        restaurant.notify_on_non_customer = "notify_on_non_customer" in request.POST
         restaurant.notify_daily_digest    = "notify_daily_digest" in request.POST
         restaurant.save(update_fields=[
             "notify_via_email", "notify_email",
             "notify_on_reservation", "notify_on_complaint",
-            "notify_on_followup", "notify_daily_digest",
+            "notify_on_followup", "notify_on_non_customer", "notify_daily_digest",
         ])
         saved = True
         logger.info("portal_notifications: saved prefs | restaurant=%s | email=%s",

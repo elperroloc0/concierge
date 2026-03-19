@@ -92,6 +92,19 @@
         </div>
       </li>
 
+      <!-- Non-customer / Business calls -->
+      <li class="list-group-item d-flex align-items-center justify-content-between py-3">
+        <div>
+          <span class="fw-semibold"><i class="bi bi-telephone-x text-secondary me-2"></i>Business Calls</span>
+          <p class="text-muted small mb-0">Alert when the AI identifies a non-customer call — vendor, press, sales, service provider, etc.</p>
+        </div>
+        <div class="form-check form-switch">
+          <input class="form-check-input pref-toggle" type="checkbox" name="notify_on_non_customer"
+                 {% if restaurant.notify_on_non_customer %}checked{% endif %}
+                 style="width:2.5em;height:1.3em;">
+        </div>
+      </li>
+
       <!-- Daily digest -->
       <li class="list-group-item d-flex align-items-center justify-content-between py-3">
         <div>

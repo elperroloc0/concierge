@@ -65,6 +65,10 @@ class Restaurant(models.Model):
         default=True,
         help_text="Email when the AI flags a call as needing a callback."
     )
+    notify_on_non_customer = models.BooleanField(
+        default=True,
+        help_text="Email when the AI identifies a non-customer business call (vendor, press, sales, etc.)."
+    )
     notify_daily_digest = models.BooleanField(
         default=True,
         help_text="Morning digest email with previous day's call summary."
@@ -203,6 +207,7 @@ class CallDetail(models.Model):
         ("parking",       "Parking / Valet"),
         ("private_event", "Private Event"),
         ("complaint",     "Complaint"),
+        ("non_customer",  "Non-Customer / Business Call"),
         ("other",         "Other / General"),
     ]
 
@@ -452,6 +457,48 @@ class RestaurantKnowledgeBase(models.Model):
             "Use this for special policies, FAQs, promotions, or anything unique to your restaurant."
         )
     )
+
+    # ── Non-Customer Call Handling ─────────────────────────────────────────
+    # Choices
+    _NC_PARTNER  = [("ignore","Ignore (handle normally)"), ("message","Take a message"), ("transfer","Transfer to staff")]
+    _NC_VENDOR   = [("ignore","Ignore (handle normally)"), ("decline","Decline politely"), ("message","Take a message"), ("transfer","Transfer to staff")]
+    _NC_SALES    = [("ignore","Ignore (handle normally)"), ("decline","Decline politely"), ("message","Take a message")]
+    _NC_PRESS    = [("ignore","Ignore (handle normally)"), ("give_contact","Give press contact"), ("message","Take a message"), ("transfer","Transfer to staff")]
+    _NC_SERVICE  = [("ignore","Ignore (handle normally)"), ("decline","Decline politely"), ("message","Take a message"), ("transfer","Transfer to staff")]
+    _NC_FINANCIAL= [("ignore","Ignore (handle normally)"), ("message","Take a message"), ("transfer","Transfer to staff")]
+    _NC_SPAM     = [("decline","Decline politely"), ("end_call","End call immediately")]
+    _NC_URGENT   = [("message_urgent","Take urgent message"), ("transfer","Transfer to staff")]
+
+    # Partner companies (known business relationships)
+    partner_companies          = models.TextField(blank=True, default="",
+        help_text="Companies with an active relationship (e.g. DoorDash, OpenTable, Toast). One per line. The agent will recognize callers from these companies.")
+    partner_call_handling      = models.CharField(max_length=16, default="message",    choices=_NC_PARTNER,   help_text="How to handle calls from listed partner companies.")
+    partner_call_ask_urgency   = models.BooleanField(default=True,  help_text="Before acting, ask the caller if the matter is urgent.")
+
+    # Vendors / Suppliers (unknown or unlisted)
+    vendor_call_handling       = models.CharField(max_length=16, default="message",    choices=_NC_VENDOR,    help_text="How to handle calls from vendors or suppliers not on the partner list.")
+    vendor_call_ask_urgency    = models.BooleanField(default=True,  help_text="Before acting, ask the caller if the matter is urgent.")
+
+    # Press / Media / Influencers
+    press_call_handling        = models.CharField(max_length=16, default="give_contact", choices=_NC_PRESS,   help_text="How to handle calls from press, media, or influencers.")
+    press_call_ask_urgency     = models.BooleanField(default=False, help_text="Before acting, ask the caller if the matter is urgent.")
+
+    # External services (plumbers, cleaners, pest control, etc.)
+    service_call_handling      = models.CharField(max_length=16, default="message",    choices=_NC_SERVICE,   help_text="How to handle calls from external service providers.")
+    service_call_ask_urgency   = models.BooleanField(default=True,  help_text="Before acting, ask the caller if the matter is urgent.")
+
+    # Sales & Marketing (unsolicited)
+    sales_call_handling        = models.CharField(max_length=16, default="decline",    choices=_NC_SALES,     help_text="How to handle unsolicited sales or marketing calls.")
+
+    # Financial / Legal / Collections
+    financial_call_handling    = models.CharField(max_length=16, default="message",    choices=_NC_FINANCIAL, help_text="How to handle calls from banks, collection agencies, or legal firms.")
+
+    # Robocalls / Spam
+    spam_call_handling         = models.CharField(max_length=16, default="end_call",   choices=_NC_SPAM,      help_text="How to handle automated or spam calls.")
+
+    # Global urgency outcome
+    urgent_call_action         = models.CharField(max_length=16, default="message_urgent", choices=_NC_URGENT,
+        help_text="What to do when a non-customer caller confirms their matter is urgent.")
 
     # ── Human Escalation ──────────────────────────────────────────────────
     escalation_enabled = models.BooleanField(

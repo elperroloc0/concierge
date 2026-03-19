@@ -766,6 +766,129 @@
     <!-- ── AGENT ──────────────────────────────────────────────────────── -->
     <div class="tab-pane fade" id="tab-agent">
 
+      <!-- ── NON-CUSTOMER CALL HANDLING ──────────────────────────────── -->
+      <div class="kb-card mb-3">
+        <p class="kb-section-title">Non-Customer Calls</p>
+        <p class="kb-hint mb-4">Configure how the agent handles calls from vendors, sales reps, press, and other non-guest callers. <strong>Ignore</strong> means the agent treats them as any other call.</p>
+
+        <!-- Partner companies -->
+        <div class="mb-4">
+          <label class="kb-label">Partner Companies</label>
+          <p class="kb-hint mb-2">Companies with an active business relationship (e.g. DoorDash, OpenTable, Toast). The agent will recognize callers from these companies by name.</p>
+          {{ kb_form.partner_companies }}
+          <p class="kb-hint mt-1">One company name per line.</p>
+          <div class="row g-2 align-items-center mt-2">
+            <div class="col-md-5">
+              <label class="kb-label mb-1">When they call</label>
+              {{ kb_form.partner_call_handling }}
+            </div>
+            <div class="col-auto d-flex align-items-center gap-2 nc-urgency-wrap" data-select="id_partner_call_handling">
+              {{ kb_form.partner_call_ask_urgency }}
+              <label class="form-check-label" for="{{ kb_form.partner_call_ask_urgency.id_for_label }}" style="font-size:.8rem;color:#374151;cursor:pointer;">Ask if urgent first</label>
+            </div>
+          </div>
+        </div>
+
+        <hr style="border-color:#f3f4f6; margin: 1rem 0;">
+
+        <!-- Category rows -->
+        {% with rows=True %}
+        <div class="row g-3">
+
+          <!-- Vendors -->
+          <div class="col-12">
+            <div class="d-flex flex-wrap align-items-center gap-3">
+              <div style="min-width:180px;">
+                <label class="kb-label mb-1">Vendors / Suppliers</label>
+                <p class="kb-hint" style="font-size:.7rem;">Distributors, delivery reps, supply orders</p>
+              </div>
+              <div style="min-width:200px;">{{ kb_form.vendor_call_handling }}</div>
+              <div class="d-flex align-items-center gap-2 nc-urgency-wrap" data-select="id_vendor_call_handling">
+                {{ kb_form.vendor_call_ask_urgency }}
+                <label class="form-check-label" for="{{ kb_form.vendor_call_ask_urgency.id_for_label }}" style="font-size:.8rem;color:#374151;cursor:pointer;">Ask if urgent first</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Press -->
+          <div class="col-12">
+            <div class="d-flex flex-wrap align-items-center gap-3">
+              <div style="min-width:180px;">
+                <label class="kb-label mb-1">Press / Influencers</label>
+                <p class="kb-hint" style="font-size:.7rem;">Journalists, bloggers, content creators</p>
+              </div>
+              <div style="min-width:200px;">{{ kb_form.press_call_handling }}</div>
+              <div class="d-flex align-items-center gap-2 nc-urgency-wrap" data-select="id_press_call_handling">
+                {{ kb_form.press_call_ask_urgency }}
+                <label class="form-check-label" for="{{ kb_form.press_call_ask_urgency.id_for_label }}" style="font-size:.8rem;color:#374151;cursor:pointer;">Ask if urgent first</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- External services -->
+          <div class="col-12">
+            <div class="d-flex flex-wrap align-items-center gap-3">
+              <div style="min-width:180px;">
+                <label class="kb-label mb-1">External Services</label>
+                <p class="kb-hint" style="font-size:.7rem;">Plumbers, cleaners, pest control, maintenance</p>
+              </div>
+              <div style="min-width:200px;">{{ kb_form.service_call_handling }}</div>
+              <div class="d-flex align-items-center gap-2 nc-urgency-wrap" data-select="id_service_call_handling">
+                {{ kb_form.service_call_ask_urgency }}
+                <label class="form-check-label" for="{{ kb_form.service_call_ask_urgency.id_for_label }}" style="font-size:.8rem;color:#374151;cursor:pointer;">Ask if urgent first</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sales / Marketing -->
+          <div class="col-12">
+            <div class="d-flex flex-wrap align-items-center gap-3">
+              <div style="min-width:180px;">
+                <label class="kb-label mb-1">Sales / Marketing</label>
+                <p class="kb-hint" style="font-size:.7rem;">Unsolicited offers, promotions, advertising</p>
+              </div>
+              <div style="min-width:200px;">{{ kb_form.sales_call_handling }}</div>
+            </div>
+          </div>
+
+          <!-- Financial / Legal -->
+          <div class="col-12">
+            <div class="d-flex flex-wrap align-items-center gap-3">
+              <div style="min-width:180px;">
+                <label class="kb-label mb-1">Financial / Legal</label>
+                <p class="kb-hint" style="font-size:.7rem;">Banks, attorneys, collection agencies</p>
+              </div>
+              <div style="min-width:200px;">{{ kb_form.financial_call_handling }}</div>
+            </div>
+          </div>
+
+          <!-- Robocalls -->
+          <div class="col-12">
+            <div class="d-flex flex-wrap align-items-center gap-3">
+              <div style="min-width:180px;">
+                <label class="kb-label mb-1">Robocalls / Spam</label>
+                <p class="kb-hint" style="font-size:.7rem;">Automated calls, sweepstakes, mass marketing</p>
+              </div>
+              <div style="min-width:200px;">{{ kb_form.spam_call_handling }}</div>
+            </div>
+          </div>
+
+        </div><!-- /.row -->
+        {% endwith %}
+
+        <hr style="border-color:#f3f4f6; margin: 1.25rem 0;">
+
+        <!-- Global urgency outcome -->
+        <div class="row g-2 align-items-center" id="nc-urgent-outcome-row">
+          <div class="col-md-6">
+            <label class="kb-label mb-1">When urgency is confirmed</label>
+            <p class="kb-hint mb-1">What the agent does when a caller says their matter is urgent.</p>
+            {{ kb_form.urgent_call_action }}
+          </div>
+        </div>
+
+      </div><!-- /.kb-card non-customer -->
+
       <div class="kb-card mb-3">
         <p class="kb-section-title">Call Transfer</p>
         <p class="kb-hint mb-3">When enabled, the agent can connect the caller to a staff member instead of handling the call itself.</p>
@@ -817,6 +940,30 @@
 </form>
 
 <script>
+// ── Non-customer urgency checkbox visibility ──────────────────────────────────
+// Hide the "ask if urgent" checkbox when the action is ignore, transfer, or end_call
+// (asking about urgency only makes sense for decline / message / give_contact actions)
+function ncUpdateUrgency(selectId) {
+  const sel  = document.getElementById(selectId);
+  if (!sel) return;
+  const wrap = document.querySelector(`.nc-urgency-wrap[data-select="${selectId}"]`);
+  if (!wrap) return;
+  const hide = ["ignore", "transfer", "end_call"].includes(sel.value);
+  wrap.style.display = hide ? "none" : "";
+}
+const NC_SELECTS = [
+  "id_partner_call_handling",
+  "id_vendor_call_handling",
+  "id_press_call_handling",
+  "id_service_call_handling",
+];
+NC_SELECTS.forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  ncUpdateUrgency(id);
+  el.addEventListener("change", () => ncUpdateUrgency(id));
+});
+
 // ── Example content per field ─────────────────────────────────────────────────
 const EXAMPLES = {
   "id_address_full":         "123 SW 8th Street, Miami, FL 33130",
@@ -873,7 +1020,7 @@ const TAB_FIELDS = {
   "tab-events":       ["id_private_dining_min_spend","id_press_contact"],
   "tab-ambience":     ["id_live_music_details","id_party_vibe_start_time","id_dress_code","id_special_events_info"],
   "tab-facilities":   ["id_valet_cost","id_free_parking_info"],
-  "tab-agent":        ["id_escalation_transfer_number","id_escalation_conditions","id_affiliated_restaurants"],
+  "tab-agent":        ["id_partner_companies","id_vendor_call_handling","id_press_call_handling","id_service_call_handling","id_sales_call_handling","id_financial_call_handling","id_escalation_transfer_number","id_escalation_conditions","id_affiliated_restaurants"],
   "tab-other":        ["id_owner_notes"],
 };
 

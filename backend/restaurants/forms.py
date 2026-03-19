@@ -107,6 +107,15 @@ class KnowledgeBaseForm(forms.ModelForm):
             # Facilities
             "has_terrace", "ac_intensity", "stroller_friendly",
             "has_valet", "valet_cost", "free_parking_info",
+            # Agent — non-customer call handling
+            "partner_companies", "partner_call_handling", "partner_call_ask_urgency",
+            "vendor_call_handling", "vendor_call_ask_urgency",
+            "press_call_handling", "press_call_ask_urgency",
+            "service_call_handling", "service_call_ask_urgency",
+            "sales_call_handling",
+            "financial_call_handling",
+            "spam_call_handling",
+            "urgent_call_action",
             # Agent (owner-facing: call transfer + sister locations)
             "escalation_enabled", "escalation_conditions", "escalation_transfer_number",
             "affiliated_restaurants",
@@ -162,7 +171,21 @@ class KnowledgeBaseForm(forms.ModelForm):
             "has_valet":              forms.CheckboxInput(attrs=_CHECK),
             "valet_cost":             forms.TextInput(attrs=_TEXT),
             "free_parking_info":      forms.Textarea(attrs=_ta(2)),
-            # Agent
+            # Agent — non-customer call handling
+            "partner_companies":        forms.Textarea(attrs={**_ta(3), "placeholder": "DoorDash\nOpenTable\nToast\nResy"}),
+            "partner_call_handling":    forms.Select(attrs=_SEL),
+            "partner_call_ask_urgency": forms.CheckboxInput(attrs=_CHECK),
+            "vendor_call_handling":     forms.Select(attrs=_SEL),
+            "vendor_call_ask_urgency":  forms.CheckboxInput(attrs=_CHECK),
+            "press_call_handling":      forms.Select(attrs=_SEL),
+            "press_call_ask_urgency":   forms.CheckboxInput(attrs=_CHECK),
+            "service_call_handling":    forms.Select(attrs=_SEL),
+            "service_call_ask_urgency": forms.CheckboxInput(attrs=_CHECK),
+            "sales_call_handling":      forms.Select(attrs=_SEL),
+            "financial_call_handling":  forms.Select(attrs=_SEL),
+            "spam_call_handling":       forms.Select(attrs=_SEL),
+            "urgent_call_action":       forms.Select(attrs=_SEL),
+            # Agent — call transfer + sister locations
             "affiliated_restaurants":     forms.Textarea(attrs={**_ta(3), "placeholder": "Cuba Ocho\nCalle Dragones Colombia"}),
             "escalation_enabled":         forms.CheckboxInput(attrs=_CHECK),
             "escalation_conditions":      forms.Textarea(attrs={**_ta(3), "placeholder": "Caller asks to speak with a manager.\nCaller reports an emergency on-site."}),
