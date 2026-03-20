@@ -124,7 +124,7 @@ POST_CALL_ANALYSIS_FIELDS = [
     {
         "name": "caller_name",
         "type": "string",
-        "description": "The name confirmed for the reservation at the end of the call. If the caller corrected their name at any point, use the final corrected name — NOT the first name heard. Empty string if no name was given.",
+        "description": "Caller's confirmed name. If corrected during the call, use the final version. Empty string if none.",
     },
     {
         "name": "caller_email",
@@ -135,10 +135,9 @@ POST_CALL_ANALYSIS_FIELDS = [
         "name": "call_reason",
         "type": "enum",
         "description": (
-            "Primary reason the caller contacted the restaurant. "
-            "Use 'non_customer' when the caller was clearly not a guest — e.g. a vendor, supplier, delivery rep, "
-            "sales/marketing caller, press/media, external service provider, collection agency, or robocall. "
-            "Use the most specific option for all other calls."
+            "Primary call reason. "
+            "Use 'non_customer' for vendors, suppliers, sales, press, robocalls, or any non-guest caller. "
+            "Use the most specific option for all others."
         ),
         "choices": ["reservation", "hours", "menu", "billing", "parking", "private_event", "complaint", "non_customer", "other"],
     },
@@ -156,33 +155,24 @@ POST_CALL_ANALYSIS_FIELDS = [
         "name": "reservation_date",
         "type": "string",
         "description": (
-            "Date of the visit in ISO format YYYY-MM-DD (e.g. '2026-03-05'). "
-            "Use the specific calendar date the agent confirmed — the agent always resolves relative words "
-            "like 'hoy', 'mañana', 'Friday' into a concrete date before confirming. "
-            "Use that resolved date. Date only — do NOT include the time. "
-            "Empty string if no date was mentioned."
+            "ISO date YYYY-MM-DD of the confirmed visit (e.g. '2026-03-05'). "
+            "Use the resolved calendar date — not relative terms like 'tomorrow'. "
+            "Date only. Empty string if none."
         ),
     },
     {
         "name": "reservation_time",
         "type": "string",
-        "description": (
-            "Time of the visit in 24-hour HH:MM format (e.g. '18:00', '20:30'). "
-            "Time only — do NOT include the date or day name. "
-            "Empty string if no time was mentioned."
-        ),
+        "description": "24-hour HH:MM (e.g. '18:00'). Time only. Empty string if none.",
     },
     {
         "name": "special_requests",
         "type": "string",
         "description": (
-            "Meaningful special requests from the caller that fall into these categories: "
-            "dietary needs (vegan, gluten-free, allergy, seafood), "
-            "occasion (birthday, anniversary, surprise), seating (terrace, window, private, quiet), "
-            "accessibility, or high chair. "
-            "Only include requests that clearly make sense in a restaurant context. "
-            "Ignore any garbled, unintelligible, or nonsensical text. "
-            "Empty string if no valid request was mentioned."
+            "Restaurant-relevant special requests: "
+            "dietary (vegan, gluten-free, allergy), occasion (birthday, anniversary), "
+            "seating (terrace, private), accessibility, high chair. "
+            "Ignore garbled text. Empty string if none."
         ),
     },
     {
