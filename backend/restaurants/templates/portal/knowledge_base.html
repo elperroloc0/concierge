@@ -1136,9 +1136,9 @@ const DISH_CFG = {
 function makeDishRow(group, name, desc, price, starred) {
   const tr = document.createElement("tr");
   tr.innerHTML = `
-    <td><input class="form-control form-control-sm" placeholder="Dish name" value="${_esc(name)}"></td>
-    <td><input class="form-control form-control-sm" placeholder="Short description" value="${_esc(desc)}"></td>
-    <td><input class="form-control form-control-sm" placeholder="$18" style="max-width:90px" value="${_esc(price)}"></td>
+    <td><input class="form-control form-control-sm" value="${_esc(name)}"></td>
+    <td><input class="form-control form-control-sm" value="${_esc(desc)}"></td>
+    <td><input class="form-control form-control-sm" style="max-width:90px" value="${_esc(price)}"></td>
     <td class="dish-star"><input type="checkbox" class="form-check-input" title="Signature / must-try"${starred ? " checked" : ""}></td>
     <td class="dish-remove">
       <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="removeDishRow(this,'${group}')">

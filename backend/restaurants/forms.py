@@ -52,7 +52,7 @@ class RestaurantBasicForm(forms.ModelForm):
             "timezone":           forms.TextInput(attrs=_TEXT),
             "primary_lang":       forms.Select(attrs=_SEL),
             "conversation_tone":  forms.Select(attrs=_SEL),
-            "welcome_phrase":     forms.Textarea(attrs={**_ta(2), "placeholder": "Thank you for calling [Restaurant Name], how can I help you today?"}),
+            "welcome_phrase":     forms.Textarea(attrs=_ta(2)),
             "contact_phone":      forms.TextInput(attrs=_TEXT),
             "contact_email":      forms.EmailInput(attrs=_TEXT),
         }
@@ -74,8 +74,8 @@ class RestaurantBasicForm(forms.ModelForm):
 
 class KnowledgeBaseForm(forms.ModelForm):
     # Override URL fields as CharField so normalization runs before validation.
-    food_menu_url = forms.CharField(required=False, widget=forms.TextInput(attrs={**_TEXT, "placeholder": "https://yourwebsite.com/menu"}))
-    bar_menu_url  = forms.CharField(required=False, widget=forms.TextInput(attrs={**_TEXT, "placeholder": "https://yourwebsite.com/drinks"}))
+    food_menu_url = forms.CharField(required=False, widget=forms.TextInput(attrs=_TEXT))
+    bar_menu_url  = forms.CharField(required=False, widget=forms.TextInput(attrs=_TEXT))
 
     class Meta:
         model = RestaurantKnowledgeBase
@@ -126,20 +126,17 @@ class KnowledgeBaseForm(forms.ModelForm):
         ]
         widgets = {
             # Spoken overrides
-            "contact_email_spoken": forms.TextInput(attrs={**_TEXT, "placeholder": "admon calle dragones arroba gmail punto com"}),
+            "contact_email_spoken": forms.TextInput(attrs=_TEXT),
             # Hours
-            "hours_of_operation":     forms.Textarea(attrs={**_ta(4), "placeholder": "Mon–Thu 12pm–midnight, Fri–Sat 12pm–2am, Sun 12pm–11pm"}),
+            "hours_of_operation":     forms.Textarea(attrs=_ta(4)),
             "kitchen_closing_time":   forms.TextInput(attrs=_TEXT),
             "closes_on_holidays":     forms.CheckboxInput(attrs=_CHECK),
             "holiday_closure_notes":  forms.Textarea(attrs=_ta(2)),
-            "private_event_closures": forms.Textarea(attrs={
-                **_ta(3),
-                "placeholder": "March 15, 2026: closed for private event.\nApril 1, 2026: private buyout — no public dining.",
-            }),
+            "private_event_closures": forms.Textarea(attrs=_ta(3)),
             # Menu
-            "food_menu_summary":      forms.Textarea(attrs={**_ta(6), "placeholder": "We specialize in Latin-Asian fusion. Best sellers: ceviche tostada ($18), short rib tacos ($24). Most dishes between $15–$35."}),
+            "food_menu_summary":      forms.Textarea(attrs=_ta(6)),
             "bar_menu_summary":       forms.Textarea(attrs=_ta(6)),
-            "happy_hour_details":     forms.Textarea(attrs={**_ta(4), "placeholder": "Mon–Fri 4–7pm. 50% off all cocktails and select beers. Available at bar and lounge seating only."}),
+            "happy_hour_details":     forms.Textarea(attrs=_ta(4)),
             "dietary_options":        forms.Textarea(attrs=_ta(4)),
             # Billing
             "auto_gratuity":          forms.CheckboxInput(attrs=_CHECK),
@@ -172,7 +169,7 @@ class KnowledgeBaseForm(forms.ModelForm):
             "valet_cost":             forms.TextInput(attrs=_TEXT),
             "free_parking_info":      forms.Textarea(attrs=_ta(2)),
             # Agent — non-customer call handling
-            "partner_companies":        forms.Textarea(attrs={**_ta(3), "placeholder": "DoorDash\nOpenTable\nToast\nResy"}),
+            "partner_companies":        forms.Textarea(attrs=_ta(3)),
             "partner_call_handling":    forms.Select(attrs=_SEL),
             "partner_call_ask_urgency": forms.CheckboxInput(attrs=_CHECK),
             "vendor_call_handling":     forms.Select(attrs=_SEL),
@@ -186,22 +183,14 @@ class KnowledgeBaseForm(forms.ModelForm):
             "spam_call_handling":       forms.Select(attrs=_SEL),
             "urgent_call_action":       forms.Select(attrs=_SEL),
             # Agent — call transfer + sister locations
-            "affiliated_restaurants":     forms.Textarea(attrs={**_ta(3), "placeholder": "Cuba Ocho\nCalle Dragones Colombia"}),
+            "affiliated_restaurants":     forms.Textarea(attrs=_ta(3)),
             "escalation_enabled":         forms.CheckboxInput(attrs=_CHECK),
-            "escalation_conditions":      forms.Textarea(attrs={**_ta(3), "placeholder": "Caller asks to speak with a manager.\nCaller reports an emergency on-site."}),
-            "escalation_transfer_number": forms.TextInput(attrs={**_TEXT, "placeholder": "+17865551234"}),
+            "escalation_conditions":      forms.Textarea(attrs=_ta(3)),
+            "escalation_transfer_number": forms.TextInput(attrs=_TEXT),
             # ROI
-            "avg_revenue_per_cover": forms.NumberInput(attrs={**_TEXT, "placeholder": "45.00", "step": "0.01", "min": "0"}),
+            "avg_revenue_per_cover": forms.NumberInput(attrs={**_TEXT, "step": "0.01", "min": "0"}),
             # Custom info
-            "owner_notes": forms.Textarea(attrs={
-                **_ta(6),
-                "placeholder": (
-                    "Gift cards: Yes, available at the bar\n"
-                    "Wi-Fi: Free — password is Dragones2025\n"
-                    "Corkage fee: $25 per bottle, max 2 per table\n"
-                    "Birthday policy: Complimentary dessert with 24h notice"
-                ),
-            }),
+            "owner_notes": forms.Textarea(attrs=_ta(6)),
         }
 
     def clean_food_menu_url(self):
