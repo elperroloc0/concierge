@@ -1215,6 +1215,26 @@ document.getElementById("kb-form").addEventListener("submit", () => {
   try { serializeDishes("bar"); } catch(e) { console.warn("dish serializer:", e); }
 }, { capture: true });
 
+// ── Tab persistence ───────────────────────────────────────────────────────────
+try {
+  const KB_TAB_KEY = "kb_active_tab";
+  const savedTarget = localStorage.getItem(KB_TAB_KEY);
+  if (savedTarget) {
+    const btn  = document.querySelector(`#kbTabs [data-bs-target="${savedTarget}"]`);
+    const pane = document.querySelector(savedTarget);
+    if (btn && pane) {
+      document.querySelector("#kbTabs .nav-link.active")?.classList.remove("active");
+      document.querySelector(".tab-pane.show.active")?.classList.remove("show", "active");
+      btn.classList.add("active");
+      pane.classList.add("show", "active");
+    }
+  }
+  document.querySelectorAll("#kbTabs [data-bs-toggle='tab']").forEach(btn => {
+    btn.addEventListener("shown.bs.tab", () =>
+      localStorage.setItem(KB_TAB_KEY, btn.getAttribute("data-bs-target")));
+  });
+} catch(e) { console.warn("Tab persistence:", e); }
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 try { buildExampleHints(); } catch(e) { console.error("buildExampleHints:", e); }
 try { updateTabCounters(); } catch(e) { console.error("updateTabCounters:", e); }
