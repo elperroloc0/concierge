@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+import threading
 import urllib.parse
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
@@ -2441,14 +2442,22 @@ def portal_update_avg_cover(request, slug):
     return redirect("portal_dashboard", slug=slug)
 
 
-def _sync_retell_tools(request, restaurant: Restaurant, kb: RestaurantKnowledgeBase) -> None:
-    """Push the current tool list (with or without escalation) to Retell after KB save."""
-    base_url = settings.RETELL_WEBHOOK_BASE_URL
-    if not base_url:
-        messages.warning(request, "Call transfer could not be synced: RETELL_WEBHOOK_BASE_URL is not configured.")
+def _do_retell_sync(restaurant_pk: int) -> None:
+    """
+    Push prompt + tools to Retell. Runs in a background thread so it never
+    blocks the HTTP response. Fetches fresh DB objects inside the thread to
+    avoid sharing Django ORM state across threads.
+    """
+    from .models import Restaurant as _Restaurant
+    try:
+        restaurant = _Restaurant.objects.select_related("knowledge_base").get(pk=restaurant_pk)
+        kb = restaurant.knowledge_base
+    except Exception:
+        logger.exception("_do_retell_sync: restaurant pk=%s not found", restaurant_pk)
         return
-    if not restaurant.retell_api_key or not restaurant.retell_llm_id:
-        messages.warning(request, "Call transfer settings saved, but Retell is not yet configured for this account. Contact support to activate.")
+
+    base_url = settings.RETELL_WEBHOOK_BASE_URL
+    if not base_url or not restaurant.retell_api_key or not restaurant.retell_llm_id:
         return
 
     escalation_number = kb.escalation_transfer_number if kb.escalation_enabled else None
@@ -2456,21 +2465,19 @@ def _sync_retell_tools(request, restaurant: Restaurant, kb: RestaurantKnowledgeB
         base_url,
         escalation_number=escalation_number,
         enable_sms=restaurant.enable_sms,
-        lang=restaurant.primary_lang
+        lang=restaurant.primary_lang,
     )
 
     try:
         from .admin import _build_agent_prompt
         client = RetellClient(api_key=restaurant.retell_api_key)
-        prompt = _build_agent_prompt(restaurant)
-
+        prompt  = _build_agent_prompt(restaurant)
         llm_result = client.update_llm(
             restaurant.retell_llm_id,
             general_tools=tools,
             general_prompt=prompt,
             begin_message="{{welcome_phrase}}",
         )
-
         if restaurant.retell_agent_id:
             client.point_agent_to_llm_version(
                 restaurant.retell_agent_id,
@@ -2484,14 +2491,27 @@ def _sync_retell_tools(request, restaurant: Restaurant, kb: RestaurantKnowledgeB
                     restaurant.retell_agent_id,
                     published_version,
                 )
+        logger.info("_do_retell_sync: completed for restaurant=%s", restaurant.slug)
+    except Exception:
+        logger.exception("_do_retell_sync: Retell API error for restaurant=%s", restaurant.slug)
 
-        if kb.escalation_enabled and escalation_number:
-            messages.success(request, f"Call transfer activated — calls will be forwarded to {escalation_number} when conditions are met.")
-        else:
-            messages.info(request, "Call transfer deactivated.")
-    except Exception as exc:
-        logger.exception("Failed to sync Retell tools for %s", restaurant.slug)
-        messages.error(request, f"Settings saved, but failed to sync call transfer with Retell: {exc}")
+
+def _sync_retell_tools(request, restaurant: Restaurant, kb: RestaurantKnowledgeBase) -> None:
+    """Kick off a background Retell sync and return immediately."""
+    base_url = settings.RETELL_WEBHOOK_BASE_URL
+    if not base_url:
+        messages.warning(request, "Call transfer could not be synced: RETELL_WEBHOOK_BASE_URL is not configured.")
+        return
+    if not restaurant.retell_api_key or not restaurant.retell_llm_id:
+        messages.warning(request, "Call transfer settings saved, but Retell is not yet configured for this account. Contact support to activate.")
+        return
+
+    threading.Thread(target=_do_retell_sync, args=(restaurant.pk,), daemon=True).start()
+
+    if kb.escalation_enabled and kb.escalation_transfer_number:
+        messages.success(request, f"Call transfer activated — calls will be forwarded to {kb.escalation_transfer_number} when conditions are met.")
+    else:
+        messages.info(request, "Call transfer deactivated.")
 
 
 
@@ -2542,29 +2562,26 @@ def portal_calls(request, slug):
     date_to            = request.GET.get("date_to", "")
     phone_filter       = request.GET.get("phone", "").strip()
 
-    # Base queryset — one row per actual call (deduplicated by call_id).
-    # Prefer call_analyzed > call_ended > others to guard against legacy data
-    # where multiple event types had CallDetails for the same call.
-    _has_analyzed = CallEvent.objects.filter(
-        payload__call__call_id=OuterRef("payload__call__call_id"),
-        event_type="call_analyzed",
-        detail__isnull=False,
-        restaurant=restaurant,
-    )
-    _has_analyzed_or_ended = CallEvent.objects.filter(
-        payload__call__call_id=OuterRef("payload__call__call_id"),
-        event_type__in=["call_analyzed", "call_ended"],
-        detail__isnull=False,
-        restaurant=restaurant,
-    )
-    base_qs = (
+    # Deduplicate by call_id in Python (one row per actual call).
+    # Prefer call_analyzed > call_ended > others — handles legacy data where
+    # multiple event types each had a CallDetail for the same call_id.
+    # Two-query approach avoids O(n²) correlated JSON subqueries on large tables.
+    _TYPE_PRIORITY = {"call_analyzed": 0, "call_ended": 1}
+    _candidates = (
         CallEvent.objects
         .filter(restaurant=restaurant, detail__isnull=False)
-        .filter(
-            Q(event_type="call_analyzed") |
-            (Q(event_type="call_ended") & ~Exists(_has_analyzed)) |
-            (~Q(event_type__in=["call_analyzed", "call_ended"]) & ~Exists(_has_analyzed_or_ended))
-        )
+        .values("id", "event_type", "payload__call__call_id")
+    )
+    _best_pks: dict[str, tuple[int, int]] = {}  # call_id → (pk, priority)
+    for _row in _candidates:
+        _cid = _row["payload__call__call_id"] or f"__noid_{_row['id']}"
+        _p   = _TYPE_PRIORITY.get(_row["event_type"], 2)
+        if _cid not in _best_pks or _p < _best_pks[_cid][1]:
+            _best_pks[_cid] = (_row["id"], _p)
+
+    base_qs = (
+        CallEvent.objects
+        .filter(pk__in=[pk for pk, _ in _best_pks.values()])
         .select_related("detail")
         .prefetch_related("sms_logs")
         .order_by("-created_at")
