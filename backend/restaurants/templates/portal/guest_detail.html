@@ -143,6 +143,10 @@
               <span class="opacity-75">{{ detail.created_at|date:"g:i A" }}</span>
             </div>
             <div class="flex-grow-1">
+            <a href="{% url 'portal_calls' restaurant.slug %}?phone={{ memory.phone }}#call-{{ detail.call_event_id }}"
+               class="btn btn-link btn-sm p-0 float-end text-muted ms-2" title="View in Call Log" onclick="event.stopPropagation()">
+              <i class="bi bi-box-arrow-up-right"></i>
+            </a>
               <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
                 <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle" style="font-size:.7rem">
                   {{ detail.get_call_reason_display }}
