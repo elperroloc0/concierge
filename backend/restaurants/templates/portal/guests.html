@@ -80,6 +80,11 @@
             {% else %}
               <span class="fw-semibold text-muted">{{ mem.phone }}</span>
             {% endif %}
+            {% if mem.pending_name %}
+              <br><span class="badge bg-warning text-dark mt-1" style="font-size:.68rem">
+                <i class="bi bi-person-exclamation me-1"></i>New name: {{ mem.pending_name }}
+              </span>
+            {% endif %}
             {% if mem.staff_notes %}
               <br><span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle mt-1" style="font-size:.68rem">
                 <i class="bi bi-sticky me-1"></i>{{ mem.staff_notes|truncatechars:30 }}
@@ -156,7 +161,9 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label small fw-semibold">Phone <span class="text-danger">*</span></label>
-            <input type="tel" name="phone" class="form-control form-control-sm" placeholder="+1 (305) 555-0100" required>
+            <input type="tel" name="phone" class="form-control form-control-sm" placeholder="+13055550100" required
+                   pattern="\+?[0-9\s\-\(\)]{7,20}" title="Enter a valid phone number, e.g. +13055550100">
+            <div class="form-text">E.164 format recommended: +13055550100</div>
           </div>
           <div class="mb-3">
             <label class="form-label small fw-semibold">Name</label>

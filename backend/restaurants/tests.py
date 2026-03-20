@@ -913,13 +913,22 @@ class UpsertCallerMemoryTest(TestCase):
         mem = CallerMemory.objects.get(phone="+13055550001", restaurant=self.restaurant)
         self.assertEqual(mem.name, "Mavi")
 
-    def test_updates_name_when_new_call_provides_one(self):
+    def test_fills_name_when_profile_has_none(self):
+        """First call with a name fills the name field directly."""
+        event = self._make_event(caller_name="Mavi")
+        self._upsert(event)
+        mem = CallerMemory.objects.get(phone="+13055550001", restaurant=self.restaurant)
+        self.assertEqual(mem.name, "Mavi")
+
+    def test_queues_pending_name_when_different_name_detected(self):
+        """If a profile already has a name and a different name comes in, it goes to pending_name."""
         event1 = self._make_event(caller_name="Mavi")
         event2 = self._make_event(caller_name="Maria")
         self._upsert(event1)
         self._upsert(event2)
         mem = CallerMemory.objects.get(phone="+13055550001", restaurant=self.restaurant)
-        self.assertEqual(mem.name, "Maria")
+        self.assertEqual(mem.name, "Mavi")
+        self.assertEqual(mem.pending_name, "Maria")
 
     def test_skips_when_from_number_is_missing(self):
         """If the call has no from_number, no CallerMemory record should be created."""

@@ -581,6 +581,10 @@ class CallerMemory(models.Model):
         help_text="'guest' = customer; 'business' = vendor, press, sales, etc."
     )
 
+    # Pending name — set when agent detects a different name for an existing profile.
+    # Cleared once staff accepts or rejects.
+    pending_name = models.CharField(max_length=255, blank=True, default="")
+
     # Staff-editable annotations
     preferences = models.TextField(
         blank=True, default="",

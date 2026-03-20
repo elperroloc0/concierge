@@ -898,19 +898,28 @@ def _upsert_caller_memory(call_event: CallEvent, restaurant) -> None:
     )
 
     if not created:
-        # Only overwrite name/email if new value is non-empty
+        changed = ["call_count", "last_call_at"]
+        # Name: auto-fill if empty; queue for verification if different from existing
         if new_name:
-            mem.name = new_name
-        if new_email:
+            if not mem.name:
+                mem.name = new_name
+                changed.append("name")
+            elif new_name != mem.name and new_name != mem.pending_name:
+                mem.pending_name = new_name
+                changed.append("pending_name")
+        if new_email and not mem.email:
             mem.email = new_email
+            changed.append("email")
         # Guests always take precedence over business — never downgrade
-        if new_type == CallerMemory.CALLER_TYPE_GUEST:
+        if new_type == CallerMemory.CALLER_TYPE_GUEST and mem.caller_type != CallerMemory.CALLER_TYPE_GUEST:
             mem.caller_type = CallerMemory.CALLER_TYPE_GUEST
-        mem.call_count   += 1
-        mem.last_call_at  = dj_tz.now()
+            changed.append("caller_type")
+        mem.call_count  += 1
+        mem.last_call_at = dj_tz.now()
         if new_summary:
             mem.last_call_summary = new_summary
-        mem.save(update_fields=["name", "email", "caller_type", "call_count", "last_call_at", "last_call_summary"])
+            changed.append("last_call_summary")
+        mem.save(update_fields=changed)
 
     logger.info(
         "_upsert_caller_memory: restaurant=%s phone=%s count=%d created=%s",
@@ -2759,6 +2768,15 @@ def portal_guest_detail(request, slug, memory_pk):
             memory.name = request.POST.get("name", "").strip()[:255]
             memory.save(update_fields=["name"])
             saved = True
+        elif action == "accept_pending_name":
+            memory.name = memory.pending_name
+            memory.pending_name = ""
+            memory.save(update_fields=["name", "pending_name"])
+            saved = True
+        elif action == "reject_pending_name":
+            memory.pending_name = ""
+            memory.save(update_fields=["pending_name"])
+            saved = True
 
     # Call history for this phone number at this restaurant
     call_history = (
@@ -2797,9 +2815,13 @@ def portal_guest_create(request, slug):
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
 
+    import re as _re
     phone = request.POST.get("phone", "").strip()
     if not phone:
         messages.error(request, "Phone number is required.")
+        return redirect("portal_guests", slug=slug)
+    if not _re.fullmatch(r"\+?[1-9]\d{6,14}", phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")):
+        messages.error(request, f"'{phone}' is not a valid phone number. Use E.164 format, e.g. +13055550100.")
         return redirect("portal_guests", slug=slug)
 
     if CallerMemory.objects.filter(restaurant=restaurant, phone=phone).exists():
