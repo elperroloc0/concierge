@@ -154,6 +154,26 @@ def _end_call_tool_definition() -> dict:
     }
 
 
+def _get_caller_profile_tool_definition(base_url: str) -> dict:
+    return {
+        "type": "custom",
+        "name": "get_caller_profile",
+        "description": (
+            "Retrieve the full profile of the current caller from the restaurant's memory database. "
+            "Call this when the caller references a prior visit, prior call, a pending follow-up, "
+            "or when you need their preferences or staff notes. "
+            "No parameters needed — the caller is identified automatically from the call context."
+        ),
+        "url": f"{base_url}/api/retell/tools/get-caller-profile/",
+        "speak_during_execution": False,
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    }
+
+
 def build_tool_list(base_url: str, escalation_number: str | None = None, enable_sms: bool = False, lang: str = "en") -> list:
     """
     Build the full Retell general_tools list.
@@ -164,6 +184,7 @@ def build_tool_list(base_url: str, escalation_number: str | None = None, enable_
     tools = [
         _save_caller_info_tool_definition(base_url),
         _get_info_tool_definition(base_url),
+        _get_caller_profile_tool_definition(base_url),
         _resolve_date_tool_definition(base_url),
         _end_call_tool_definition(),
     ]

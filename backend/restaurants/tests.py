@@ -748,3 +748,99 @@ class GetCallerSummaryTest(TestCase):
                                     HTTP_X_RETELL_SIGNATURE="sig")
         dyn = resp.json()["call_inbound"]["dynamic_variables"]
         self.assertIn("caller_summary", dyn)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# get_caller_profile TOOL ENDPOINT TESTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class GetCallerProfileToolTest(TestCase):
+    """
+    Tests for POST /api/retell/tools/get-caller-profile/
+
+    Security focus: caller must be identified from call.from_number only,
+    never from agent-supplied args. Endpoint is strictly read-only.
+    """
+
+    def setUp(self):
+        self.client = Client()
+        self.restaurant = make_restaurant(
+            name="La Perla",
+            retell_phone_number="+13051234567",
+        )
+        self.url = reverse("retell_tool_get_caller_profile")
+
+    def _post(self, from_number="+13055550001", to_number="+13051234567", args=None):
+        payload = {
+            "call": {"from_number": from_number, "to_number": to_number},
+            "args": args or {},
+        }
+        return self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
+
+    def _make_memory(self, **kwargs):
+        defaults = {
+            "restaurant": self.restaurant,
+            "phone": "+13055550001",
+            "name": "Mavi",
+            "call_count": 3,
+            "last_call_summary": "Wanted to book for 17 people.",
+            "preferences": "prefers terrace",
+            "staff_notes": "VIP",
+        }
+        defaults.update(kwargs)
+        return CallerMemory.objects.create(**defaults)
+
+    def test_only_accepts_post(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 405)
+
+    def test_invalid_json_returns_400(self):
+        response = self.client.post(self.url, data="bad json", content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_returns_profile_for_known_caller(self):
+        self._make_memory()
+        response = self._post()
+        self.assertEqual(response.status_code, 200)
+        result = response.json()["result"]
+        self.assertIn("Mavi", result)
+        self.assertIn("Wanted to book for 17 people", result)
+        self.assertIn("prefers terrace", result)
+        self.assertIn("VIP", result)
+
+    def test_returns_no_profile_message_for_unknown_caller(self):
+        response = self._post(from_number="+10000000000")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("No profile", response.json()["result"])
+
+    def test_returns_error_when_from_number_missing(self):
+        payload = {"call": {"to_number": "+13051234567"}, "args": {}}
+        response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("No caller number", response.json()["result"])
+
+    def test_cannot_spoof_caller_via_args(self):
+        """Agent-supplied args must have no effect on which caller is looked up."""
+        # Mavi's record exists for from_number +13055550001
+        self._make_memory()
+        # Attacker tries to pass a spoofed phone in args — should be ignored
+        response = self._post(
+            from_number="+10000000000",   # unknown real caller
+            args={"phone": "+13055550001"},  # spoofed arg — must be ignored
+        )
+        # Should NOT return Mavi's profile
+        self.assertNotIn("Mavi", response.json()["result"])
+
+    def test_unknown_restaurant_returns_not_found_message(self):
+        response = self._post(to_number="+19999999999")
+        self.assertIn("not found", response.json()["result"].lower())
+
+    def test_profile_does_not_leak_across_restaurants(self):
+        """A CallerMemory for restaurant A must not be visible to restaurant B."""
+        other = make_restaurant(name="El Patio", retell_phone_number="+10001112222")
+        CallerMemory.objects.create(
+            restaurant=other, phone="+13055550001", name="Secret", call_count=1,
+        )
+        # Query against La Perla (self.restaurant) — should not see El Patio's data
+        response = self._post()
+        self.assertNotIn("Secret", response.json()["result"])

@@ -1553,6 +1553,61 @@ def retell_tool_get_info(request):
 
 
 @csrf_exempt
+def retell_tool_get_caller_profile(request):
+    """
+    Retell custom tool — returns the full CallerMemory profile for the current caller.
+
+    Security: caller is identified exclusively from call.from_number (Retell call context),
+    never from agent-supplied parameters. All DB access is via Django ORM (parameterized).
+    This endpoint is read-only — no writes occur during the call.
+    """
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"result": "error: invalid json"}, status=400)
+
+    call        = data.get("call", {})
+    to_number   = call.get("to_number", "").strip()   # identifies the restaurant
+    from_number = call.get("from_number", "").strip()  # identifies the caller
+
+    if not from_number:
+        return JsonResponse({"result": "No caller number available."})
+
+    restaurant = Restaurant.objects.filter(retell_phone_number=to_number, is_active=True).first()
+    if not restaurant:
+        return JsonResponse({"result": "Restaurant not found."})
+
+    from .models import CallerMemory
+    try:
+        mem = CallerMemory.objects.get(phone=from_number, restaurant=restaurant)
+    except CallerMemory.DoesNotExist:
+        return JsonResponse({"result": "No profile found for this caller."})
+
+    parts = []
+    if mem.name:
+        parts.append(f"Name: {mem.name}")
+    if mem.email:
+        parts.append(f"Email: {mem.email}")
+    parts.append(f"Total calls: {mem.call_count}")
+    if mem.last_call_at:
+        parts.append(f"Last call: {mem.last_call_at.strftime('%b %d, %Y')}")
+    if mem.last_call_summary:
+        parts.append(f"Last call summary: {mem.last_call_summary}")
+    if mem.preferences:
+        parts.append(f"Preferences: {mem.preferences}")
+    if mem.staff_notes:
+        parts.append(f"Staff notes: {mem.staff_notes}")
+
+    logger.info(
+        "get_caller_profile: restaurant=%s caller=%s → %d fields returned",
+        restaurant.slug, from_number[-4:], len(parts),
+    )
+    return JsonResponse({"result": "\n".join(parts)})
+
+
+@csrf_exempt
 def retell_tool_send_sms(request):
     """Retell custom tool webhook — sends an SMS to the caller via Twilio."""
     if request.method != "POST":
