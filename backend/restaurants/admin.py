@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 from .models import (
     CallDetail,
     CallEvent,
+    CallerMemory,
     Restaurant,
     RestaurantKnowledgeBase,
     SmsLog,
@@ -40,6 +41,7 @@ You handle calls naturally and efficiently, exactly like a great human reception
 - Avoid robotic phrases. Never say "How may I assist you today?" if you already greeted them.
 - When reading times/dates, use natural speech (e.g., "7 PM", not "19:00").
 - Do not make up information. Always use your tools.
+- Caller memory: If the caller references a prior visit, a message they left, or a pending follow-up, call `get_caller_profile()` to retrieve their full history before responding.
 - When saying the website, always say EXACTLY: {{website_domain_spoken}} — never read a raw URL.
 - When saying the email, always say EXACTLY: {{contact_email_spoken}} — never read a raw email address.
 
@@ -651,6 +653,20 @@ class SmsLogAdmin(admin.ModelAdmin):
     list_filter    = ("status", "restaurant")
     search_fields  = ("to_number", "message", "twilio_sid")
     readonly_fields = ("created_at", "delivered_at", "twilio_sid", "error_message")
+
+
+@admin.register(CallerMemory)
+class CallerMemoryAdmin(admin.ModelAdmin):
+    list_display   = ("phone", "name", "restaurant", "call_count", "last_call_at", "updated_at")
+    list_filter    = ("restaurant",)
+    search_fields  = ("phone", "name", "email", "preferences", "staff_notes")
+    readonly_fields = ("call_count", "last_call_at", "last_call_summary", "created_at", "updated_at")
+    fieldsets = (
+        (None, {"fields": ("restaurant", "phone", "name", "email")}),
+        ("Call History", {"fields": ("call_count", "last_call_at", "last_call_summary")}),
+        ("Staff Annotations", {"fields": ("preferences", "staff_notes")}),
+        ("Timestamps", {"fields": ("created_at", "updated_at")}),
+    )
 
 
 # ─── Restaurant Admin ─────────────────────────────────────────────────────────
