@@ -653,3 +653,98 @@ class CallerMemoryModelTest(TestCase):
         )
         detail = CallDetail.objects.create(call_event=event)
         self.assertEqual(detail.call_summary, "")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# _get_caller_summary TESTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class GetCallerSummaryTest(TestCase):
+    """Tests for _get_caller_summary(): formatting and edge cases."""
+
+    def setUp(self):
+        from django.utils import timezone
+        self.restaurant = make_restaurant(name="La Perla")
+        self.now = timezone.now()
+
+    def _make_memory(self, **kwargs):
+        from .models import CallerMemory
+        defaults = {
+            "restaurant": self.restaurant,
+            "phone": "+13055550001",
+            "name": "Mavi",
+            "call_count": 3,
+            "last_call_at": self.now,
+            "last_call_summary": "Asked about a reservation for 17 people.",
+        }
+        defaults.update(kwargs)
+        return CallerMemory.objects.create(**defaults)
+
+    def _call(self, phone):
+        from .views import _get_caller_summary
+        return _get_caller_summary(phone, self.restaurant)
+
+    def test_empty_string_when_no_memory_exists(self):
+        """First-time caller — no CallerMemory record — should return empty string."""
+        result = self._call("+13055550001")
+        self.assertEqual(result, "")
+
+    def test_empty_string_when_phone_is_blank(self):
+        """Blank from_number should return empty string without querying DB."""
+        result = self._call("")
+        self.assertEqual(result, "")
+
+    def test_includes_name_and_call_count(self):
+        self._make_memory()
+        result = self._call("+13055550001")
+        self.assertIn("Mavi", result)
+        self.assertIn("3", result)
+
+    def test_includes_last_call_summary(self):
+        self._make_memory()
+        result = self._call("+13055550001")
+        self.assertIn("reservation for 17 people", result)
+
+    def test_includes_preferences_when_set(self):
+        self._make_memory(preferences="prefers terrace seating")
+        result = self._call("+13055550001")
+        self.assertIn("prefers terrace seating", result)
+
+    def test_excludes_preferences_when_blank(self):
+        self._make_memory(preferences="")
+        result = self._call("+13055550001")
+        self.assertNotIn("preferences", result.lower().split("known")[1] if "known" in result.lower() else result)
+
+    def test_includes_staff_notes_when_set(self):
+        self._make_memory(staff_notes="VIP client")
+        result = self._call("+13055550001")
+        self.assertIn("VIP client", result)
+
+    def test_returns_returning_caller_header(self):
+        self._make_memory()
+        result = self._call("+13055550001")
+        self.assertIn("RETURNING CALLER", result)
+
+    def test_no_memory_for_different_restaurant(self):
+        """CallerMemory for a different restaurant should NOT appear."""
+        other = make_restaurant(name="El Patio")
+        CallerMemory.objects.create(
+            restaurant=other, phone="+13055550001",
+            name="Mavi", call_count=1,
+        )
+        result = self._call("+13055550001")
+        self.assertEqual(result, "")
+
+    def test_inbound_webhook_includes_caller_summary_key(self):
+        """The inbound webhook response must always include caller_summary key."""
+        from unittest.mock import patch
+        url = reverse("retell_webhook", kwargs={"rest_id": self.restaurant.id})
+        from .models import Subscription
+        Subscription.objects.create(restaurant=self.restaurant, status="active", communication_balance=50)
+        payload = json.dumps({"to_number": self.restaurant.retell_phone_number})
+        with patch("restaurants.views.Retell") as MockRetell:
+            MockRetell.return_value.verify.return_value = True
+            resp = self.client.post(url, data=payload, content_type="application/json",
+                                    HTTP_X_RETELL_SIGNATURE="sig")
+        dyn = resp.json()["call_inbound"]["dynamic_variables"]
+        self.assertIn("caller_summary", dyn)
