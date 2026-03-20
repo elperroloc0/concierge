@@ -1005,3 +1005,160 @@ class CallerTypeUpsertTest(TestCase):
         """CallerMemory created manually without caller_type must default to guest."""
         mem = CallerMemory.objects.create(restaurant=self.restaurant, phone="+13055550002")
         self.assertEqual(mem.caller_type, CallerMemory.CALLER_TYPE_GUEST)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PORTAL GUEST CRM VIEW TESTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class PortalGuestsListTest(TestCase):
+    """Tests for portal_guests list view."""
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        self.user = User.objects.create_user("owner", password="pass")
+        self.restaurant = make_restaurant(name="La Perla", retell_phone_number="+13051234567")
+        self.restaurant.user = self.user
+        self.restaurant.save()
+        self.client.force_login(self.user)
+        self.url = reverse("portal_guests", kwargs={"slug": self.restaurant.slug})
+
+    def _make_memory(self, phone, caller_type="guest", name=""):
+        return CallerMemory.objects.create(
+            restaurant=self.restaurant, phone=phone,
+            caller_type=caller_type, name=name, call_count=1,
+        )
+
+    def test_requires_login(self):
+        self.client.logout()
+        resp = self.client.get(self.url)
+        self.assertNotEqual(resp.status_code, 200)
+
+    def test_returns_200_for_authenticated_owner(self):
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_shows_guests_tab_by_default(self):
+        self._make_memory("+13055550001", caller_type="guest", name="Mavi")
+        self._make_memory("+13055550002", caller_type="business", name="Sysco Rep")
+        resp = self.client.get(self.url)
+        self.assertContains(resp, "Mavi")
+        self.assertNotContains(resp, "Sysco Rep")
+
+    def test_business_tab_shows_business_contacts(self):
+        self._make_memory("+13055550001", caller_type="guest", name="Mavi")
+        self._make_memory("+13055550002", caller_type="business", name="Sysco Rep")
+        resp = self.client.get(self.url + "?tab=business")
+        self.assertNotContains(resp, "Mavi")
+        self.assertContains(resp, "Sysco Rep")
+
+    def test_search_filters_by_name(self):
+        self._make_memory("+13055550001", name="Mavi")
+        self._make_memory("+13055550002", name="Carlos")
+        resp = self.client.get(self.url + "?q=Mavi")
+        self.assertContains(resp, "Mavi")
+        self.assertNotContains(resp, "Carlos")
+
+    def test_other_restaurant_records_not_visible(self):
+        other = make_restaurant(name="El Patio")
+        CallerMemory.objects.create(restaurant=other, phone="+10001112222", name="Intruder", call_count=1)
+        resp = self.client.get(self.url)
+        self.assertNotContains(resp, "Intruder")
+
+
+class PortalGuestDetailTest(TestCase):
+    """Tests for portal_guest_detail view: GET display and POST save."""
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        self.user = User.objects.create_user("owner2", password="pass")
+        self.restaurant = make_restaurant(name="La Perla 2")
+        self.restaurant.user = self.user
+        self.restaurant.save()
+        self.client.force_login(self.user)
+        self.memory = CallerMemory.objects.create(
+            restaurant=self.restaurant, phone="+13055550099",
+            name="Mavi", call_count=2, caller_type="guest",
+        )
+        self.url = reverse("portal_guest_detail", kwargs={
+            "slug": self.restaurant.slug, "memory_pk": self.memory.pk
+        })
+
+    def test_get_returns_200_with_profile(self):
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Mavi")
+        self.assertContains(resp, "+13055550099")
+
+    def test_post_saves_preferences_and_staff_notes(self):
+        resp = self.client.post(self.url, {
+            "action": "save",
+            "preferences": "prefers terrace",
+            "staff_notes": "VIP",
+            "caller_type": "guest",
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.memory.refresh_from_db()
+        self.assertEqual(self.memory.preferences, "prefers terrace")
+        self.assertEqual(self.memory.staff_notes, "VIP")
+
+    def test_post_can_change_caller_type(self):
+        resp = self.client.post(self.url, {
+            "action": "save",
+            "preferences": "",
+            "staff_notes": "",
+            "caller_type": "business",
+        })
+        self.memory.refresh_from_db()
+        self.assertEqual(self.memory.caller_type, "business")
+
+    def test_cannot_access_other_restaurant_profile(self):
+        other_rest = make_restaurant(name="Other")
+        other_mem  = CallerMemory.objects.create(
+            restaurant=other_rest, phone="+10001112222", call_count=1,
+        )
+        url = reverse("portal_guest_detail", kwargs={
+            "slug": other_rest.slug, "memory_pk": other_mem.pk
+        })
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 404)
+
+
+class PortalGuestDeleteTest(TestCase):
+    """Tests for portal_guest_delete: POST-only, ownership, redirect."""
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        self.user = User.objects.create_user("owner3", password="pass")
+        self.restaurant = make_restaurant(name="La Perla 3")
+        self.restaurant.user = self.user
+        self.restaurant.save()
+        self.client.force_login(self.user)
+        self.memory = CallerMemory.objects.create(
+            restaurant=self.restaurant, phone="+13055550077", call_count=1,
+        )
+
+    def _url(self, pk=None):
+        return reverse("portal_guest_delete", kwargs={
+            "slug": self.restaurant.slug,
+            "memory_pk": pk or self.memory.pk,
+        })
+
+    def test_get_returns_405(self):
+        resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, 405)
+
+    def test_post_deletes_record_and_redirects(self):
+        resp = self.client.post(self._url())
+        self.assertRedirects(resp, reverse("portal_guests", kwargs={"slug": self.restaurant.slug}))
+        self.assertFalse(CallerMemory.objects.filter(pk=self.memory.pk).exists())
+
+    def test_cannot_delete_other_restaurant_record(self):
+        other_rest = make_restaurant(name="Other 2")
+        other_mem  = CallerMemory.objects.create(restaurant=other_rest, phone="+10001112333", call_count=1)
+        url = reverse("portal_guest_delete", kwargs={
+            "slug": other_rest.slug, "memory_pk": other_mem.pk
+        })
+        resp = self.client.post(url)
+        self.assertEqual(resp.status_code, 404)
+        self.assertTrue(CallerMemory.objects.filter(pk=other_mem.pk).exists())

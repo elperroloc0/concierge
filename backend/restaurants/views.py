@@ -15,6 +15,7 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db.models import Q
 from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -23,7 +24,7 @@ from django.views.decorators.csrf import csrf_exempt
 from retell import Retell
 
 from .forms import KnowledgeBaseForm, RestaurantBasicForm, AccountEmailForm, PasswordUpdateForm
-from .models import CallDetail, CallEvent, Restaurant, RestaurantKnowledgeBase, SmsLog, Subscription, PendingEmailChange
+from .models import CallDetail, CallEvent, CallerMemory, Restaurant, RestaurantKnowledgeBase, SmsLog, Subscription, PendingEmailChange
 from .services.retell_client import RetellClient
 from .services.retell_tools import build_tool_list
 
@@ -269,7 +270,6 @@ def _get_caller_summary(from_number: str, restaurant) -> str:
     """
     if not from_number:
         return ""
-    from .models import CallerMemory
     try:
         mem = CallerMemory.objects.get(phone=from_number, restaurant=restaurant)
     except CallerMemory.DoesNotExist:
@@ -867,7 +867,6 @@ def _upsert_caller_memory(call_event: CallEvent, restaurant) -> None:
     Merges new name/email if provided; always updates call_count,
     last_call_at, and last_call_summary from Retell.
     """
-    from .models import CallerMemory
     from django.utils import timezone as dj_tz
 
     call         = call_event.payload.get("call", {})
@@ -1642,7 +1641,6 @@ def retell_tool_get_caller_profile(request):
     if not restaurant:
         return JsonResponse({"result": "Restaurant not found."})
 
-    from .models import CallerMemory
     try:
         mem = CallerMemory.objects.get(phone=from_number, restaurant=restaurant)
     except CallerMemory.DoesNotExist:
@@ -2671,8 +2669,84 @@ def portal_reservation_status(request, slug, event_pk):
 
 @login_required
 def portal_guests(request, slug):
-    """Redirect to unified Call Log — kept for backwards-compat with bookmarks."""
-    return redirect("portal_calls", slug=slug)
+    """CRM list: all CallerMemory records for this restaurant, split by caller_type."""
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+
+    active_tab = request.GET.get("tab", "guest")
+    if active_tab not in ("guest", "business"):
+        active_tab = "guest"
+
+    q = request.GET.get("q", "").strip()
+
+    qs = (
+        restaurant.caller_memories
+        .filter(caller_type=active_tab)
+        .order_by("-last_call_at")
+    )
+    if q:
+        qs = qs.filter(Q(name__icontains=q) | Q(phone__icontains=q))
+
+    paginator = Paginator(qs, 25)
+    page_obj  = paginator.get_page(request.GET.get("page"))
+
+    guest_count    = restaurant.caller_memories.filter(caller_type="guest").count()
+    business_count = restaurant.caller_memories.filter(caller_type="business").count()
+
+    return render(request, "portal/guests.html", {
+        "restaurant":    restaurant,
+        "page_obj":      page_obj,
+        "active_tab":    active_tab,
+        "q":             q,
+        "guest_count":   guest_count,
+        "business_count": business_count,
+    })
+
+
+@login_required
+def portal_guest_detail(request, slug, memory_pk):
+    """CRM detail: view/edit a single CallerMemory profile + call history."""
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    memory     = get_object_or_404(CallerMemory, pk=memory_pk, restaurant=restaurant)
+
+    saved = False
+    if request.method == "POST":
+        action = request.POST.get("action", "save")
+        if action == "save":
+            memory.preferences = request.POST.get("preferences", "").strip()
+            memory.staff_notes = request.POST.get("staff_notes", "").strip()
+            new_type = request.POST.get("caller_type", "").strip()
+            if new_type in (CallerMemory.CALLER_TYPE_GUEST, CallerMemory.CALLER_TYPE_BUSINESS):
+                memory.caller_type = new_type
+            memory.save(update_fields=["preferences", "staff_notes", "caller_type"])
+            saved = True
+
+    # Call history for this phone number at this restaurant
+    call_history = (
+        CallDetail.objects
+        .filter(caller_phone=memory.phone, call_event__restaurant=restaurant)
+        .select_related("call_event")
+        .order_by("-created_at")[:20]
+    )
+
+    return render(request, "portal/guest_detail.html", {
+        "restaurant":   restaurant,
+        "memory":       memory,
+        "call_history": call_history,
+        "saved":        saved,
+        "caller_type_choices": CallerMemory.CALLER_TYPE_CHOICES,
+    })
+
+
+@login_required
+def portal_guest_delete(request, slug, memory_pk):
+    """Delete a CallerMemory record. POST only."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    memory     = get_object_or_404(CallerMemory, pk=memory_pk, restaurant=restaurant)
+    memory.delete()
+    messages.success(request, f"Caller profile for {memory.name or memory.phone} deleted.")
+    return redirect("portal_guests", slug=slug)
 
 
 # ─── Billing (Stripe) ────────────────────────────────────────────────────────
