@@ -15,6 +15,7 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db.models import Exists, OuterRef, Q
 from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -2428,10 +2429,29 @@ def portal_calls(request, slug):
     date_to            = request.GET.get("date_to", "")
     phone_filter       = request.GET.get("phone", "").strip()
 
-    # Base queryset — any CallEvent that has a CallDetail attached
+    # Base queryset — one row per actual call (deduplicated by call_id).
+    # Prefer call_analyzed > call_ended > others to guard against legacy data
+    # where multiple event types had CallDetails for the same call.
+    _has_analyzed = CallEvent.objects.filter(
+        payload__call__call_id=OuterRef("payload__call__call_id"),
+        event_type="call_analyzed",
+        detail__isnull=False,
+        restaurant=restaurant,
+    )
+    _has_analyzed_or_ended = CallEvent.objects.filter(
+        payload__call__call_id=OuterRef("payload__call__call_id"),
+        event_type__in=["call_analyzed", "call_ended"],
+        detail__isnull=False,
+        restaurant=restaurant,
+    )
     base_qs = (
         CallEvent.objects
         .filter(restaurant=restaurant, detail__isnull=False)
+        .filter(
+            Q(event_type="call_analyzed") |
+            (Q(event_type="call_ended") & ~Exists(_has_analyzed)) |
+            (~Q(event_type__in=["call_analyzed", "call_ended"]) & ~Exists(_has_analyzed_or_ended))
+        )
         .select_related("detail")
         .prefetch_related("sms_logs")
         .order_by("-created_at")
