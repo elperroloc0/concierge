@@ -17,7 +17,7 @@ from django.forms import ValidationError
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from .models import CallEvent, Restaurant
+from .models import CallDetail, CallEvent, CallerMemory, Restaurant
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPERS
@@ -568,3 +568,88 @@ class EventsWebhookTest(TestCase):
 
         sub.refresh_from_db()
         self.assertEqual(sub.communication_balance, Decimal("9.50"))
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CALLER MEMORY MODEL TESTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class CallerMemoryModelTest(TestCase):
+    """Tests for CallerMemory model: creation, uniqueness, __str__, defaults."""
+
+    def setUp(self):
+        self.restaurant = make_restaurant(name="La Perla")
+
+    def _make_memory(self, **kwargs):
+        defaults = {
+            "restaurant": self.restaurant,
+            "phone": "+13055550001",
+            "name": "Mavi",
+            "call_count": 1,
+            "last_call_summary": "Asked about a reservation for 17 people.",
+        }
+        defaults.update(kwargs)
+        return CallerMemory.objects.create(**defaults)
+
+    def test_creation_stores_all_fields(self):
+        """CallerMemory should persist all provided fields."""
+        mem = self._make_memory(email="mavi@example.com", preferences="prefers terrace")
+        mem.refresh_from_db()
+        self.assertEqual(mem.phone, "+13055550001")
+        self.assertEqual(mem.name, "Mavi")
+        self.assertEqual(mem.email, "mavi@example.com")
+        self.assertEqual(mem.preferences, "prefers terrace")
+        self.assertEqual(mem.call_count, 1)
+
+    def test_unique_together_prevents_duplicate_phone_per_restaurant(self):
+        """Two records with the same (restaurant, phone) must raise IntegrityError."""
+        from django.db import IntegrityError
+        self._make_memory()
+        with self.assertRaises(IntegrityError):
+            CallerMemory.objects.create(
+                restaurant=self.restaurant,
+                phone="+13055550001",
+                call_count=2,
+            )
+
+    def test_same_phone_different_restaurant_is_allowed(self):
+        """Same phone number on a different restaurant should succeed."""
+        other = make_restaurant(name="El Patio")
+        self._make_memory()
+        mem2 = CallerMemory.objects.create(
+            restaurant=other,
+            phone="+13055550001",
+            call_count=1,
+        )
+        self.assertEqual(CallerMemory.objects.filter(phone="+13055550001").count(), 2)
+
+    def test_str_uses_name_when_available(self):
+        mem = self._make_memory(name="Mavi")
+        self.assertIn("Mavi", str(mem))
+        self.assertIn(self.restaurant.slug, str(mem))
+
+    def test_str_falls_back_to_phone_when_no_name(self):
+        mem = self._make_memory(name="")
+        self.assertIn("+13055550001", str(mem))
+
+    def test_blank_defaults(self):
+        """Fields with default='' should not require explicit values."""
+        mem = CallerMemory.objects.create(
+            restaurant=self.restaurant,
+            phone="+13055550002",
+        )
+        self.assertEqual(mem.name, "")
+        self.assertEqual(mem.email, "")
+        self.assertEqual(mem.preferences, "")
+        self.assertEqual(mem.staff_notes, "")
+        self.assertEqual(mem.last_call_summary, "")
+        self.assertEqual(mem.call_count, 0)
+
+    def test_call_detail_has_call_summary_field(self):
+        """CallDetail.call_summary field must exist and default to empty string."""
+        event = CallEvent.objects.create(
+            restaurant=self.restaurant,
+            event_type="call_ended",
+            payload={},
+        )
+        detail = CallDetail.objects.create(call_event=event)
+        self.assertEqual(detail.call_summary, "")
