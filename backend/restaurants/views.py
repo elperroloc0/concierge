@@ -880,6 +880,9 @@ def _upsert_caller_memory(call_event: CallEvent, restaurant) -> None:
     new_name      = str(analysis.get("caller_name") or "").strip()[:255]
     new_email     = str(analysis.get("caller_email") or "").strip()[:255]
     new_summary   = (full_analysis.get("call_summary") or "").strip()
+    call_reason   = str(analysis.get("call_reason") or "").strip()
+    # Guests always take precedence — a non_customer call never downgrades a guest
+    new_type = CallerMemory.CALLER_TYPE_BUSINESS if call_reason == "non_customer" else CallerMemory.CALLER_TYPE_GUEST
 
     mem, created = CallerMemory.objects.get_or_create(
         phone=from_number,
@@ -887,6 +890,7 @@ def _upsert_caller_memory(call_event: CallEvent, restaurant) -> None:
         defaults={
             "name":              new_name,
             "email":             new_email,
+            "caller_type":       new_type,
             "call_count":        1,
             "last_call_at":      dj_tz.now(),
             "last_call_summary": new_summary,
@@ -899,11 +903,14 @@ def _upsert_caller_memory(call_event: CallEvent, restaurant) -> None:
             mem.name = new_name
         if new_email:
             mem.email = new_email
+        # Guests always take precedence over business — never downgrade
+        if new_type == CallerMemory.CALLER_TYPE_GUEST:
+            mem.caller_type = CallerMemory.CALLER_TYPE_GUEST
         mem.call_count   += 1
         mem.last_call_at  = dj_tz.now()
         if new_summary:
             mem.last_call_summary = new_summary
-        mem.save(update_fields=["name", "email", "call_count", "last_call_at", "last_call_summary"])
+        mem.save(update_fields=["name", "email", "caller_type", "call_count", "last_call_at", "last_call_summary"])
 
     logger.info(
         "_upsert_caller_memory: restaurant=%s phone=%s count=%d created=%s",

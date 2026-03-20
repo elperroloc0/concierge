@@ -566,6 +566,21 @@ class CallerMemory(models.Model):
     # AI-generated summary of the most recent call (from Retell)
     last_call_summary = models.TextField(blank=True, default="")
 
+    # Caller classification — set automatically, editable by staff
+    CALLER_TYPE_GUEST    = "guest"
+    CALLER_TYPE_BUSINESS = "business"
+    CALLER_TYPE_CHOICES  = [
+        (CALLER_TYPE_GUEST,    "Guest"),
+        (CALLER_TYPE_BUSINESS, "Business Contact"),
+    ]
+    caller_type = models.CharField(
+        max_length=16,
+        choices=CALLER_TYPE_CHOICES,
+        default=CALLER_TYPE_GUEST,
+        db_index=True,
+        help_text="'guest' = customer; 'business' = vendor, press, sales, etc."
+    )
+
     # Staff-editable annotations
     preferences = models.TextField(
         blank=True, default="",

@@ -949,3 +949,59 @@ class UpsertCallerMemoryTest(TestCase):
         _build_call_detail_from_payload(event)
         detail = CallDetail.objects.get(call_event=event)
         self.assertEqual(detail.call_summary, "Called about the menu.")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# caller_type UPSERT TESTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class CallerTypeUpsertTest(TestCase):
+    """Tests for caller_type assignment logic in _upsert_caller_memory."""
+
+    def setUp(self):
+        self.restaurant = make_restaurant(name="La Perla")
+
+    def _make_event(self, from_number="+13055550001", call_reason="other"):
+        return CallEvent.objects.create(
+            restaurant=self.restaurant,
+            event_type="call_analyzed",
+            payload={"call": {
+                "from_number": from_number,
+                "call_analysis": {"call_summary": "", "custom_analysis_data": {"call_reason": call_reason}},
+            }},
+        )
+
+    def _upsert(self, event):
+        from .views import _upsert_caller_memory
+        _upsert_caller_memory(event, self.restaurant)
+
+    def test_non_customer_call_creates_business_type(self):
+        self._upsert(self._make_event(call_reason="non_customer"))
+        mem = CallerMemory.objects.get(phone="+13055550001", restaurant=self.restaurant)
+        self.assertEqual(mem.caller_type, CallerMemory.CALLER_TYPE_BUSINESS)
+
+    def test_regular_call_creates_guest_type(self):
+        for reason in ("reservation", "hours", "menu", "complaint", "other"):
+            CallerMemory.objects.filter(restaurant=self.restaurant).delete()
+            self._upsert(self._make_event(call_reason=reason))
+            mem = CallerMemory.objects.get(phone="+13055550001", restaurant=self.restaurant)
+            self.assertEqual(mem.caller_type, CallerMemory.CALLER_TYPE_GUEST, msg=f"Failed for reason={reason}")
+
+    def test_guest_is_never_downgraded_to_business(self):
+        """If a guest calls again and is classified as non_customer, type stays guest."""
+        self._upsert(self._make_event(call_reason="reservation"))
+        self._upsert(self._make_event(call_reason="non_customer"))
+        mem = CallerMemory.objects.get(phone="+13055550001", restaurant=self.restaurant)
+        self.assertEqual(mem.caller_type, CallerMemory.CALLER_TYPE_GUEST)
+
+    def test_business_can_be_upgraded_to_guest(self):
+        """If a business contact later calls as a guest, they become a guest."""
+        self._upsert(self._make_event(call_reason="non_customer"))
+        self._upsert(self._make_event(call_reason="reservation"))
+        mem = CallerMemory.objects.get(phone="+13055550001", restaurant=self.restaurant)
+        self.assertEqual(mem.caller_type, CallerMemory.CALLER_TYPE_GUEST)
+
+    def test_default_caller_type_is_guest(self):
+        """CallerMemory created manually without caller_type must default to guest."""
+        mem = CallerMemory.objects.create(restaurant=self.restaurant, phone="+13055550002")
+        self.assertEqual(mem.caller_type, CallerMemory.CALLER_TYPE_GUEST)
