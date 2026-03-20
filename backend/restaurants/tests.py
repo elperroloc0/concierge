@@ -1102,6 +1102,15 @@ class PortalGuestDetailTest(TestCase):
         self.assertEqual(self.memory.preferences, "prefers terrace")
         self.assertEqual(self.memory.staff_notes, "VIP")
 
+    def test_save_name_action_updates_name(self):
+        resp = self.client.post(self.url, {
+            "action": "save_name",
+            "name": "Mavi González",
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.memory.refresh_from_db()
+        self.assertEqual(self.memory.name, "Mavi González")
+
     def test_post_can_change_caller_type(self):
         resp = self.client.post(self.url, {
             "action": "save",

@@ -2719,6 +2719,10 @@ def portal_guest_detail(request, slug, memory_pk):
                 memory.caller_type = new_type
             memory.save(update_fields=["preferences", "staff_notes", "caller_type"])
             saved = True
+        elif action == "save_name":
+            memory.name = request.POST.get("name", "").strip()[:255]
+            memory.save(update_fields=["name"])
+            saved = True
 
     # Call history for this phone number at this restaurant
     call_history = (

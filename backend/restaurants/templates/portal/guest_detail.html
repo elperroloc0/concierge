@@ -25,7 +25,21 @@
       <i class="bi bi-person-fill fs-3 text-primary"></i>
     </div>
     <div class="flex-grow-1">
-      <h5 class="fw-bold mb-1">{{ memory.name|default:"Unknown name" }}</h5>
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <h5 class="fw-bold mb-0" id="nameDisplay">{{ memory.name|default:"Unknown name" }}</h5>
+        <button type="button" class="btn btn-link btn-sm p-0 text-muted" onclick="showNameEdit()" id="editNameBtn" title="Edit name">
+          <i class="bi bi-pencil fs-6"></i>
+        </button>
+      </div>
+      <form method="post" id="nameEditForm" class="d-none mb-1">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="save_name">
+        <div class="input-group input-group-sm" style="max-width:300px">
+          <input type="text" name="name" class="form-control" value="{{ memory.name }}" placeholder="Full name" id="nameInput">
+          <button type="submit" class="btn btn-primary">Save</button>
+          <button type="button" class="btn btn-outline-secondary" onclick="hideNameEdit()">Cancel</button>
+        </div>
+      </form>
       <p class="text-muted mb-1">
         <i class="bi bi-telephone me-1"></i>{{ memory.phone }}
         {% if memory.email %}
@@ -190,6 +204,18 @@
 
 {% block extra_scripts %}
 <script>
+function showNameEdit() {
+  document.getElementById('nameDisplay').classList.add('d-none');
+  document.getElementById('editNameBtn').classList.add('d-none');
+  document.getElementById('nameEditForm').classList.remove('d-none');
+  const inp = document.getElementById('nameInput');
+  inp.focus(); inp.select();
+}
+function hideNameEdit() {
+  document.getElementById('nameDisplay').classList.remove('d-none');
+  document.getElementById('editNameBtn').classList.remove('d-none');
+  document.getElementById('nameEditForm').classList.add('d-none');
+}
 function confirmDelete(btn) {
   document.getElementById('deleteForm').action = btn.dataset.deleteUrl;
   document.getElementById('deleteModalName').textContent = btn.dataset.name;
