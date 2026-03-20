@@ -16,6 +16,7 @@ urlpatterns = [
     path("<slug:slug>/calls/<int:event_pk>/resolve-followup/", views.portal_resolve_followup, name="portal_resolve_followup"),
     path("<slug:slug>/calls/<int:event_pk>/reservation-status/", views.portal_reservation_status, name="portal_reservation_status"),
     path("<slug:slug>/guests/",                          views.portal_guests,        name="portal_guests"),
+    path("<slug:slug>/guests/add/",                      views.portal_guest_create,  name="portal_guest_create"),
     path("<slug:slug>/guests/<int:memory_pk>/",          views.portal_guest_detail,  name="portal_guest_detail"),
     path("<slug:slug>/guests/<int:memory_pk>/delete/",   views.portal_guest_delete,  name="portal_guest_delete"),
     path("<slug:slug>/billing/",            views.portal_billing,          name="portal_billing"),

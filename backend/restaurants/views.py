@@ -2789,6 +2789,39 @@ def portal_guest_delete(request, slug, memory_pk):
     return redirect("portal_guests", slug=slug)
 
 
+@login_required
+def portal_guest_create(request, slug):
+    """Manually create a CallerMemory record from the portal."""
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    phone = request.POST.get("phone", "").strip()
+    if not phone:
+        messages.error(request, "Phone number is required.")
+        return redirect("portal_guests", slug=slug)
+
+    if CallerMemory.objects.filter(restaurant=restaurant, phone=phone).exists():
+        messages.error(request, f"A profile for {phone} already exists.")
+        return redirect("portal_guests", slug=slug)
+
+    caller_type = request.POST.get("caller_type", CallerMemory.CALLER_TYPE_GUEST)
+    if caller_type not in (CallerMemory.CALLER_TYPE_GUEST, CallerMemory.CALLER_TYPE_BUSINESS):
+        caller_type = CallerMemory.CALLER_TYPE_GUEST
+
+    memory = CallerMemory.objects.create(
+        restaurant=restaurant,
+        phone=phone,
+        name=request.POST.get("name", "").strip(),
+        email=request.POST.get("email", "").strip(),
+        caller_type=caller_type,
+        preferences=request.POST.get("preferences", "").strip(),
+        staff_notes=request.POST.get("staff_notes", "").strip(),
+    )
+    return redirect("portal_guest_detail", slug=slug, memory_pk=memory.pk)
+
+
 # ─── Billing (Stripe) ────────────────────────────────────────────────────────
 
 def _get_or_create_subscription(restaurant):
