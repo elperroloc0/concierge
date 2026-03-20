@@ -255,6 +255,9 @@ class CallDetail(models.Model):
     # Audio recording URL from Retell AI
     recording_url = models.URLField(max_length=500, blank=True, default="")
 
+    # AI-generated call summary from Retell (populated from call_ended event)
+    call_summary = models.TextField(blank=True, default="")
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -539,3 +542,62 @@ class PendingEmailChange(models.Model):
     def __str__(self):
         return f"Pending change for {self.user.email} -> {self.new_email}"
 
+
+class CallerMemory(models.Model):
+    """
+    Persistent per-caller profile, keyed by (restaurant, phone).
+    Built automatically from call_ended events; editable by staff.
+    """
+    restaurant = models.ForeignKey(
+        "restaurants.Restaurant",
+        on_delete=models.CASCADE,
+        related_name="caller_memories",
+    )
+    # Caller identifier — E.164 format, e.g. "+13055551234"
+    phone = models.CharField(max_length=32, db_index=True)
+
+    # Identity — updated with each call, last confirmed value wins
+    name  = models.CharField(max_length=255, blank=True, default="")
+    email = models.EmailField(max_length=255, blank=True, default="")
+
+    # Call history
+    call_count    = models.PositiveIntegerField(default=0)
+    last_call_at  = models.DateTimeField(null=True, blank=True)
+    # AI-generated summary of the most recent call (from Retell)
+    last_call_summary = models.TextField(blank=True, default="")
+
+    # Caller classification — set automatically, editable by staff
+    CALLER_TYPE_GUEST    = "guest"
+    CALLER_TYPE_BUSINESS = "business"
+    CALLER_TYPE_CHOICES  = [
+        (CALLER_TYPE_GUEST,    "Guest"),
+        (CALLER_TYPE_BUSINESS, "Business Contact"),
+    ]
+    caller_type = models.CharField(
+        max_length=16,
+        choices=CALLER_TYPE_CHOICES,
+        default=CALLER_TYPE_GUEST,
+        db_index=True,
+        help_text="'guest' = customer; 'business' = vendor, press, sales, etc."
+    )
+
+    # Staff-editable annotations
+    preferences = models.TextField(
+        blank=True, default="",
+        help_text="e.g. 'prefers terrace seating, gluten-free'"
+    )
+    staff_notes = models.TextField(
+        blank=True, default="",
+        help_text="e.g. 'VIP', 'do not call before noon'"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [["restaurant", "phone"]]
+        ordering = ["-last_call_at"]
+
+    def __str__(self):
+        label = self.name or self.phone
+        return f"CallerMemory[{self.restaurant.slug} | {label}]"

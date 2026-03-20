@@ -176,6 +176,7 @@
         {% for c in enriched %}
         <!-- Main row -->
         <tr class="call-row"
+            id="call-{{ c.event.pk }}"
             data-bs-toggle="collapse"
             data-bs-target="#panel-{{ c.event.pk }}"
             aria-expanded="false">
@@ -429,6 +430,20 @@
 
 {% block extra_scripts %}
 <script>
+// Auto-expand and scroll to call row when arriving via anchor link (#call-NNN)
+(function () {
+  const hash = window.location.hash; // e.g. "#call-42"
+  if (!hash.startsWith('#call-')) return;
+  const row = document.querySelector(hash);
+  if (!row) return;
+  const panelId = row.getAttribute('data-bs-target');
+  const panel = panelId && document.querySelector(panelId);
+  if (panel) {
+    new bootstrap.Collapse(panel, { toggle: false }).show();
+  }
+  setTimeout(() => row.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
+})();
+
 // Rotate chevron on expand/collapse
 document.querySelectorAll('.call-row').forEach(row => {
   const targetId = row.getAttribute('data-bs-target');

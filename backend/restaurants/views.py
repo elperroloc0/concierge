@@ -25,7 +25,7 @@ from django.views.decorators.csrf import csrf_exempt
 from retell import Retell
 
 from .forms import KnowledgeBaseForm, RestaurantBasicForm, AccountEmailForm, PasswordUpdateForm
-from .models import CallDetail, CallEvent, Restaurant, RestaurantKnowledgeBase, SmsLog, Subscription, PendingEmailChange
+from .models import CallDetail, CallEvent, CallerMemory, Restaurant, RestaurantKnowledgeBase, SmsLog, Subscription, PendingEmailChange
 from .services.retell_client import RetellClient
 from .services.retell_tools import build_tool_list
 
@@ -263,39 +263,36 @@ def _build_non_customer_rules(kb) -> str:
     return header + "\n".join(lines)
 
 
-def _get_caller_history(from_number: str, restaurant) -> str:
-    """Return a formatted RETURNING CALLER block for the system prompt, or empty string."""
+def _get_caller_summary(from_number: str, restaurant) -> str:
+    """
+    Return a lightweight RETURNING CALLER block to inject at call start,
+    or empty string if this is a first-time caller.
+    Reads from CallerMemory — populated after each call_ended event.
+    """
     if not from_number:
         return ""
-    from datetime import timedelta
-    from django.utils import timezone as dj_tz
-    cutoff = dj_tz.now() - timedelta(days=60)
-    records = list(
-        CallDetail.objects
-        .filter(caller_phone=from_number, call_event__restaurant=restaurant, created_at__gte=cutoff)
-        .order_by("-created_at")[:5]
-    )
-    if not records:
+    try:
+        mem = CallerMemory.objects.get(phone=from_number, restaurant=restaurant)
+    except CallerMemory.DoesNotExist:
         return ""
-    lines = []
-    for detail in records:
-        date_str = detail.created_at.strftime("%b %d")
-        reason = detail.get_call_reason_display()
-        line = f"- {date_str}: {reason}"
-        if detail.follow_up_needed:
-            line += " (follow-up was needed)"
-        if detail.wants_reservation and detail.reservation_date:
-            line += f" — reservation for {detail.party_size or '?'} on {detail.reservation_date.strftime('%b %d')}"
-        if detail.notes:
-            line += f" — {detail.notes[:100]}"
-        lines.append(line)
-    return (
-        "### RETURNING CALLER\n"
-        "This number has called before. Use this context naturally — "
-        "acknowledge prior interactions if the caller references them, but do not volunteer it unless relevant:\n"
-        + "\n".join(lines)
-        + "\n"
+
+    name_label = mem.name or "known caller"
+    lines = [f"### RETURNING CALLER — {name_label}"]
+    lines.append(
+        f"Called {mem.call_count} time(s)."
+        + (f" Last call: {mem.last_call_at.strftime('%b %d, %Y')}." if mem.last_call_at else "")
     )
+    if mem.last_call_summary:
+        lines.append(f"Last call summary: {mem.last_call_summary}")
+    if mem.preferences:
+        lines.append(f"Known preferences: {mem.preferences}")
+    if mem.staff_notes:
+        lines.append(f"Staff notes: {mem.staff_notes}")
+    lines.append(
+        "Use this context naturally — acknowledge prior interactions if the caller "
+        "references them. Call get_caller_profile() if you need the full history."
+    )
+    return "\n".join(lines) + "\n"
 
 
 def _build_dynamic_variables(restaurant):
@@ -350,7 +347,7 @@ def _build_dynamic_variables(restaurant):
             "bar_menu_url":             kb.bar_menu_url  or _site,
             "brand_voice_notes":        kb.brand_voice_notes or "",
             "non_customer_call_rules":  _build_non_customer_rules(kb),
-            "caller_history":           "",
+            "caller_summary":            "",
         })
     else:
         dyn.update({
@@ -363,7 +360,7 @@ def _build_dynamic_variables(restaurant):
             "bar_menu_url":             restaurant.website or "",
             "brand_voice_notes":        "",
             "non_customer_call_rules":  "",
-            "caller_history":           "",
+            "caller_summary":            "",
         })
     return dyn
 
@@ -851,6 +848,7 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
             "special_requests":  str(_get("special_requests", "")),
             "follow_up_needed":  _get_bool("follow_up_needed", True),
             "recording_url":     call.get("recording_url", ""),
+            "call_summary":      (full_analysis.get("call_summary") or "").strip(),
             "notes":             "",
         },
     )
@@ -862,6 +860,62 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
             event_type="call_in_progress",
             payload__call__call_id=call_id,
         ).exclude(pk=call_event.pk).delete()
+
+
+def _upsert_caller_memory(call_event: CallEvent, restaurant) -> None:
+    """
+    Create or update CallerMemory after a call ends.
+    Merges new name/email if provided; always updates call_count,
+    last_call_at, and last_call_summary from Retell.
+    """
+    from django.utils import timezone as dj_tz
+
+    call         = call_event.payload.get("call", {})
+    from_number  = (call.get("from_number") or "").strip()
+    if not from_number:
+        return
+
+    full_analysis = call.get("call_analysis") or {}
+    analysis      = full_analysis.get("custom_analysis_data") or full_analysis
+    new_name      = str(analysis.get("caller_name") or "").strip()[:255]
+    new_email     = str(analysis.get("caller_email") or "").strip()[:255]
+    new_summary   = (full_analysis.get("call_summary") or "").strip()
+    call_reason   = str(analysis.get("call_reason") or "").strip()
+    # Guests always take precedence — a non_customer call never downgrades a guest
+    new_type = CallerMemory.CALLER_TYPE_BUSINESS if call_reason == "non_customer" else CallerMemory.CALLER_TYPE_GUEST
+
+    mem, created = CallerMemory.objects.get_or_create(
+        phone=from_number,
+        restaurant=restaurant,
+        defaults={
+            "name":              new_name,
+            "email":             new_email,
+            "caller_type":       new_type,
+            "call_count":        1,
+            "last_call_at":      dj_tz.now(),
+            "last_call_summary": new_summary,
+        },
+    )
+
+    if not created:
+        # Only overwrite name/email if new value is non-empty
+        if new_name:
+            mem.name = new_name
+        if new_email:
+            mem.email = new_email
+        # Guests always take precedence over business — never downgrade
+        if new_type == CallerMemory.CALLER_TYPE_GUEST:
+            mem.caller_type = CallerMemory.CALLER_TYPE_GUEST
+        mem.call_count   += 1
+        mem.last_call_at  = dj_tz.now()
+        if new_summary:
+            mem.last_call_summary = new_summary
+        mem.save(update_fields=["name", "email", "caller_type", "call_count", "last_call_at", "last_call_summary"])
+
+    logger.info(
+        "_upsert_caller_memory: restaurant=%s phone=%s count=%d created=%s",
+        restaurant.slug, from_number[-4:], mem.call_count, created,
+    )
 
 
 # ─── Retell Webhooks ──────────────────────────────────────────────────────────
@@ -936,7 +990,7 @@ def retell_inbound_webhook(request, rest_id):
     dyn_vars = _build_dynamic_variables(restaurant)
     dyn_vars["account_status"] = "active"
     dyn_vars["caller_from_number"] = _from if _from != "?" else ""
-    dyn_vars["caller_history"] = _get_caller_history(_from if _from != "?" else "", restaurant)
+    dyn_vars["caller_summary"] = _get_caller_summary(_from if _from != "?" else "", restaurant)
     dyn_response = {"call_inbound": {"dynamic_variables": dyn_vars}}
 
     # Verify Retell signature
@@ -1359,6 +1413,11 @@ def retell_events_webhook(request):
         except Exception:
             logger.exception("Failed to build CallDetail for CallEvent pk=%s", call_event.pk)
 
+        try:
+            _upsert_caller_memory(call_event, restaurant)
+        except Exception:
+            logger.exception("Failed to upsert CallerMemory for CallEvent pk=%s", call_event.pk)
+
         # Always clean up call_in_progress placeholders for this call_id,
         # even if _build_call_detail_from_payload raised an exception.
         _analyzed_call_id = data.get("call", {}).get("call_id", "")
@@ -1554,6 +1613,60 @@ def retell_tool_get_info(request):
     result = _format_kb_topic(kb, topic)
     logger.info("get_info: restaurant=%s topic=%r → %d chars", restaurant.slug, topic, len(result))
     return JsonResponse({"result": result})
+
+
+@csrf_exempt
+def retell_tool_get_caller_profile(request):
+    """
+    Retell custom tool — returns the full CallerMemory profile for the current caller.
+
+    Security: caller is identified exclusively from call.from_number (Retell call context),
+    never from agent-supplied parameters. All DB access is via Django ORM (parameterized).
+    This endpoint is read-only — no writes occur during the call.
+    """
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"result": "error: invalid json"}, status=400)
+
+    call        = data.get("call", {})
+    to_number   = call.get("to_number", "").strip()   # identifies the restaurant
+    from_number = call.get("from_number", "").strip()  # identifies the caller
+
+    if not from_number:
+        return JsonResponse({"result": "No caller number available."})
+
+    restaurant = Restaurant.objects.filter(retell_phone_number=to_number, is_active=True).first()
+    if not restaurant:
+        return JsonResponse({"result": "Restaurant not found."})
+
+    try:
+        mem = CallerMemory.objects.get(phone=from_number, restaurant=restaurant)
+    except CallerMemory.DoesNotExist:
+        return JsonResponse({"result": "No profile found for this caller."})
+
+    parts = []
+    if mem.name:
+        parts.append(f"Name: {mem.name}")
+    if mem.email:
+        parts.append(f"Email: {mem.email}")
+    parts.append(f"Total calls: {mem.call_count}")
+    if mem.last_call_at:
+        parts.append(f"Last call: {mem.last_call_at.strftime('%b %d, %Y')}")
+    if mem.last_call_summary:
+        parts.append(f"Last call summary: {mem.last_call_summary}")
+    if mem.preferences:
+        parts.append(f"Preferences: {mem.preferences}")
+    if mem.staff_notes:
+        parts.append(f"Staff notes: {mem.staff_notes}")
+
+    logger.info(
+        "get_caller_profile: restaurant=%s caller=%s → %d fields returned",
+        restaurant.slug, from_number[-4:], len(parts),
+    )
+    return JsonResponse({"result": "\n".join(parts)})
 
 
 @csrf_exempt
@@ -2592,8 +2705,88 @@ def portal_reservation_status(request, slug, event_pk):
 
 @login_required
 def portal_guests(request, slug):
-    """Redirect to unified Call Log — kept for backwards-compat with bookmarks."""
-    return redirect("portal_calls", slug=slug)
+    """CRM list: all CallerMemory records for this restaurant, split by caller_type."""
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+
+    active_tab = request.GET.get("tab", "guest")
+    if active_tab not in ("guest", "business"):
+        active_tab = "guest"
+
+    q = request.GET.get("q", "").strip()
+
+    qs = (
+        restaurant.caller_memories
+        .filter(caller_type=active_tab)
+        .order_by("-last_call_at")
+    )
+    if q:
+        qs = qs.filter(Q(name__icontains=q) | Q(phone__icontains=q))
+
+    paginator = Paginator(qs, 25)
+    page_obj  = paginator.get_page(request.GET.get("page"))
+
+    guest_count    = restaurant.caller_memories.filter(caller_type="guest").count()
+    business_count = restaurant.caller_memories.filter(caller_type="business").count()
+
+    return render(request, "portal/guests.html", {
+        "restaurant":    restaurant,
+        "page_obj":      page_obj,
+        "active_tab":    active_tab,
+        "q":             q,
+        "guest_count":   guest_count,
+        "business_count": business_count,
+    })
+
+
+@login_required
+def portal_guest_detail(request, slug, memory_pk):
+    """CRM detail: view/edit a single CallerMemory profile + call history."""
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    memory     = get_object_or_404(CallerMemory, pk=memory_pk, restaurant=restaurant)
+
+    saved = False
+    if request.method == "POST":
+        action = request.POST.get("action", "save")
+        if action == "save":
+            memory.preferences = request.POST.get("preferences", "").strip()
+            memory.staff_notes = request.POST.get("staff_notes", "").strip()
+            new_type = request.POST.get("caller_type", "").strip()
+            if new_type in (CallerMemory.CALLER_TYPE_GUEST, CallerMemory.CALLER_TYPE_BUSINESS):
+                memory.caller_type = new_type
+            memory.save(update_fields=["preferences", "staff_notes", "caller_type"])
+            saved = True
+        elif action == "save_name":
+            memory.name = request.POST.get("name", "").strip()[:255]
+            memory.save(update_fields=["name"])
+            saved = True
+
+    # Call history for this phone number at this restaurant
+    call_history = (
+        CallDetail.objects
+        .filter(caller_phone=memory.phone, call_event__restaurant=restaurant)
+        .select_related("call_event")
+        .order_by("-created_at")[:20]
+    )
+
+    return render(request, "portal/guest_detail.html", {
+        "restaurant":   restaurant,
+        "memory":       memory,
+        "call_history": call_history,
+        "saved":        saved,
+        "caller_type_choices": CallerMemory.CALLER_TYPE_CHOICES,
+    })
+
+
+@login_required
+def portal_guest_delete(request, slug, memory_pk):
+    """Delete a CallerMemory record. POST only."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    memory     = get_object_or_404(CallerMemory, pk=memory_pk, restaurant=restaurant)
+    memory.delete()
+    messages.success(request, f"Caller profile for {memory.name or memory.phone} deleted.")
+    return redirect("portal_guests", slug=slug)
 
 
 # ─── Billing (Stripe) ────────────────────────────────────────────────────────

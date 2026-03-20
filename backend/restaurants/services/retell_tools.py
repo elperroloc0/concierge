@@ -40,10 +40,8 @@ def _save_caller_info_tool_definition(base_url: str) -> dict:
         "type": "custom",
         "name": "save_caller_info",
         "description": (
-            "Save the caller's name only when they explicitly provide it in response to a direct question. "
-            "Call once silently — do NOT announce it or pause the conversation. "
-            "Also set follow_up_needed=true if the caller explicitly asks to be called back "
-            "or requests to speak with a human and could not be transferred."
+            "Save caller info. Call once silently — do NOT announce it. "
+            "Set follow_up_needed=true if caller asked for callback or requested a human and could not be transferred."
         ),
         "url": f"{base_url}/api/retell/tools/save-caller-info/",
         "speak_during_execution": False,
@@ -98,11 +96,7 @@ def _get_info_tool_definition(base_url: str) -> dict:
     return {
         "type": "custom",
         "name": "get_info",
-        "description": (
-            "Look up specific restaurant information from the knowledge base. "
-            "Call this BEFORE answering any factual question about the restaurant. "
-            "Do not guess or recall from memory — always retrieve the data first."
-        ),
+        "description": "Retrieve restaurant information from the knowledge base. Call BEFORE answering any factual question — never guess.",
         "url": f"{base_url}/api/retell/tools/get-info/",
         "speak_during_execution": False,
         "parameters": {
@@ -154,6 +148,25 @@ def _end_call_tool_definition() -> dict:
     }
 
 
+def _get_caller_profile_tool_definition(base_url: str) -> dict:
+    return {
+        "type": "custom",
+        "name": "get_caller_profile",
+        "description": (
+            "Retrieve the caller's profile (history, preferences, staff notes). "
+            "Call when caller references a prior visit, call, or follow-up. "
+            "No parameters needed."
+        ),
+        "url": f"{base_url}/api/retell/tools/get-caller-profile/",
+        "speak_during_execution": False,
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    }
+
+
 def build_tool_list(base_url: str, escalation_number: str | None = None, enable_sms: bool = False, lang: str = "en") -> list:
     """
     Build the full Retell general_tools list.
@@ -164,6 +177,7 @@ def build_tool_list(base_url: str, escalation_number: str | None = None, enable_
     tools = [
         _save_caller_info_tool_definition(base_url),
         _get_info_tool_definition(base_url),
+        _get_caller_profile_tool_definition(base_url),
         _resolve_date_tool_definition(base_url),
         _end_call_tool_definition(),
     ]
