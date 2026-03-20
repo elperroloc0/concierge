@@ -844,3 +844,108 @@ class GetCallerProfileToolTest(TestCase):
         # Query against La Perla (self.restaurant) — should not see El Patio's data
         response = self._post()
         self.assertNotIn("Secret", response.json()["result"])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# _upsert_caller_memory TESTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class UpsertCallerMemoryTest(TestCase):
+    """Tests for _upsert_caller_memory(): creation, merging, and idempotency."""
+
+    def setUp(self):
+        self.restaurant = make_restaurant(name="La Perla")
+
+    def _make_event(self, from_number="+13055550001", caller_name="", call_summary="", caller_email=""):
+        """Create a call_analyzed CallEvent with the given fields."""
+        event = CallEvent.objects.create(
+            restaurant=self.restaurant,
+            event_type="call_analyzed",
+            payload={
+                "call": {
+                    "from_number": from_number,
+                    "call_analysis": {
+                        "call_summary": call_summary,
+                        "custom_analysis_data": {
+                            "caller_name": caller_name,
+                            "caller_email": caller_email,
+                        },
+                    },
+                }
+            },
+        )
+        return event
+
+    def _upsert(self, event):
+        from .views import _upsert_caller_memory
+        _upsert_caller_memory(event, self.restaurant)
+
+    def test_creates_new_record_for_first_call(self):
+        event = self._make_event(caller_name="Mavi", call_summary="Wanted to book for 17.")
+        self._upsert(event)
+        mem = CallerMemory.objects.get(phone="+13055550001", restaurant=self.restaurant)
+        self.assertEqual(mem.name, "Mavi")
+        self.assertEqual(mem.call_count, 1)
+        self.assertIn("book for 17", mem.last_call_summary)
+
+    def test_increments_call_count_on_subsequent_calls(self):
+        event1 = self._make_event(caller_name="Mavi", call_summary="First call.")
+        event2 = self._make_event(caller_name="Mavi", call_summary="Second call.")
+        self._upsert(event1)
+        self._upsert(event2)
+        mem = CallerMemory.objects.get(phone="+13055550001", restaurant=self.restaurant)
+        self.assertEqual(mem.call_count, 2)
+
+    def test_updates_summary_on_subsequent_call(self):
+        event1 = self._make_event(call_summary="Old summary.")
+        event2 = self._make_event(call_summary="New summary.")
+        self._upsert(event1)
+        self._upsert(event2)
+        mem = CallerMemory.objects.get(phone="+13055550001", restaurant=self.restaurant)
+        self.assertEqual(mem.last_call_summary, "New summary.")
+
+    def test_does_not_overwrite_name_with_empty_string(self):
+        """If the new call has no caller_name, existing name must be preserved."""
+        event1 = self._make_event(caller_name="Mavi")
+        event2 = self._make_event(caller_name="")   # no name captured this time
+        self._upsert(event1)
+        self._upsert(event2)
+        mem = CallerMemory.objects.get(phone="+13055550001", restaurant=self.restaurant)
+        self.assertEqual(mem.name, "Mavi")
+
+    def test_updates_name_when_new_call_provides_one(self):
+        event1 = self._make_event(caller_name="Mavi")
+        event2 = self._make_event(caller_name="Maria")
+        self._upsert(event1)
+        self._upsert(event2)
+        mem = CallerMemory.objects.get(phone="+13055550001", restaurant=self.restaurant)
+        self.assertEqual(mem.name, "Maria")
+
+    def test_skips_when_from_number_is_missing(self):
+        """If the call has no from_number, no CallerMemory record should be created."""
+        event = self._make_event(from_number="")
+        self._upsert(event)
+        self.assertFalse(CallerMemory.objects.filter(restaurant=self.restaurant).exists())
+
+    def test_staff_notes_and_preferences_are_not_overwritten(self):
+        """Staff-curated fields must survive post-call upserts."""
+        CallerMemory.objects.create(
+            restaurant=self.restaurant, phone="+13055550001",
+            preferences="prefers terrace", staff_notes="VIP", call_count=1,
+        )
+        event = self._make_event(caller_name="Mavi", call_summary="New call.")
+        self._upsert(event)
+        mem = CallerMemory.objects.get(phone="+13055550001", restaurant=self.restaurant)
+        self.assertEqual(mem.preferences, "prefers terrace")
+        self.assertEqual(mem.staff_notes, "VIP")
+
+    def test_call_summary_stored_on_call_detail(self):
+        """call_summary from Retell must be stored on CallDetail.call_summary."""
+        event = self._make_event(call_summary="Called about the menu.")
+        # _build_call_detail_from_payload needs a proper call_ended structure
+        event.payload["call"]["from_number"] = "+13055550001"
+        event.save()
+        from .views import _build_call_detail_from_payload
+        _build_call_detail_from_payload(event)
+        detail = CallDetail.objects.get(call_event=event)
+        self.assertEqual(detail.call_summary, "Called about the menu.")

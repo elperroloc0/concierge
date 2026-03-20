@@ -847,6 +847,7 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
             "special_requests":  str(_get("special_requests", "")),
             "follow_up_needed":  _get_bool("follow_up_needed", True),
             "recording_url":     call.get("recording_url", ""),
+            "call_summary":      (full_analysis.get("call_summary") or "").strip(),
             "notes":             "",
         },
     )
@@ -858,6 +859,56 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
             event_type="call_in_progress",
             payload__call__call_id=call_id,
         ).exclude(pk=call_event.pk).delete()
+
+
+def _upsert_caller_memory(call_event: CallEvent, restaurant) -> None:
+    """
+    Create or update CallerMemory after a call ends.
+    Merges new name/email if provided; always updates call_count,
+    last_call_at, and last_call_summary from Retell.
+    """
+    from .models import CallerMemory
+    from django.utils import timezone as dj_tz
+
+    call         = call_event.payload.get("call", {})
+    from_number  = (call.get("from_number") or "").strip()
+    if not from_number:
+        return
+
+    full_analysis = call.get("call_analysis") or {}
+    analysis      = full_analysis.get("custom_analysis_data") or full_analysis
+    new_name      = str(analysis.get("caller_name") or "").strip()[:255]
+    new_email     = str(analysis.get("caller_email") or "").strip()[:255]
+    new_summary   = (full_analysis.get("call_summary") or "").strip()
+
+    mem, created = CallerMemory.objects.get_or_create(
+        phone=from_number,
+        restaurant=restaurant,
+        defaults={
+            "name":              new_name,
+            "email":             new_email,
+            "call_count":        1,
+            "last_call_at":      dj_tz.now(),
+            "last_call_summary": new_summary,
+        },
+    )
+
+    if not created:
+        # Only overwrite name/email if new value is non-empty
+        if new_name:
+            mem.name = new_name
+        if new_email:
+            mem.email = new_email
+        mem.call_count   += 1
+        mem.last_call_at  = dj_tz.now()
+        if new_summary:
+            mem.last_call_summary = new_summary
+        mem.save(update_fields=["name", "email", "call_count", "last_call_at", "last_call_summary"])
+
+    logger.info(
+        "_upsert_caller_memory: restaurant=%s phone=%s count=%d created=%s",
+        restaurant.slug, from_number[-4:], mem.call_count, created,
+    )
 
 
 # ─── Retell Webhooks ──────────────────────────────────────────────────────────
@@ -1354,6 +1405,11 @@ def retell_events_webhook(request):
             _build_call_detail_from_payload(call_event)
         except Exception:
             logger.exception("Failed to build CallDetail for CallEvent pk=%s", call_event.pk)
+
+        try:
+            _upsert_caller_memory(call_event, restaurant)
+        except Exception:
+            logger.exception("Failed to upsert CallerMemory for CallEvent pk=%s", call_event.pk)
 
         # Always clean up call_in_progress placeholders for this call_id,
         # even if _build_call_detail_from_payload raised an exception.
