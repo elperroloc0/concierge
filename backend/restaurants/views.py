@@ -1934,17 +1934,17 @@ def _kb_lint(restaurant, kb):
             error_tabs.append("hours")
 
     if kb:
-        if len(kb.food_menu_summary) > 500:
+        if len(kb.food_menu_summary) > 1500:
             warnings.append(
                 f"Food menu summary is long ({len(kb.food_menu_summary)} chars). "
-                "Keep it under 3 sentences for clearer phone answers — the agent will summarize naturally."
+                "Consider trimming to under 1500 characters — long descriptions reduce agent accuracy."
             )
             if "menu" not in warning_tabs:
                 warning_tabs.append("menu")
-        if len(kb.bar_menu_summary) > 500:
+        if len(kb.bar_menu_summary) > 1500:
             warnings.append(
                 f"Bar menu summary is long ({len(kb.bar_menu_summary)} chars). "
-                "Keep it under 3 sentences."
+                "Consider trimming to under 1500 characters — long descriptions reduce agent accuracy."
             )
             if "menu" not in warning_tabs:
                 warning_tabs.append("menu")

@@ -89,14 +89,14 @@ class KbLintTest(TestCase):
 
     def test_warning_when_food_menu_summary_too_long(self):
         r = make_restaurant()
-        kb = make_kb(r, food_menu_summary="x" * 501)
+        kb = make_kb(r, food_menu_summary="x" * 1501)
         result = _kb_lint(r, kb)
         self.assertTrue(any("Food menu" in w for w in result["warnings"]))
         self.assertIn("menu", result["warning_tabs"])
 
     def test_warning_when_bar_menu_summary_too_long(self):
         r = make_restaurant()
-        kb = make_kb(r, bar_menu_summary="x" * 501)
+        kb = make_kb(r, bar_menu_summary="x" * 1501)
         result = _kb_lint(r, kb)
         self.assertTrue(any("Bar menu" in w for w in result["warnings"]))
 
