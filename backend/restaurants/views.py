@@ -261,6 +261,41 @@ def _build_non_customer_rules(kb) -> str:
     return header + "\n".join(lines)
 
 
+def _get_caller_history(from_number: str, restaurant) -> str:
+    """Return a formatted RETURNING CALLER block for the system prompt, or empty string."""
+    if not from_number:
+        return ""
+    from datetime import timedelta
+    from django.utils import timezone as dj_tz
+    cutoff = dj_tz.now() - timedelta(days=60)
+    records = list(
+        CallDetail.objects
+        .filter(caller_phone=from_number, call_event__restaurant=restaurant, created_at__gte=cutoff)
+        .order_by("-created_at")[:5]
+    )
+    if not records:
+        return ""
+    lines = []
+    for detail in records:
+        date_str = detail.created_at.strftime("%b %d")
+        reason = detail.get_call_reason_display()
+        line = f"- {date_str}: {reason}"
+        if detail.follow_up_needed:
+            line += " (follow-up was needed)"
+        if detail.wants_reservation and detail.reservation_date:
+            line += f" — reservation for {detail.party_size or '?'} on {detail.reservation_date.strftime('%b %d')}"
+        if detail.notes:
+            line += f" — {detail.notes[:100]}"
+        lines.append(line)
+    return (
+        "### RETURNING CALLER\n"
+        "This number has called before. Use this context naturally — "
+        "acknowledge prior interactions if the caller references them, but do not volunteer it unless relevant:\n"
+        + "\n".join(lines)
+        + "\n"
+    )
+
+
 def _build_dynamic_variables(restaurant):
     """Build the full dynamic_variables dict from Restaurant + KnowledgeBase."""
     kb = getattr(restaurant, "knowledge_base", None)
@@ -313,6 +348,7 @@ def _build_dynamic_variables(restaurant):
             "bar_menu_url":             kb.bar_menu_url  or _site,
             "brand_voice_notes":        kb.brand_voice_notes or "",
             "non_customer_call_rules":  _build_non_customer_rules(kb),
+            "caller_history":           "",
         })
     else:
         dyn.update({
@@ -325,6 +361,7 @@ def _build_dynamic_variables(restaurant):
             "bar_menu_url":             restaurant.website or "",
             "brand_voice_notes":        "",
             "non_customer_call_rules":  "",
+            "caller_history":           "",
         })
     return dyn
 
@@ -897,6 +934,7 @@ def retell_inbound_webhook(request, rest_id):
     dyn_vars = _build_dynamic_variables(restaurant)
     dyn_vars["account_status"] = "active"
     dyn_vars["caller_from_number"] = _from if _from != "?" else ""
+    dyn_vars["caller_history"] = _get_caller_history(_from if _from != "?" else "", restaurant)
     dyn_response = {"call_inbound": {"dynamic_variables": dyn_vars}}
 
     # Verify Retell signature
