@@ -32,14 +32,29 @@ from .services.retell_tools import build_tool_list
 
 # ─── Global Redirects ─────────────────────────────────────────────────────────
 
+def portal_demo_request(request):
+    """Handle demo request form submission from landing page."""
+    if request.method == "POST":
+        # Log the request — full lead handling to be implemented
+        logger.info(
+            "Demo request: name=%s %s email=%s business=%s industry=%s",
+            request.POST.get("first_name", ""),
+            request.POST.get("last_name", ""),
+            request.POST.get("email", ""),
+            request.POST.get("business_name", ""),
+            request.POST.get("industry", ""),
+        )
+    return render(request, "landing_thanks.html")
+
+
 def root_redirect(request):
-    """Redirect root '/' to the portal login or dashboard."""
+    """Show landing page for visitors; redirect authenticated users to their portal."""
     if request.user.is_authenticated:
-        # If user is logged in, try to find their restaurant
         restaurant = Restaurant.objects.filter(user=request.user).first()
         if restaurant:
             return redirect("portal_dashboard", slug=restaurant.slug)
-    return redirect("portal_login")
+        return redirect("portal_login")
+    return render(request, "landing.html")
 
 
 # ─── Retell Webhook Helpers ───────────────────────────────────────────────────

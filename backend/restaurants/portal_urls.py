@@ -4,6 +4,8 @@ from . import views
 
 urlpatterns = [
     path("", views.root_redirect),
+    # ── Landing ────────────────────────────────────────────────────────────
+    path("demo-request/",  views.portal_demo_request, name="portal_demo_request"),
     # ── Auth (no slug — pre-login) ─────────────────────────────────────────
     path("login/",views.portal_login,   name="portal_login"),
     path("logout/",views.portal_logout,  name="portal_logout"),
