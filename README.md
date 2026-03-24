@@ -1,6 +1,6 @@
 # AI Concierge - Restuarant Backend
 
-A production-ready Django application that powers an AI telephonic concierge service for restaurants, built using **Retell AI**, **Twilio**, and **Stripe**. This backend handles inbound webhook events from the AI agent, manages restaurant details and knowledge bases, tracks usage-based billing, handles SMS escalations, and provides a portal for restaurant owners to configure their agent exactly to their brand specifications.
+A production-ready Django application that powers an AI telephonic concierge service for restaurants, built using **Retell AI**, **Twilio**, and **Stripe**. This backend handles inbound webhook events from the AI agent, manages restaurant details and knowledge bases, tracks usage-based billing, handles SMS escalations, has a memory table for the agent, and provides a portal for restaurant owners to configure their agent exactly to their brand specifications.
 
 ## Features
 
