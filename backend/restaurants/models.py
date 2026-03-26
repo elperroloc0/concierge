@@ -380,6 +380,7 @@ class RestaurantKnowledgeBase(models.Model):
         choices=[("all", "All tables"), ("large_parties", "Large parties only"), ("", "N/A")]
     )
     max_cards_to_split   = models.PositiveSmallIntegerField(null=True, blank=True)
+    corkage_policy       = models.TextField(blank=True, default="", help_text="Corkage fee policy — amount, conditions, limits.")
 
     # ── Reservations & Groups ─────────────────────────────────────────────
     reservation_grace_min  = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -422,6 +423,12 @@ class RestaurantKnowledgeBase(models.Model):
     has_valet         = models.BooleanField(default=False)
     valet_cost        = models.CharField(max_length=64, blank=True, default="")
     free_parking_info = models.TextField(blank=True, default="")
+
+    # ── Team ─────────────────────────────────────────────────────────────
+    team_members = models.TextField(
+        blank=True, default="",
+        help_text="Staff the agent should recognize by name. One per line, format: Name — Role."
+    )
 
     # ── Agent Behavior ────────────────────────────────────────────────────
     affiliated_restaurants = models.TextField(

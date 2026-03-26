@@ -94,7 +94,7 @@ class KnowledgeBaseForm(forms.ModelForm):
             "bar_concept", "bar_signature_drinks", "bar_wine_beer",
             "happy_hour_details", "dietary_options",
             # Billing
-            "auto_gratuity", "service_charge_pct", "service_charge_scope", "max_cards_to_split",
+            "auto_gratuity", "service_charge_pct", "service_charge_scope", "max_cards_to_split", "corkage_policy",
             # Reservations
             "reservation_grace_min", "no_show_fee", "large_party_min_guests",
             # Private events
@@ -116,7 +116,8 @@ class KnowledgeBaseForm(forms.ModelForm):
             "financial_call_handling",
             "spam_call_handling",
             "urgent_call_action",
-            # Agent (owner-facing: call transfer + sister locations)
+            # Agent (owner-facing: team + call transfer + sister locations)
+            "team_members",
             "escalation_enabled", "escalation_conditions", "escalation_transfer_number",
             "affiliated_restaurants",
             # ROI
@@ -143,6 +144,7 @@ class KnowledgeBaseForm(forms.ModelForm):
             "service_charge_pct":     forms.TextInput(attrs=_TEXT),
             "service_charge_scope":   forms.Select(attrs=_SEL),
             "max_cards_to_split":     forms.NumberInput(attrs=_TEXT),
+            "corkage_policy":         forms.Textarea(attrs=_ta(2)),
             # Reservations
             "reservation_grace_min":  forms.NumberInput(attrs=_TEXT),
             "no_show_fee":            forms.TextInput(attrs=_TEXT),
@@ -182,7 +184,8 @@ class KnowledgeBaseForm(forms.ModelForm):
             "financial_call_handling":  forms.Select(attrs=_SEL),
             "spam_call_handling":       forms.Select(attrs=_SEL),
             "urgent_call_action":       forms.Select(attrs=_SEL),
-            # Agent — call transfer + sister locations
+            # Agent — team + call transfer + sister locations
+            "team_members":               forms.Textarea(attrs=_ta(3)),
             "affiliated_restaurants":     forms.Textarea(attrs=_ta(3)),
             "escalation_enabled":         forms.CheckboxInput(attrs=_CHECK),
             "escalation_conditions":      forms.Textarea(attrs=_ta(3)),

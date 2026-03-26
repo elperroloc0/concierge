@@ -601,6 +601,11 @@
             {{ kb_form.no_show_fee }}
             <p class="kb-hint">e.g. "$50 per person for parties of 6 or more"</p>
           </div>
+          <div class="col-12">
+            <label class="kb-label">Corkage Policy</label>
+            {{ kb_form.corkage_policy }}
+            <p class="kb-hint">e.g. "$40 per bottle, max 2 bottles per table. Not available on holidays."</p>
+          </div>
         </div>
 
       </div>
@@ -911,6 +916,11 @@
             {{ kb_form.escalation_conditions }}
             <p class="kb-hint">One condition per line. The agent will offer to transfer when any condition is clearly met.</p>
           </div>
+          <div class="col-12">
+            <label class="kb-label">Team members</label>
+            {{ kb_form.team_members }}
+            <p class="kb-hint">Staff the agent should recognize by name. One per line, format: Name — Role.</p>
+          </div>
         </div>
       </div>
 
@@ -990,6 +1000,7 @@ const EXAMPLES = {
 
   "id_reservation_grace_min":"15",
   "id_no_show_fee":          "$50 per person for parties of 6 or more",
+  "id_corkage_policy":       "$40 per bottle, max 2 bottles per table",
   "id_large_party_min_guests":"8",
 
   "id_private_dining_min_spend":   "$2,000 minimum food and beverage spend",
@@ -1006,6 +1017,7 @@ const EXAMPLES = {
 
   "id_escalation_transfer_number": "+17865551234",
   "id_escalation_conditions":      "Caller asks to speak with a manager.\nCaller reports an emergency on-site.",
+  "id_team_members":               "Name — Role\nName — Role",
   "id_affiliated_restaurants":     "Sister Restaurant Name\nAnother Location Name",
 
 };
@@ -1015,12 +1027,12 @@ const TAB_FIELDS = {
   "tab-basic":        ["id_name","id_website","id_address_full","id_location_reference","id_welcome_phrase","id_contact_phone","id_contact_email"],
   "tab-hours":        ["id_hours_of_operation","id_kitchen_closing_time","id_holiday_closure_notes","id_private_event_closures"],
   "tab-menu":         ["id_food_menu_url","id_menu_cuisine_type","id_menu_best_sellers","id_menu_price_range","id_menu_categories","id_bar_menu_url","id_bar_concept","id_bar_signature_drinks","id_bar_wine_beer","id_happy_hour_details","id_dietary_options"],
-  "tab-billing":      ["id_service_charge_pct","id_max_cards_to_split","id_cover_charge","id_no_show_fee"],
+  "tab-billing":      ["id_service_charge_pct","id_max_cards_to_split","id_cover_charge","id_no_show_fee","id_corkage_policy"],
   "tab-reservations": ["id_reservation_grace_min","id_large_party_min_guests"],
   "tab-events":       ["id_private_dining_min_spend","id_press_contact"],
   "tab-ambience":     ["id_live_music_details","id_party_vibe_start_time","id_dress_code","id_special_events_info"],
   "tab-facilities":   ["id_valet_cost","id_free_parking_info"],
-  "tab-agent":        ["id_partner_companies","id_vendor_call_handling","id_press_call_handling","id_service_call_handling","id_sales_call_handling","id_financial_call_handling","id_escalation_transfer_number","id_escalation_conditions","id_affiliated_restaurants"],
+  "tab-agent":        ["id_partner_companies","id_vendor_call_handling","id_press_call_handling","id_service_call_handling","id_sales_call_handling","id_financial_call_handling","id_escalation_transfer_number","id_escalation_conditions","id_team_members","id_affiliated_restaurants"],
   "tab-other":        ["id_owner_notes"],
 };
 

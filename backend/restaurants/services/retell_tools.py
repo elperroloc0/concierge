@@ -67,13 +67,7 @@ def _resolve_date_tool_definition(base_url: str) -> dict:
     return {
         "type": "custom",
         "name": "resolve_date",
-        "description": (
-            "Convert a relative or ambiguous date phrase into an actual calendar date. "
-            "Call this as soon as the caller gives a date for a reservation. "
-            "Use the spoken_es or spoken_en field from the response when confirming with the caller. "
-            "If is_past=true, tell the caller the date has passed. "
-            "If ambiguity is set, ask the caller to clarify."
-        ),
+        "description": "Convert a relative or ambiguous date phrase into an actual calendar date.",
         "url": f"{base_url}/api/retell/tools/resolve-date/",
         "speak_during_execution": False,
         "parameters": {
@@ -96,7 +90,7 @@ def _get_info_tool_definition(base_url: str) -> dict:
     return {
         "type": "custom",
         "name": "get_info",
-        "description": "Retrieve restaurant information from the knowledge base. Call BEFORE answering any factual question — never guess.",
+        "description": "Retrieve restaurant information from the knowledge base.",
         "url": f"{base_url}/api/retell/tools/get-info/",
         "speak_during_execution": False,
         "parameters": {
@@ -121,11 +115,7 @@ def _escalation_tool_definition(transfer_number: str) -> dict:
     return {
         "type": "transfer_call",
         "name": "transfer_to_human",
-        "description": (
-            "Transfer the caller to a human agent. "
-            "Only call when escalation conditions are met. "
-            "Never call for routine questions you can answer yourself."
-        ),
+        "description": "Transfer the caller to a human agent.",
         "transfer_destination": {
             "type": "predefined",
             "number": transfer_number,
@@ -135,6 +125,7 @@ def _escalation_tool_definition(transfer_number: str) -> dict:
             "opt_out_initial_message": True,
             "opt_out_human_detection": True,
             "on_hold_music": "ringtone",
+            "transfer_ring_duration_ms": 25000,
             "private_handoff_option": {
                 "type": "prompt",
                 "prompt": (
@@ -151,11 +142,7 @@ def _end_call_tool_definition() -> dict:
     return {
         "type": "end_call",
         "name": "end_call",
-        "description": (
-            "End the call cleanly. "
-            "Call this ONLY after a proper goodbye has been spoken. "
-            "Never call mid-conversation."
-        ),
+        "description": "End the call.",
     }
 
 
@@ -163,11 +150,7 @@ def _get_caller_profile_tool_definition(base_url: str) -> dict:
     return {
         "type": "custom",
         "name": "get_caller_profile",
-        "description": (
-            "Retrieve the caller's profile (history, preferences, staff notes). "
-            "Call when caller references a prior visit, call, or follow-up. "
-            "No parameters needed."
-        ),
+        "description": "Retrieve the caller's profile (history, preferences, staff notes). No parameters needed.",
         "url": f"{base_url}/api/retell/tools/get-caller-profile/",
         "speak_during_execution": False,
         "parameters": {

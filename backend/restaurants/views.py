@@ -361,6 +361,7 @@ def _build_dynamic_variables(restaurant):
             "food_menu_url":            kb.food_menu_url or _site,
             "bar_menu_url":             kb.bar_menu_url  or _site,
             "brand_voice_notes":        kb.brand_voice_notes or "",
+            "team_members":             kb.team_members or "",
             "non_customer_call_rules":  _build_non_customer_rules(kb),
             "caller_summary":            "",
         })
@@ -373,6 +374,7 @@ def _build_dynamic_variables(restaurant):
             "escalation_conditions":    "",
             "food_menu_url":            restaurant.website or "",
             "bar_menu_url":             restaurant.website or "",
+            "team_members":             "",
             "brand_voice_notes":        "",
             "non_customer_call_rules":  "",
             "caller_summary":            "",
@@ -1561,6 +1563,7 @@ def _format_kb_topic(kb, topic: str) -> str:
             lines.append("Auto-gratuity: Yes")
         add("Service charge", f"{kb.service_charge_pct} ({kb.get_service_charge_scope_display()})" if kb.service_charge_pct else None)
         add("Max cards to split", str(kb.max_cards_to_split) if kb.max_cards_to_split else None)
+        add("Corkage policy", kb.corkage_policy)
         add("Cover / show charge", kb.cover_charge)
         add("No-show fee", kb.no_show_fee)
 
@@ -1594,11 +1597,7 @@ def _format_kb_topic(kb, topic: str) -> str:
             add("Live music", kb.live_music_details)
         add("Special events & entertainment", kb.special_events_info)
         if not lines:
-            lines.append(
-                "No specific event details are available right now. "
-                "Do NOT suggest the caller 'call the restaurant' — they are already on a call. "
-                "Instead, offer to take a message or direct them to the website."
-            )
+            lines.append("No specific event details are available right now.")
 
     elif topic == "additional":
         add("Additional info", kb.additional_info)
