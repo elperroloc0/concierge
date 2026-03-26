@@ -1542,6 +1542,7 @@ def _format_kb_topic(kb, topic: str) -> str:
             add("Wine & beer", kb.bar_wine_beer)
         else:
             add("Bar & cocktails", kb.bar_menu_summary)  # legacy fallback
+        add("Bottle service", kb.bottle_service)
         if kb.bar_menu_url:
             lines.append(f"Bar menu link (SMS only — never read aloud): {kb.bar_menu_url}")
 

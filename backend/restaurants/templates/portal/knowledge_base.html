@@ -537,6 +537,14 @@
                 {{ kb_form.bar_wine_beer }}
                 <p class="kb-hint">{{ kb_form.bar_wine_beer.help_text }}</p>
               </div>
+              <div class="col-12">
+                <label class="kb-label">
+                  Bottle Service
+                  <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
+                </label>
+                {{ kb_form.bottle_service }}
+                <p class="kb-hint">Premium bottles, champagne, bottle service policy, pre-order options.</p>
+              </div>
             </div>
           </div><!-- /msub-bar -->
 
@@ -991,7 +999,8 @@ const EXAMPLES = {
   "id_menu_price_range":     "$15–$35 per dish",
   "id_menu_categories":      "Starters & shareables, Dumplings & gyoza, Robata & grilled, Wok & fried rice, Mains, Sides",
   "id_bar_concept":          "Craft cocktails with an extensive rum and mezcal selection. Full wine list and draft beers.",
-  "id_bar_wine_beer":        "Full wine list available by glass and bottle. Draft beers on tap. Bottle service available on weekends.",
+  "id_bar_wine_beer":        "Full wine list available by glass and bottle. Draft beers on tap.",
+  "id_bottle_service":       "Premium bottles and champagne available. Pre-order for your table — contact events team.",
   "id_happy_hour_details":   "Mon–Fri 4–7pm. 50% off all cocktails and select draft beers. Available at bar and lounge only, not dining tables.",
   "id_dietary_options":      "Vegan and gluten-free options available on request. Please notify your server of any allergies — our kitchen can accommodate most dietary needs.",
 
@@ -1026,7 +1035,7 @@ const EXAMPLES = {
 const TAB_FIELDS = {
   "tab-basic":        ["id_name","id_website","id_address_full","id_location_reference","id_welcome_phrase","id_contact_phone","id_contact_email"],
   "tab-hours":        ["id_hours_of_operation","id_kitchen_closing_time","id_holiday_closure_notes","id_private_event_closures"],
-  "tab-menu":         ["id_food_menu_url","id_menu_cuisine_type","id_menu_best_sellers","id_menu_price_range","id_menu_categories","id_bar_menu_url","id_bar_concept","id_bar_signature_drinks","id_bar_wine_beer","id_happy_hour_details","id_dietary_options"],
+  "tab-menu":         ["id_food_menu_url","id_menu_cuisine_type","id_menu_best_sellers","id_menu_price_range","id_menu_categories","id_bar_menu_url","id_bar_concept","id_bar_signature_drinks","id_bar_wine_beer","id_bottle_service","id_happy_hour_details","id_dietary_options"],
   "tab-billing":      ["id_service_charge_pct","id_max_cards_to_split","id_cover_charge","id_no_show_fee","id_corkage_policy"],
   "tab-reservations": ["id_reservation_grace_min","id_large_party_min_guests"],
   "tab-events":       ["id_private_dining_min_spend","id_press_contact"],

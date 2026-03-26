@@ -91,7 +91,7 @@ class KnowledgeBaseForm(forms.ModelForm):
             "food_menu_url", "food_menu_summary",
             "menu_cuisine_type", "menu_best_sellers", "menu_price_range", "menu_categories",
             "bar_menu_url", "bar_menu_summary",
-            "bar_concept", "bar_signature_drinks", "bar_wine_beer",
+            "bar_concept", "bar_signature_drinks", "bar_wine_beer", "bottle_service",
             "happy_hour_details", "dietary_options",
             # Billing
             "auto_gratuity", "service_charge_pct", "service_charge_scope", "max_cards_to_split", "corkage_policy",
@@ -137,6 +137,7 @@ class KnowledgeBaseForm(forms.ModelForm):
             # Menu
             "food_menu_summary":      forms.Textarea(attrs=_ta(6)),
             "bar_menu_summary":       forms.Textarea(attrs=_ta(6)),
+            "bottle_service":         forms.Textarea(attrs=_ta(3)),
             "happy_hour_details":     forms.Textarea(attrs=_ta(4)),
             "dietary_options":        forms.Textarea(attrs=_ta(4)),
             # Billing

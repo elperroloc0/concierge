@@ -520,7 +520,7 @@ class KnowledgeBaseInline(admin.StackedInline):
             "food_menu_url", "food_menu_summary",
             "menu_cuisine_type", "menu_best_sellers", "menu_price_range", "menu_categories",
             "bar_menu_url", "bar_menu_summary",
-            "bar_concept", "bar_signature_drinks", "bar_wine_beer",
+            "bar_concept", "bar_signature_drinks", "bar_wine_beer", "bottle_service",
             "happy_hour_details", "dietary_options",
         )}),
         ("Billing & Payments", {"fields": (

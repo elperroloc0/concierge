@@ -360,6 +360,9 @@ class RestaurantKnowledgeBase(models.Model):
     bar_wine_beer        = models.TextField(blank=True, default="",
         help_text="Wine & beer selection highlights.")
 
+    bottle_service      = models.TextField(blank=True, default="",
+        help_text="Bottle service details — availability, brands, pricing, pre-order policy.")
+
     happy_hour_details = models.TextField(blank=True, default="")
     dietary_options    = models.TextField(
         blank=True, default="",
