@@ -122,15 +122,26 @@ def _escalation_tool_definition(transfer_number: str) -> dict:
         "type": "transfer_call",
         "name": "transfer_to_human",
         "description": (
-            "Transfer the caller to a human agent when escalation conditions are met. "
-            "Only call this after acknowledging the caller. Never call for routine questions."
+            "Transfer the caller to a human agent. "
+            "Only call when escalation conditions are met. "
+            "Never call for routine questions you can answer yourself."
         ),
         "transfer_destination": {
             "type": "predefined",
             "number": transfer_number,
         },
         "transfer_option": {
-            "type": "cold_transfer",
+            "type": "warm_transfer",
+            "opt_out_initial_message": True,
+            "opt_out_human_detection": True,
+            "on_hold_music": "ringtone",
+            "private_handoff_option": {
+                "type": "prompt",
+                "prompt": (
+                    "Greet the staff member and briefly summarize why the caller is calling. "
+                    "Include the caller's name and reason if available."
+                ),
+            },
         },
     }
 
