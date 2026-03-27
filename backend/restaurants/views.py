@@ -2200,6 +2200,99 @@ def portal_logout(request):
     return redirect("portal_login")
 
 
+def portal_password_reset_request(request):
+    """Step 1: user enters their email to receive a reset link."""
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.tokens import default_token_generator
+    from django.utils.encoding import force_bytes
+    from django.utils.http import urlsafe_base64_encode
+
+    if request.user.is_authenticated:
+        return redirect("portal_login")
+
+    sent = False
+    error = None
+
+    if request.method == "POST":
+        email = request.POST.get("email", "").strip().lower()
+        User = get_user_model()
+        try:
+            user = User.objects.get(email__iexact=email)
+            uid   = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+            reset_url = request.build_absolute_uri(
+                reverse("portal_password_reset_confirm", kwargs={"uidb64": uid, "token": token})
+            )
+            from django.core.mail import send_mail
+            send_mail(
+                subject="Reset your Concierge Portal password",
+                message=(
+                    f"Hi,\n\n"
+                    f"We received a request to reset the password for your Concierge Portal account ({email}).\n\n"
+                    f"Click the link below to set a new password (valid for 24 hours):\n{reset_url}\n\n"
+                    f"If you did not request this, you can ignore this email.\n\n"
+                    f"— Concierge AI"
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+            )
+        except User.DoesNotExist:
+            pass  # Don't reveal whether email exists
+        except Exception:
+            logger.exception("portal_password_reset_request: failed to send email")
+            error = "Failed to send reset email. Please try again later."
+
+        if not error:
+            sent = True
+
+    return render(request, "portal/password_reset_request.html", {"sent": sent, "error": error})
+
+
+def portal_password_reset_confirm(request, uidb64, token):
+    """Step 2: user sets a new password via the link."""
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.forms import SetPasswordForm
+    from django.contrib.auth.tokens import default_token_generator
+    from django.utils.encoding import force_str
+    from django.utils.http import urlsafe_base64_decode
+
+    User = get_user_model()
+    error = None
+    form = None
+
+    try:
+        uid  = force_str(urlsafe_base64_decode(uidb64))
+        user = User.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        user = None
+
+    valid_link = user is not None and default_token_generator.check_token(user, token)
+
+    if not valid_link:
+        return render(request, "portal/password_reset_confirm.html", {"valid_link": False})
+
+    if request.method == "POST":
+        form = SetPasswordForm(user, request.POST)
+        if form.is_valid():
+            form.save()
+            return render(request, "portal/password_reset_confirm.html", {
+                "valid_link": True,
+                "done": True,
+            })
+    else:
+        form = SetPasswordForm(user)
+
+    # Apply portal form-control styling to the form fields
+    for field in form.fields.values():
+        field.widget.attrs.update({"class": "form-control"})
+
+    return render(request, "portal/password_reset_confirm.html", {
+        "valid_link": True,
+        "done": False,
+        "form": form,
+    })
+
+
 @portal_view()
 def portal_account(request, slug):
     restaurant = request.restaurant

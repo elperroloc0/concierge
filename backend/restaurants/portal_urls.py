@@ -10,6 +10,8 @@ urlpatterns = [
     path("login/",views.portal_login,   name="portal_login"),
     path("logout/",views.portal_logout,  name="portal_logout"),
     path("select-restaurant/", views.portal_select_restaurant, name="portal_select_restaurant"),
+    path("password-reset/", views.portal_password_reset_request, name="portal_password_reset_request"),
+    path("password-reset/<uidb64>/<token>/", views.portal_password_reset_confirm, name="portal_password_reset_confirm"),
     path("account/confirm-email/<uuid:token>/", views.portal_confirm_email, name="portal_confirm_email"),
 
     # ── Restaurant-scoped pages ────────────────────────────────────────────
