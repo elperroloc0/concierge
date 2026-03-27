@@ -6,7 +6,10 @@ def balance_status(request):
     if not request.user.is_authenticated:
         return {"balance_status": "", "agent_status": "inactive"}
     try:
-        sub = request.user.restaurant.subscription
+        restaurant = getattr(request, "restaurant", None)
+        if not restaurant:
+            return {"balance_status": "", "agent_status": "inactive"}
+        sub = restaurant.subscription
         bal = sub.communication_balance
 
         # Balance status for sidebar dot
@@ -32,3 +35,13 @@ def balance_status(request):
     except Exception:
         pass
     return {"balance_status": "", "agent_status": "inactive"}
+
+
+def membership(request):
+    """Inject the current membership into all templates for role-based UI."""
+    m = getattr(request, "membership", None)
+    return {
+        "membership": m,
+        "is_owner": m.role == "owner" if m else False,
+        "is_operator": m.role == "operator" if m else False,
+    }

@@ -24,8 +24,9 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from retell import Retell
 
+from .decorators import portal_view
 from .forms import KnowledgeBaseForm, RestaurantBasicForm, AccountEmailForm, PasswordUpdateForm
-from .models import CallDetail, CallEvent, CallerMemory, Restaurant, RestaurantKnowledgeBase, SmsLog, Subscription, PendingEmailChange
+from .models import CallDetail, CallEvent, CallerMemory, Restaurant, RestaurantKnowledgeBase, RestaurantMembership, SmsLog, Subscription, PendingEmailChange
 from .services.retell_client import RetellClient
 from .services.retell_tools import build_tool_list
 
@@ -50,9 +51,11 @@ def portal_demo_request(request):
 def root_redirect(request):
     """Show landing page for visitors; redirect authenticated users to their portal."""
     if request.user.is_authenticated:
-        restaurant = Restaurant.objects.filter(user=request.user).first()
-        if restaurant:
-            return redirect("portal_dashboard", slug=restaurant.slug)
+        membership = RestaurantMembership.objects.filter(
+            user=request.user, is_active=True, restaurant__is_active=True
+        ).select_related("restaurant").first()
+        if membership:
+            return redirect("portal_dashboard", slug=membership.restaurant.slug)
         return redirect("portal_login")
     return render(request, "landing.html")
 
@@ -2102,12 +2105,21 @@ def _classify_call(payload):
 
 # ─── Portal Views ─────────────────────────────────────────────────────────────
 
+def _get_login_redirect(user):
+    """Return the dashboard URL for the user's first active membership, or None."""
+    membership = RestaurantMembership.objects.filter(
+        user=user, is_active=True, restaurant__is_active=True
+    ).select_related("restaurant").first()
+    if membership:
+        return redirect("portal_dashboard", slug=membership.restaurant.slug)
+    return None
+
+
 def portal_login(request):
     if request.user.is_authenticated:
-        try:
-            return redirect("portal_dashboard", slug=request.user.restaurant.slug)
-        except Exception:
-            pass
+        redir = _get_login_redirect(request.user)
+        if redir:
+            return redir
 
     error = None
     if request.method == "POST":
@@ -2123,11 +2135,11 @@ def portal_login(request):
             pass
         if user is not None:
             login(request, user)
-            try:
-                return redirect("portal_dashboard", slug=user.restaurant.slug)
-            except Exception:
-                logger.warning("portal_login: user=%s has no restaurant linked — redirecting to login", user.username)
-                return redirect("portal_login")
+            redir = _get_login_redirect(user)
+            if redir:
+                return redir
+            logger.warning("portal_login: user=%s has no membership — redirecting to login", user.username)
+            return redirect("portal_login")
         error = "Invalid email or password."
 
     return render(request, "portal/login.html", {"error": error})
@@ -2138,9 +2150,9 @@ def portal_logout(request):
     return redirect("portal_login")
 
 
-@login_required
+@portal_view()
 def portal_account(request, slug):
-    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    restaurant = request.restaurant
     user = request.user
 
     if request.method == "POST":
@@ -2247,10 +2259,10 @@ def portal_confirm_email(request, token):
     user.username = new_email  # We use email as username in this system
     user.save()
 
-    # Also update restaurant's contact email
-    if hasattr(user, 'restaurant') and user.restaurant:
-        user.restaurant.contact_email = new_email
-        user.restaurant.save()
+    # Also update restaurant's contact email for owner memberships
+    for m in RestaurantMembership.objects.filter(user=user, role="owner", is_active=True).select_related("restaurant"):
+        m.restaurant.contact_email = new_email
+        m.restaurant.save()
 
     # Clean up pending change
     pending.delete()
@@ -2274,9 +2286,9 @@ def portal_confirm_email(request, token):
 
 
 
-@login_required
+@portal_view()
 def portal_dashboard(request, slug):
-    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    restaurant = request.restaurant
 
     from django.db.models import Sum
 
@@ -2468,9 +2480,9 @@ def portal_dashboard(request, slug):
     return render(request, "portal/dashboard.html", context)
 
 
-@login_required
+@portal_view(require_owner=True)
 def portal_update_avg_cover(request, slug):
-    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    restaurant = request.restaurant
     if request.method == "POST":
         value = request.POST.get("avg_revenue_per_cover", "").strip()
         try:
@@ -2555,9 +2567,9 @@ def _sync_retell_tools(request, restaurant: Restaurant, kb: RestaurantKnowledgeB
 
 
 
-@login_required
+@portal_view(require_kb_edit=True)
 def portal_knowledge_base(request, slug):
-    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    restaurant = request.restaurant
     kb, _ = RestaurantKnowledgeBase.objects.get_or_create(restaurant=restaurant)
 
     if request.method == "POST":
@@ -2590,9 +2602,9 @@ def portal_knowledge_base(request, slug):
     })
 
 
-@login_required
+@portal_view()
 def portal_calls(request, slug):
-    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    restaurant = request.restaurant
 
     # ── Filters from GET params ────────────────────────────────────────────────
     reason_filter      = request.GET.get("reason", "")
@@ -2709,11 +2721,11 @@ def portal_calls(request, slug):
     })
 
 
-@login_required
+@portal_view()
 def portal_resolve_followup(request, slug, event_pk):
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
-    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    restaurant = request.restaurant
     event = get_object_or_404(CallEvent, pk=event_pk, restaurant=restaurant)
     try:
         event.detail.follow_up_needed = False
@@ -2723,12 +2735,12 @@ def portal_resolve_followup(request, slug, event_pk):
     return JsonResponse({"ok": True})
 
 
-@login_required
+@portal_view()
 def portal_reservation_status(request, slug, event_pk):
     """AJAX: set reservation_status on a CallDetail (confirmed / lost / pending)."""
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
-    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    restaurant = request.restaurant
     event = get_object_or_404(CallEvent, pk=event_pk, restaurant=restaurant)
     status = request.POST.get("status", "")
     if status not in ("confirmed", "lost", "pending"):
@@ -2743,10 +2755,10 @@ def portal_reservation_status(request, slug, event_pk):
         return JsonResponse({"ok": False, "error": "No detail"}, status=404)
 
 
-@login_required
+@portal_view()
 def portal_guests(request, slug):
     """CRM list: all CallerMemory records for this restaurant, split by caller_type."""
-    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    restaurant = request.restaurant
 
     active_tab = request.GET.get("tab", "guest")
     if active_tab not in ("guest", "business"):
@@ -2778,10 +2790,10 @@ def portal_guests(request, slug):
     })
 
 
-@login_required
+@portal_view()
 def portal_guest_detail(request, slug, memory_pk):
     """CRM detail: view/edit a single CallerMemory profile + call history."""
-    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    restaurant = request.restaurant
     memory     = get_object_or_404(CallerMemory, pk=memory_pk, restaurant=restaurant)
 
     saved = False
@@ -2826,22 +2838,22 @@ def portal_guest_detail(request, slug, memory_pk):
     })
 
 
-@login_required
+@portal_view()
 def portal_guest_delete(request, slug, memory_pk):
     """Delete a CallerMemory record. POST only."""
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
-    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    restaurant = request.restaurant
     memory     = get_object_or_404(CallerMemory, pk=memory_pk, restaurant=restaurant)
     memory.delete()
     messages.success(request, f"Caller profile for {memory.name or memory.phone} deleted.")
     return redirect("portal_guests", slug=slug)
 
 
-@login_required
+@portal_view()
 def portal_guest_create(request, slug):
     """Manually create a CallerMemory record from the portal."""
-    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    restaurant = request.restaurant
 
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
@@ -2882,9 +2894,9 @@ def _get_or_create_subscription(restaurant):
     return sub
 
 
-@login_required
+@portal_view(require_owner=True)
 def portal_billing(request, slug):
-    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    restaurant = request.restaurant
     sub = _get_or_create_subscription(restaurant)
 
     # ── Expense aggregation ──────────────────────────────────────────────────
@@ -2923,12 +2935,12 @@ def portal_billing(request, slug):
     })
 
 
-@login_required
+@portal_view(require_owner=True)
 def portal_cancel_subscription(request, slug):
     if request.method != "POST":
         return redirect("portal_billing", slug=slug)
 
-    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    restaurant = request.restaurant
     sub = _get_or_create_subscription(restaurant)
 
     if sub.stripe_subscription_id:
@@ -2948,12 +2960,12 @@ def portal_cancel_subscription(request, slug):
     return redirect("portal_billing", slug=slug)
 
 
-@login_required
+@portal_view(require_owner=True)
 def portal_billing_checkout(request, slug):
     if request.method != "POST":
         return redirect("portal_billing", slug=slug)
 
-    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    restaurant = request.restaurant
     sub = _get_or_create_subscription(restaurant)
 
     if not settings.STRIPE_SECRET_KEY or not settings.STRIPE_PRICE_ID:
@@ -2985,12 +2997,12 @@ def portal_billing_checkout(request, slug):
     return redirect(session.url, permanent=False)
 
 
-@login_required
+@portal_view(require_owner=True)
 def portal_billing_topup(request, slug):
     if request.method != "POST":
         return redirect("portal_billing", slug=slug)
 
-    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    restaurant = request.restaurant
     sub = _get_or_create_subscription(restaurant)
 
     if not settings.STRIPE_SECRET_KEY or not settings.STRIPE_COMMUNICATION_PRICE_ID:
@@ -3021,12 +3033,12 @@ def portal_billing_topup(request, slug):
     return redirect(session.url, permanent=False)
 
 
-@login_required
+@portal_view(require_owner=True)
 def portal_billing_portal(request, slug):
     if request.method != "POST":
         return redirect("portal_billing", slug=slug)
 
-    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    restaurant = request.restaurant
     sub = _get_or_create_subscription(restaurant)
 
     if not settings.STRIPE_SECRET_KEY:
@@ -3047,9 +3059,9 @@ def portal_billing_portal(request, slug):
     return redirect(portal_session.url, permanent=False)
 
 
-@login_required
+@portal_view(require_owner=True)
 def portal_notifications(request, slug):
-    restaurant = get_object_or_404(Restaurant, slug=slug, user=request.user, is_active=True)
+    restaurant = request.restaurant
     saved = False
 
     if request.method == "POST":

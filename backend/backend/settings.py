@@ -117,6 +117,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'restaurants.context_processors.balance_status',
+                'restaurants.context_processors.membership',
             ],
         },
     },

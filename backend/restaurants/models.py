@@ -153,6 +153,37 @@ class Restaurant(models.Model):
         return self.name
 
 
+class RestaurantMembership(models.Model):
+    ROLE_CHOICES = [
+        ("owner", "Owner"),
+        ("operator", "Operator"),
+    ]
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="memberships"
+    )
+    restaurant = models.ForeignKey(
+        "Restaurant", on_delete=models.CASCADE, related_name="memberships"
+    )
+    role = models.CharField(max_length=16, choices=ROLE_CHOICES)
+    is_active = models.BooleanField(default=True)
+    invited_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # Owner-configurable permissions
+    can_edit_kb = models.BooleanField(
+        default=False, help_text="Operator can edit Knowledge Base."
+    )
+
+    class Meta:
+        unique_together = [("user", "restaurant")]
+
+    def __str__(self):
+        return f"{self.user} — {self.restaurant} ({self.role})"
+
+
 class Subscription(models.Model):
     STATUS_CHOICES = [
         ("active",    "Active"),

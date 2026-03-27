@@ -11,6 +11,7 @@ from .models import (
     CallEvent,
     Restaurant,
     RestaurantKnowledgeBase,
+    RestaurantMembership,
     SmsLog,
     Subscription,
 )
@@ -563,6 +564,13 @@ class KnowledgeBaseInline(admin.StackedInline):
     )
 
 
+class MembershipInline(admin.TabularInline):
+    model = RestaurantMembership
+    extra = 0
+    fields = ("user", "role", "is_active", "can_edit_kb", "created_at")
+    readonly_fields = ("created_at",)
+
+
 class SubscriptionInline(admin.StackedInline):
     model = Subscription
     can_delete = False
@@ -691,7 +699,7 @@ class RestaurantAdmin(admin.ModelAdmin):
             "enable_sms", "twilio_account_sid", "twilio_auth_token", "twilio_from_number",
         ), "description": "Enable Twilio integration, or leave credentials blank to use the platform-level Twilio from .env."}),
     )
-    inlines = [KnowledgeBaseInline, SubscriptionInline]
+    inlines = [KnowledgeBaseInline, MembershipInline, SubscriptionInline]
     actions = [
         retell_create_llm, retell_update_llm_prompt, retell_configure_call_analysis,
         retell_configure_sms_tool, retell_configure_escalation_tool,

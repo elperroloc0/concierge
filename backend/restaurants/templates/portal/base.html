@@ -36,6 +36,7 @@
         <i class="bi bi-people-fill"></i> Guests
       </a>
     </li>
+    {% if is_owner %}
     <li class="nav-item">
       <a class="nav-link {% block nav_billing %}{% endblock %}" href="{% url 'portal_billing' restaurant.slug %}">
         <i class="bi bi-credit-card-fill"></i> Billing
@@ -49,6 +50,7 @@
         <i class="bi bi-bell-fill"></i> Notifications
       </a>
     </li>
+    {% endif %}
     <li class="nav-item">
       <a class="nav-link {% block nav_account %}{% endblock %}" href="{% url 'portal_account' restaurant.slug %}">
         <i class="bi bi-person-fill"></i> Account
