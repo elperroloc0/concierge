@@ -180,6 +180,12 @@ class RestaurantMembership(models.Model):
         default=False, help_text="Has the user seen the welcome message?"
     )
 
+    # Operator notification preferences (controlled by owner)
+    notify_on_reservation = models.BooleanField(default=False)
+    notify_on_complaint = models.BooleanField(default=False)
+    notify_on_followup = models.BooleanField(default=False)
+    notify_on_non_customer = models.BooleanField(default=False)
+
     class Meta:
         unique_together = [("user", "restaurant")]
 

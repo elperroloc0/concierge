@@ -121,6 +121,67 @@
     </ul>
   </div>
 
+  {% if operator %}
+  <!-- Operator Notifications -->
+  <div class="card mb-4">
+    <div class="card-header bg-white border-bottom py-3 px-4 d-flex align-items-center gap-2">
+      <i class="bi bi-person-badge text-secondary"></i>
+      <span class="fw-semibold">Operator Notifications</span>
+      <span class="text-muted small ms-1">— {{ operator.user.get_full_name|default:operator.user.email }}</span>
+    </div>
+    <div class="card-body pb-1">
+      <p class="text-muted small mb-3">Choose which alerts are also sent to <strong>{{ operator.user.email }}</strong>.</p>
+      <ul class="list-group list-group-flush">
+
+        <li class="list-group-item d-flex align-items-center justify-content-between py-3 px-0">
+          <div>
+            <span class="fw-semibold"><i class="bi bi-calendar-event text-primary me-2"></i>Reservation Requests</span>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input op-toggle" type="checkbox" name="op_notify_on_reservation"
+                   {% if operator.notify_on_reservation %}checked{% endif %}
+                   style="width:2.5em;height:1.3em;">
+          </div>
+        </li>
+
+        <li class="list-group-item d-flex align-items-center justify-content-between py-3 px-0">
+          <div>
+            <span class="fw-semibold"><i class="bi bi-exclamation-triangle text-danger me-2"></i>Complaints</span>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input op-toggle" type="checkbox" name="op_notify_on_complaint"
+                   {% if operator.notify_on_complaint %}checked{% endif %}
+                   style="width:2.5em;height:1.3em;">
+          </div>
+        </li>
+
+        <li class="list-group-item d-flex align-items-center justify-content-between py-3 px-0">
+          <div>
+            <span class="fw-semibold"><i class="bi bi-reply-fill text-warning me-2"></i>Follow-up Needed</span>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input op-toggle" type="checkbox" name="op_notify_on_followup"
+                   {% if operator.notify_on_followup %}checked{% endif %}
+                   style="width:2.5em;height:1.3em;">
+          </div>
+        </li>
+
+        <li class="list-group-item d-flex align-items-center justify-content-between py-3 px-0">
+          <div>
+            <span class="fw-semibold"><i class="bi bi-telephone-x text-secondary me-2"></i>Business Calls</span>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input op-toggle" type="checkbox" name="op_notify_on_non_customer"
+                   {% if operator.notify_on_non_customer %}checked{% endif %}
+                   style="width:2.5em;height:1.3em;">
+          </div>
+        </li>
+
+      </ul>
+    </div>
+  </div>
+  {% endif %}
+
   <button type="submit" class="btn btn-primary">
     Save Preferences
   </button>
@@ -132,13 +193,11 @@
 <script>
   // Disable per-event toggles when master switch is off, but ensure they submit
   const master = document.getElementById('masterSwitch');
-  const prefs  = document.querySelectorAll('.pref-toggle');
-  const form   = document.querySelector('form');
+  const prefs  = document.querySelectorAll('.pref-toggle, .op-toggle');
 
   function syncToggles() {
     prefs.forEach(p => {
         if (!master.checked) {
-            // Visually disabled but keep value
             p.classList.add('opacity-50');
             p.style.pointerEvents = 'none';
         } else {

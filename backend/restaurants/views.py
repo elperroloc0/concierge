@@ -1039,6 +1039,17 @@ def retell_inbound_webhook(request, rest_id):
     return JsonResponse(dyn_response, status=200)
 
 
+def _get_operator_email(restaurant: Restaurant) -> str | None:
+    """Return the active operator's email if they exist, else None."""
+    m = (
+        RestaurantMembership.objects
+        .filter(restaurant=restaurant, role="operator", is_active=True)
+        .select_related("user")
+        .first()
+    )
+    return m.user.email if m else None
+
+
 def _send_call_alert_email(
     call_event: CallEvent,
     restaurant: Restaurant,
@@ -1049,8 +1060,9 @@ def _send_call_alert_email(
     reason_color: str,
     reason_border: str,
     text_body_extra: str = "",
+    extra_recipients: list[str] | None = None,
 ) -> None:
-    """Shared helper: render and send an event-driven alert email to the restaurant owner."""
+    """Shared helper: render and send an event-driven alert email to the restaurant owner (and optionally the operator)."""
     from django.core.mail import EmailMultiAlternatives
     from django.template.loader import render_to_string
     from django.utils.timezone import localtime
@@ -1058,6 +1070,12 @@ def _send_call_alert_email(
     notify_email = restaurant.notify_email or (restaurant.user.email if restaurant.user else "")
     if not restaurant.notify_via_email or not notify_email:
         return
+
+    recipients = [notify_email]
+    if extra_recipients:
+        for addr in extra_recipients:
+            if addr and addr != notify_email:
+                recipients.append(addr)
 
     try:
         detail = call_event.detail
@@ -1108,10 +1126,10 @@ def _send_call_alert_email(
     )
 
     try:
-        msg = EmailMultiAlternatives(subject, text_body, settings.DEFAULT_FROM_EMAIL, [notify_email])
+        msg = EmailMultiAlternatives(subject, text_body, settings.DEFAULT_FROM_EMAIL, recipients)
         msg.attach_alternative(html_body, "text/html")
         msg.send()
-        logger.info("call_alert: [%s] sent to %s | restaurant=%s", reason_display, notify_email, restaurant.slug)
+        logger.info("call_alert: [%s] sent to %s | restaurant=%s", reason_display, recipients, restaurant.slug)
     except Exception:
         logger.exception("call_alert: [%s] failed | restaurant=%s", reason_display, restaurant.slug)
 
@@ -1120,7 +1138,6 @@ def _send_followup_alert_email(call_event: CallEvent, restaurant: Restaurant) ->
     """Send follow-up alert if the preference flag is on."""
     if not restaurant.notify_on_followup:
         return
-    # Include caller note in text body if present
     note = ""
     try:
         note = call_event.detail.notes or ""
@@ -1129,12 +1146,16 @@ def _send_followup_alert_email(call_event: CallEvent, restaurant: Restaurant) ->
     extra = "The caller asked to be called back or requested a human agent.\n"
     if note:
         extra += f"\nCaller message:\n{note}\n"
+    op = RestaurantMembership.objects.filter(
+        restaurant=restaurant, role="operator", is_active=True, notify_on_followup=True
+    ).select_related("user").first()
     _send_call_alert_email(
         call_event, restaurant,
         subject_prefix="⚠️ Follow-up Needed",
         reason_display="Follow-up Required",
         reason_bg="#fee2e2", reason_color="#b91c1c", reason_border="#fca5a5",
         text_body_extra=extra,
+        extra_recipients=[op.user.email] if op else None,
     )
 
 
@@ -1142,12 +1163,16 @@ def _send_reservation_alert_email(call_event: CallEvent, restaurant: Restaurant)
     """Send reservation-intent alert if the preference flag is on."""
     if not restaurant.notify_on_reservation:
         return
+    op = RestaurantMembership.objects.filter(
+        restaurant=restaurant, role="operator", is_active=True, notify_on_reservation=True
+    ).select_related("user").first()
     _send_call_alert_email(
         call_event, restaurant,
         subject_prefix="📅 Reservation Request",
         reason_display="Reservation Intent",
         reason_bg="#dbeafe", reason_color="#1e40af", reason_border="#93c5fd",
         text_body_extra="A caller expressed interest in making a reservation.\n",
+        extra_recipients=[op.user.email] if op else None,
     )
 
 
@@ -1155,12 +1180,16 @@ def _send_complaint_alert_email(call_event: CallEvent, restaurant: Restaurant) -
     """Send complaint alert if the preference flag is on."""
     if not restaurant.notify_on_complaint:
         return
+    op = RestaurantMembership.objects.filter(
+        restaurant=restaurant, role="operator", is_active=True, notify_on_complaint=True
+    ).select_related("user").first()
     _send_call_alert_email(
         call_event, restaurant,
         subject_prefix="🚨 Complaint Received",
         reason_display="Complaint",
         reason_bg="#fee2e2", reason_color="#991b1b", reason_border="#fca5a5",
         text_body_extra="A caller raised a complaint. Immediate attention may be required.\n",
+        extra_recipients=[op.user.email] if op else None,
     )
 
 
@@ -1168,12 +1197,16 @@ def _send_non_customer_alert_email(call_event: CallEvent, restaurant: Restaurant
     """Send a business-call alert when a non-customer call is identified."""
     if not restaurant.notify_on_non_customer:
         return
+    op = RestaurantMembership.objects.filter(
+        restaurant=restaurant, role="operator", is_active=True, notify_on_non_customer=True
+    ).select_related("user").first()
     _send_call_alert_email(
         call_event, restaurant,
         subject_prefix="📞 Business Call",
         reason_display="Non-Customer / Business Call",
         reason_bg="#f3f4f6", reason_color="#374151", reason_border="#d1d5db",
         text_body_extra="The AI identified this call as a non-customer business call (vendor, press, sales, service, etc.).\n",
+        extra_recipients=[op.user.email] if op else None,
     )
 
 
@@ -3228,6 +3261,10 @@ def portal_notifications(request, slug):
     restaurant = request.restaurant
     saved = False
 
+    operator_membership = RestaurantMembership.objects.filter(
+        restaurant=restaurant, role="operator", is_active=True
+    ).select_related("user").first()
+
     if request.method == "POST":
         restaurant.notify_via_email       = "notify_via_email" in request.POST
         restaurant.notify_email           = request.POST.get("notify_email", "").strip()
@@ -3241,6 +3278,17 @@ def portal_notifications(request, slug):
             "notify_on_reservation", "notify_on_complaint",
             "notify_on_followup", "notify_on_non_customer", "notify_daily_digest",
         ])
+
+        if operator_membership:
+            operator_membership.notify_on_reservation  = "op_notify_on_reservation" in request.POST
+            operator_membership.notify_on_complaint    = "op_notify_on_complaint" in request.POST
+            operator_membership.notify_on_followup     = "op_notify_on_followup" in request.POST
+            operator_membership.notify_on_non_customer = "op_notify_on_non_customer" in request.POST
+            operator_membership.save(update_fields=[
+                "notify_on_reservation", "notify_on_complaint",
+                "notify_on_followup", "notify_on_non_customer",
+            ])
+
         saved = True
         logger.info("portal_notifications: saved prefs | restaurant=%s | email=%s",
                      restaurant.slug, restaurant.notify_via_email)
@@ -3248,6 +3296,7 @@ def portal_notifications(request, slug):
     return render(request, "portal/notifications.html", {
         "restaurant": restaurant,
         "saved":      saved,
+        "operator":   operator_membership,
     })
 
 
