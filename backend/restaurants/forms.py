@@ -238,11 +238,7 @@ class AccountEmailForm(forms.Form):
 
     def clean_new_email(self):
         new_email = self.cleaned_data.get("new_email", "").strip().lower()
-        # Check against restaurant contact email or user email/username
-        if self.restaurant and self.restaurant.contact_email:
-            current_email = self.restaurant.contact_email.lower()
-        else:
-            current_email = (self.user.email or self.user.username).lower()
+        current_email = (self.user.email or self.user.username).lower()
 
         if new_email == current_email:
             raise forms.ValidationError("This is already your current email address.")

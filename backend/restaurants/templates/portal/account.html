@@ -5,6 +5,25 @@
 {% block nav_account %}active{% endblock %}
 
 {% block content %}
+
+{% if show_welcome %}
+<div class="alert alert-primary d-flex gap-2 align-items-start mb-4" role="alert">
+  <i class="bi bi-stars fs-5 mt-1 flex-shrink-0"></i>
+  <div>
+    {% if is_owner %}
+      <strong>Welcome to Concierge AI!</strong> This is your portal for {{ restaurant.name }}. Start by filling out your <a href="{% url 'portal_kb' restaurant.slug %}">Knowledge Base</a> so your AI agent knows how to answer calls.
+    {% else %}
+      <strong>Welcome!</strong> You've been added as an operator for <strong>{{ restaurant.name }}</strong>. From here you can manage calls and guests. We recommend changing your password below.
+    {% endif %}
+  </div>
+  <form method="POST" class="ms-auto flex-shrink-0">
+    {% csrf_token %}
+    <input type="hidden" name="dismiss_welcome" value="1">
+    <button type="submit" class="btn-close" aria-label="Dismiss"></button>
+  </form>
+</div>
+{% endif %}
+
 <p class="text-muted mb-5">Manage your login credentials for {{ restaurant.name }}.</p>
 
 <div class="row g-4">
@@ -15,7 +34,7 @@
       <div class="mb-5">
         <h5 class="mb-2">Update Email Address</h5>
         <p class="text-muted mb-0">
-          Current email: <strong class="text-dark">{{ restaurant.contact_email }}</strong>.
+          Current email: <strong class="text-dark">{{ user.email }}</strong>.
           A confirmation link will be sent — the change takes effect only after clicking it.
         </p>
       </div>
@@ -94,4 +113,69 @@
   </div>
 
 </div>
+
+{% if is_owner %}
+<!-- Team Management -->
+<h5 class="mt-5 mb-3">Team</h5>
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card hover-lift p-5">
+      {% if operator %}
+        <!-- Active operator -->
+        <div class="d-flex align-items-start justify-content-between mb-4">
+          <div>
+            {% if operator.user.get_full_name %}
+              <h6 class="mb-1">{{ operator.user.get_full_name }}</h6>
+              <span class="text-muted">{{ operator.user.email }}</span><br>
+            {% else %}
+              <h6 class="mb-1">{{ operator.user.email }}</h6>
+            {% endif %}
+            <small class="text-muted">Operator &middot; Added {{ operator.created_at|date:"M j, Y" }}</small>
+          </div>
+        </div>
+
+        <form method="POST" action="{% url 'portal_update_operator' restaurant.slug %}" class="mb-3">
+          {% csrf_token %}
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="can_edit_kb" id="can_edit_kb" {% if operator.can_edit_kb %}checked{% endif %}>
+            <label class="form-check-label" for="can_edit_kb">Allow operator to edit Knowledge Base</label>
+          </div>
+          <button type="submit" class="btn btn-sm btn-primary">Save Permissions</button>
+        </form>
+
+        <hr>
+        <form method="POST" action="{% url 'portal_remove_operator' restaurant.slug %}" onsubmit="return confirm('Remove this operator? They will lose access immediately.')">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm btn-outline-danger">Remove Operator</button>
+        </form>
+
+      {% else %}
+        <!-- Add operator form -->
+        <div class="mb-4">
+          <h6 class="mb-1">Add an Operator</h6>
+          <p class="text-muted mb-0">Give a team member their own login to manage calls and guests.</p>
+        </div>
+
+        <form method="POST" action="{% url 'portal_add_operator' restaurant.slug %}">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input type="email" name="operator_email" class="form-control" required placeholder="operator@example.com">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" name="operator_name" class="form-control" placeholder="First Last">
+          </div>
+          <div class="form-check mb-4">
+            <input class="form-check-input" type="checkbox" name="can_edit_kb" id="new_can_edit_kb">
+            <label class="form-check-label" for="new_can_edit_kb">Allow operator to edit Knowledge Base</label>
+          </div>
+          <button type="submit" class="btn btn-primary">Add Operator</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}

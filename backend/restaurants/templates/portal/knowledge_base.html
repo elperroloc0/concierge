@@ -191,10 +191,19 @@
     <h5 class="fw-bold mb-0" style="color:#111827;">Knowledge Base</h5>
     <p class="mb-0" style="font-size:.8rem; color:#6b7280; margin-top:2px;">Information your AI agent uses to answer caller questions.</p>
   </div>
+  {% if can_edit_kb %}
   <button form="kb-form" type="submit" class="btn btn-dark fw-semibold px-4" onclick="this.classList.add('btn-loading');">
     <i class="bi bi-floppy-fill me-1"></i> Save
   </button>
+  {% endif %}
 </div>
+
+{% if not can_edit_kb %}
+<div class="alert alert-info d-flex gap-2 align-items-center mb-3" role="alert">
+  <i class="bi bi-eye-fill fs-5 flex-shrink-0"></i>
+  <span>You have <strong>read-only</strong> access to the Knowledge Base. Contact the owner to request edit permissions.</span>
+</div>
+{% endif %}
 
 {% if basic_form.errors or kb_form.errors %}
 <div class="alert alert-danger d-flex gap-2 align-items-start mb-3" role="alert">
@@ -247,6 +256,7 @@
 
 <form id="kb-form" method="post" novalidate>
   {% csrf_token %}
+  <fieldset {% if not can_edit_kb %}disabled{% endif %}>
 
   <ul class="nav kb-tabs" id="kbTabs" role="tablist">
     <li class="nav-item">
@@ -955,6 +965,7 @@
     </div>
 
   </div><!-- /.tab-content -->
+  </fieldset>
 </form>
 
 <script>

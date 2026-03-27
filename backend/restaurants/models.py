@@ -176,6 +176,9 @@ class RestaurantMembership(models.Model):
     can_edit_kb = models.BooleanField(
         default=False, help_text="Operator can edit Knowledge Base."
     )
+    welcomed = models.BooleanField(
+        default=False, help_text="Has the user seen the welcome message?"
+    )
 
     class Meta:
         unique_together = [("user", "restaurant")]

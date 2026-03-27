@@ -59,6 +59,11 @@
   </ul>
   <div class="mt-auto p-3" style="border-top:1px solid rgba(255,255,255,.1)">
     <small class="text-white-50">{{ restaurant.name }}</small><br>
+    {% if has_multiple_restaurants %}
+    <a href="{% url 'portal_select_restaurant' %}" class="text-white-50 small text-decoration-none me-3">
+      <i class="bi bi-arrow-left-right"></i> Switch
+    </a>
+    {% endif %}
     <a href="{% url 'portal_logout' %}" class="text-white-50 small text-decoration-none">
       <i class="bi bi-box-arrow-left"></i> Logout
     </a>

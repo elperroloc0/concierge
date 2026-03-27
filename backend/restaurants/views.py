@@ -17,7 +17,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Exists, OuterRef, Q
-from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
+from django.http import HttpResponse, HttpResponseForbidden, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -51,11 +51,9 @@ def portal_demo_request(request):
 def root_redirect(request):
     """Show landing page for visitors; redirect authenticated users to their portal."""
     if request.user.is_authenticated:
-        membership = RestaurantMembership.objects.filter(
-            user=request.user, is_active=True, restaurant__is_active=True
-        ).select_related("restaurant").first()
-        if membership:
-            return redirect("portal_dashboard", slug=membership.restaurant.slug)
+        redir = _get_login_redirect(request.user)
+        if redir:
+            return redir
         return redirect("portal_login")
     return render(request, "landing.html")
 
@@ -2106,13 +2104,32 @@ def _classify_call(payload):
 # ─── Portal Views ─────────────────────────────────────────────────────────────
 
 def _get_login_redirect(user):
-    """Return the dashboard URL for the user's first active membership, or None."""
-    membership = RestaurantMembership.objects.filter(
+    """Return redirect to dashboard (single membership) or selector (multiple), or None."""
+    memberships = RestaurantMembership.objects.filter(
         user=user, is_active=True, restaurant__is_active=True
-    ).select_related("restaurant").first()
-    if membership:
-        return redirect("portal_dashboard", slug=membership.restaurant.slug)
-    return None
+    ).select_related("restaurant")
+    count = memberships.count()
+    if count == 0:
+        return None
+    if count == 1:
+        return redirect("portal_dashboard", slug=memberships.first().restaurant.slug)
+    return redirect("portal_select_restaurant")
+
+
+@login_required(login_url="portal_login")
+def portal_select_restaurant(request):
+    """Show a restaurant picker for users with multiple memberships."""
+    memberships = RestaurantMembership.objects.filter(
+        user=request.user, is_active=True, restaurant__is_active=True
+    ).select_related("restaurant").order_by("restaurant__name")
+
+    if memberships.count() <= 1:
+        redir = _get_login_redirect(request.user)
+        return redir or redirect("portal_login")
+
+    return render(request, "portal/select_restaurant.html", {
+        "memberships": memberships,
+    })
 
 
 def portal_login(request):
@@ -2155,6 +2172,11 @@ def portal_account(request, slug):
     restaurant = request.restaurant
     user = request.user
 
+    if request.method == "POST" and "dismiss_welcome" in request.POST:
+        request.membership.welcomed = True
+        request.membership.save(update_fields=["welcomed"])
+        return redirect("portal_account", slug=slug)
+
     if request.method == "POST":
         if "update_email" in request.POST:
             email_form = AccountEmailForm(request.POST, user=user, restaurant=restaurant)
@@ -2184,8 +2206,6 @@ def portal_account(request, slug):
 
                     # Send security alert to old address
                     old_email = user.email or user.username
-                    if restaurant.contact_email:
-                        old_email = restaurant.contact_email
 
                     send_mail(
                         subject="Security Alert: Email change requested",
@@ -2223,12 +2243,151 @@ def portal_account(request, slug):
 
     pending_changes = PendingEmailChange.objects.filter(user=user, expires_at__gt=timezone.now())
 
+    # Operator info for Team section (owner only)
+    operator_membership = None
+    if request.membership.role == "owner":
+        operator_membership = RestaurantMembership.objects.filter(
+            restaurant=restaurant, role="operator", is_active=True
+        ).select_related("user").first()
+
     return render(request, "portal/account.html", {
         "restaurant": restaurant,
         "email_form": email_form,
         "password_form": password_form,
         "pending_changes": pending_changes,
+        "operator": operator_membership,
+        "show_welcome": not request.membership.welcomed,
     })
+
+
+@portal_view(require_owner=True)
+def portal_add_operator(request, slug):
+    """Owner adds an operator by email + name."""
+    if request.method != "POST":
+        return redirect("portal_account", slug=slug)
+
+    restaurant = request.restaurant
+    email = request.POST.get("operator_email", "").strip().lower()
+    name = request.POST.get("operator_name", "").strip()
+
+    if not email:
+        messages.error(request, "Email is required.")
+        return redirect("portal_account", slug=slug)
+
+    # Check if operator already exists
+    existing = RestaurantMembership.objects.filter(
+        restaurant=restaurant, role="operator", is_active=True
+    ).exists()
+    if existing:
+        messages.error(request, "An operator is already active. Remove them first.")
+        return redirect("portal_account", slug=slug)
+
+    # Find or create user
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+
+    user, created = User.objects.get_or_create(
+        email__iexact=email,
+        defaults={"username": email, "email": email},
+    )
+    if created:
+        import secrets
+        temp_password = secrets.token_urlsafe(12)
+        user.set_password(temp_password)
+        if name:
+            parts = name.split(None, 1)
+            user.first_name = parts[0]
+            user.last_name = parts[1] if len(parts) > 1 else ""
+        user.save()
+    else:
+        temp_password = None
+        # Check user isn't already the owner
+        if RestaurantMembership.objects.filter(
+            user=user, restaurant=restaurant, role="owner"
+        ).exists():
+            messages.error(request, "This email belongs to the restaurant owner.")
+            return redirect("portal_account", slug=slug)
+
+    # Create membership
+    membership, mem_created = RestaurantMembership.objects.get_or_create(
+        user=user,
+        restaurant=restaurant,
+        defaults={
+            "role": "operator",
+            "invited_by": request.user,
+            "can_edit_kb": "can_edit_kb" in request.POST,
+        },
+    )
+    if not mem_created:
+        membership.is_active = True
+        membership.role = "operator"
+        membership.can_edit_kb = "can_edit_kb" in request.POST
+        membership.save()
+
+    # Send welcome email (both new and existing users)
+    login_url = request.build_absolute_uri("/portal/login/")
+    if temp_password:
+        credentials_line = f"Email: {email}\nTemporary password: {temp_password}\n\nPlease change your password after your first login."
+    else:
+        credentials_line = f"Log in with your existing account ({email})."
+
+    email_sent = False
+    try:
+        from django.core.mail import send_mail
+        send_mail(
+            subject=f"You've been added to {restaurant.name} on Concierge AI",
+            message=(
+                f"Hi {name or user.get_full_name() or 'there'},\n\n"
+                f"You've been added as an operator for {restaurant.name}.\n\n"
+                f"Log in at: {login_url}\n"
+                f"{credentials_line}\n\n"
+                f"— Concierge AI"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+        )
+        email_sent = True
+    except Exception:
+        logger.exception("Failed to send operator welcome email")
+
+    if email_sent:
+        messages.success(request, f"Operator {name or email} added. Welcome email sent to {email}.")
+    else:
+        messages.warning(request, f"Operator {name or email} added, but the welcome email to {email} could not be sent. Check your email settings.")
+    return redirect("portal_account", slug=slug)
+
+
+@portal_view(require_owner=True)
+def portal_remove_operator(request, slug):
+    """Owner deactivates the operator membership."""
+    if request.method != "POST":
+        return redirect("portal_account", slug=slug)
+
+    restaurant = request.restaurant
+    RestaurantMembership.objects.filter(
+        restaurant=restaurant, role="operator", is_active=True
+    ).update(is_active=False)
+
+    messages.success(request, "Operator removed.")
+    return redirect("portal_account", slug=slug)
+
+
+@portal_view(require_owner=True)
+def portal_update_operator(request, slug):
+    """Owner updates operator permissions (can_edit_kb)."""
+    if request.method != "POST":
+        return redirect("portal_account", slug=slug)
+
+    restaurant = request.restaurant
+    membership = RestaurantMembership.objects.filter(
+        restaurant=restaurant, role="operator", is_active=True
+    ).first()
+    if membership:
+        membership.can_edit_kb = "can_edit_kb" in request.POST
+        membership.save(update_fields=["can_edit_kb"])
+        messages.success(request, "Operator permissions updated.")
+
+    return redirect("portal_account", slug=slug)
 
 
 def portal_confirm_email(request, token):
@@ -2567,12 +2726,16 @@ def _sync_retell_tools(request, restaurant: Restaurant, kb: RestaurantKnowledgeB
 
 
 
-@portal_view(require_kb_edit=True)
+@portal_view()
 def portal_knowledge_base(request, slug):
     restaurant = request.restaurant
     kb, _ = RestaurantKnowledgeBase.objects.get_or_create(restaurant=restaurant)
+    m = request.membership
+    can_edit = m.role == "owner" or m.can_edit_kb
 
     if request.method == "POST":
+        if not can_edit:
+            return HttpResponseForbidden("You don't have permission to edit the Knowledge Base.")
         basic_form = RestaurantBasicForm(request.POST, instance=restaurant)
         kb_form = KnowledgeBaseForm(request.POST, instance=kb)
         if basic_form.is_valid() and kb_form.is_valid():
@@ -2599,6 +2762,7 @@ def portal_knowledge_base(request, slug):
         "basic_form": basic_form,
         "kb_form": kb_form,
         "lint": lint,
+        "can_edit_kb": can_edit,
     })
 
 

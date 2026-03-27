@@ -39,9 +39,19 @@ def balance_status(request):
 
 def membership(request):
     """Inject the current membership into all templates for role-based UI."""
+    from .models import RestaurantMembership
+
     m = getattr(request, "membership", None)
+    has_multiple = False
+    if m and request.user.is_authenticated:
+        has_multiple = (
+            RestaurantMembership.objects.filter(
+                user=request.user, is_active=True, restaurant__is_active=True,
+            ).count() > 1
+        )
     return {
         "membership": m,
         "is_owner": m.role == "owner" if m else False,
         "is_operator": m.role == "operator" if m else False,
+        "has_multiple_restaurants": has_multiple,
     }
