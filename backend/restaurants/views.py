@@ -1086,6 +1086,7 @@ def _send_call_alert_email(
         "reservation_date":   detail.reservation_date if detail else None,
         "reservation_time":   detail.reservation_time if detail else None,
         "special_requests":   detail.special_requests if detail else "",
+        "caller_notes":       detail.notes if detail else "",
         "duration":           "",
         "reason_display":     reason_display,
         "reason_bg":          reason_bg,
@@ -1118,12 +1119,21 @@ def _send_followup_alert_email(call_event: CallEvent, restaurant: Restaurant) ->
     """Send follow-up alert if the preference flag is on."""
     if not restaurant.notify_on_followup:
         return
+    # Include caller note in text body if present
+    note = ""
+    try:
+        note = call_event.detail.notes or ""
+    except CallDetail.DoesNotExist:
+        pass
+    extra = "The caller asked to be called back or requested a human agent.\n"
+    if note:
+        extra += f"\nCaller message:\n{note}\n"
     _send_call_alert_email(
         call_event, restaurant,
         subject_prefix="⚠️ Follow-up Needed",
         reason_display="Follow-up Required",
         reason_bg="#fee2e2", reason_color="#b91c1c", reason_border="#fca5a5",
-        text_body_extra="The caller asked to be called back or requested a human agent.\n",
+        text_body_extra=extra,
     )
 
 
@@ -1809,6 +1819,7 @@ def twilio_sms_status_webhook(request):
     return HttpResponse(status=204)
 
 
+
 @csrf_exempt
 def retell_tool_save_caller_info(request):
     """Retell custom tool — saves caller name to CallDetail silently during the call."""
@@ -1826,6 +1837,7 @@ def retell_tool_save_caller_info(request):
     to_number     = call.get("to_number", "").strip()
     caller_name   = args.get("caller_name", "").strip()[:255]
     caller_email  = args.get("caller_email", "").strip()[:255]
+    note          = args.get("note", "").strip()[:1000]
     # AI-driven follow-up flag — explicit signal from the agent
     follow_up_raw = args.get("follow_up_needed")
     follow_up     = bool(follow_up_raw) if follow_up_raw is not None else None
@@ -1858,6 +1870,7 @@ def retell_tool_save_caller_info(request):
             "caller_name": caller_name,
             "caller_phone": from_number,
             "caller_email": caller_email,
+            "notes": note,
             "follow_up_needed": follow_up or False,
         },
     )
@@ -1872,6 +1885,9 @@ def retell_tool_save_caller_info(request):
         if caller_email and detail.caller_email != caller_email:
             detail.caller_email = caller_email
             update_fields.append("caller_email")
+        if note and note not in detail.notes:
+            detail.notes = f"{detail.notes}\n{note}".strip() if detail.notes else note
+            update_fields.append("notes")
         # Only set follow_up_needed to True — never clear it mid-call
         if follow_up and not detail.follow_up_needed:
             detail.follow_up_needed = True

@@ -50,6 +50,7 @@ def _save_caller_info_tool_definition(base_url: str) -> dict:
             "properties": {
                 "caller_name":      {"type": "string", "description": "Full name as introduced."},
                 "caller_email":     {"type": "string", "description": "Email if provided. Omit otherwise."},
+                "note":             {"type": "string", "description": "Message or note from the caller for the team. Include reason, details, and any context."},
                 "follow_up_needed": {
                     "type": "boolean",
                     "description": (
