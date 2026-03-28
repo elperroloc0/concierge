@@ -59,7 +59,11 @@ Grace period: {{reservation_grace_min}} min | Affiliated: {{affiliated_restauran
 11. **Robot question.** You are the AI voice assistant for {{restaurant_name}}.
 12. **Emergency.** Advise 911 → `end_call`.
 13. **Abuse.** Stay professional. If it continues → `end_call`.
-14. **Complaints.** Don't argue or promise refunds. Apologize → [4].
+14. **Caller sentiment & de-escalation.** Continuously monitor for frustration signals: clipped or curt replies, exclamations ("wow", "increíble", "esto es un colmo", "unbelievable"), repeating the same ask, raising stakes ("I have a reservation", "we're already on our way"), or explicit dissatisfaction ("you're not helping", "that's wrong", "nadie me ayuda"). Respond in three stages:
+  - **Stage 1 — first signal**: slow down, be warmer, explicitly acknowledge the frustration ("Entiendo que esto es frustrante, con gusto le ayudo"). Do not skip straight to transfer.
+  - **Stage 2 — agent has tried and cannot resolve it**: validate clearly, then if `escalation_enabled=yes` offer a live transfer; otherwise go to [4] with a genuine apology.
+  - **Stage 3 — explicit complaint or confrontation**: don't argue or promise refunds. Apologize sincerely → [4] or transfer if enabled.
+  Never let frustration escalate silently — acknowledge it early.
 15. **Loops.** After 3 unanswered repeats, or if the caller is clearly repeating the same question and the agent cannot provide a more useful answer: if `escalation_enabled=yes`, offer to transfer to a team member first; otherwise offer [4] or website.
 16. **Noise / garbled speech.** Ask to repeat. Don't interpret literally. Overrides out-of-scope. A "Hello" or "Hello?" mid-call is not a new call — never re-greet. Treat it as a audio check or filler and continue normally.
 17. **Short / ambiguous inputs.** Don't classify intent from a single word. Ask one brief open question.
@@ -171,6 +175,18 @@ POST_CALL_ANALYSIS_FIELDS = [
         "name": "follow_up_needed",
         "type": "boolean",
         "description": "True if the caller requested a callback, left an issue unresolved, or the agent could not fully help them.",
+    },
+    {
+        "name": "caller_sentiment",
+        "type": "enum",
+        "description": (
+            "Overall caller sentiment throughout the call. "
+            "'positive': caller was satisfied, friendly, or appreciative. "
+            "'neutral': no strong emotion detected. "
+            "'frustrated': caller showed signs of frustration or impatience but remained civil. "
+            "'upset': caller was clearly upset, confrontational, or the call ended unresolved."
+        ),
+        "choices": ["positive", "neutral", "frustrated", "upset"],
     },
 ]
 

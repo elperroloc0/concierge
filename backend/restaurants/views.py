@@ -864,6 +864,7 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
             "reservation_date":  _parse_reservation_date(_get("reservation_date", "")),
             "reservation_time":  _parse_reservation_time(_get("reservation_time", "")),
             "special_requests":  str(_get("special_requests", "")),
+            "caller_sentiment":  _get("caller_sentiment", "neutral"),
             "follow_up_needed":  _get_bool("follow_up_needed", True),
             "recording_url":     call.get("recording_url", ""),
             "call_summary":      (full_analysis.get("call_summary") or "").strip(),
@@ -1155,7 +1156,7 @@ def _send_followup_alert_email(call_event: CallEvent, restaurant: Restaurant) ->
         reason_display="Follow-up Required",
         reason_bg="#fee2e2", reason_color="#b91c1c", reason_border="#fca5a5",
         text_body_extra=extra,
-        extra_recipients=[op.user.email] if op else None,
+        extra_recipients=[op.notify_email or op.user.email] if op else None,
     )
 
 
@@ -1172,7 +1173,7 @@ def _send_reservation_alert_email(call_event: CallEvent, restaurant: Restaurant)
         reason_display="Reservation Intent",
         reason_bg="#dbeafe", reason_color="#1e40af", reason_border="#93c5fd",
         text_body_extra="A caller expressed interest in making a reservation.\n",
-        extra_recipients=[op.user.email] if op else None,
+        extra_recipients=[op.notify_email or op.user.email] if op else None,
     )
 
 
@@ -1189,7 +1190,7 @@ def _send_complaint_alert_email(call_event: CallEvent, restaurant: Restaurant) -
         reason_display="Complaint",
         reason_bg="#fee2e2", reason_color="#991b1b", reason_border="#fca5a5",
         text_body_extra="A caller raised a complaint. Immediate attention may be required.\n",
-        extra_recipients=[op.user.email] if op else None,
+        extra_recipients=[op.notify_email or op.user.email] if op else None,
     )
 
 
@@ -1206,7 +1207,7 @@ def _send_non_customer_alert_email(call_event: CallEvent, restaurant: Restaurant
         reason_display="Non-Customer / Business Call",
         reason_bg="#f3f4f6", reason_color="#374151", reason_border="#d1d5db",
         text_body_extra="The AI identified this call as a non-customer business call (vendor, press, sales, service, etc.).\n",
-        extra_recipients=[op.user.email] if op else None,
+        extra_recipients=[op.notify_email or op.user.email] if op else None,
     )
 
 
@@ -3373,11 +3374,13 @@ def portal_notifications(request, slug):
         ])
 
         if operator_membership:
+            operator_membership.notify_email           = request.POST.get("op_notify_email", "").strip()
             operator_membership.notify_on_reservation  = "op_notify_on_reservation" in request.POST
             operator_membership.notify_on_complaint    = "op_notify_on_complaint" in request.POST
             operator_membership.notify_on_followup     = "op_notify_on_followup" in request.POST
             operator_membership.notify_on_non_customer = "op_notify_on_non_customer" in request.POST
             operator_membership.save(update_fields=[
+                "notify_email",
                 "notify_on_reservation", "notify_on_complaint",
                 "notify_on_followup", "notify_on_non_customer",
             ])

@@ -130,7 +130,15 @@
       <span class="text-muted small ms-1">— {{ operator.user.get_full_name|default:operator.user.email }}</span>
     </div>
     <div class="card-body pb-1">
-      <p class="text-muted small mb-3">Choose which alerts are also sent to <strong>{{ operator.user.email }}</strong>.</p>
+      <div class="mb-3">
+        <label for="op_notify_email" class="form-label fw-semibold small">
+          <i class="bi bi-at me-1"></i>Notification Email
+        </label>
+        <input type="email" class="form-control form-control-sm" id="op_notify_email" name="op_notify_email"
+               value="{{ operator.notify_email }}"
+               placeholder="{{ operator.user.email }}">
+        <div class="form-text">Leave blank to use account email ({{ operator.user.email }}).</div>
+      </div>
       <ul class="list-group list-group-flush">
 
         <li class="list-group-item d-flex align-items-center justify-content-between py-3 px-0">

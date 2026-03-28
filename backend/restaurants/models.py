@@ -181,6 +181,7 @@ class RestaurantMembership(models.Model):
     )
 
     # Operator notification preferences (controlled by owner)
+    notify_email = models.EmailField(blank=True, default="", help_text="Override email for notifications. Falls back to user account email if blank.")
     notify_on_reservation = models.BooleanField(default=False)
     notify_on_complaint = models.BooleanField(default=False)
     notify_on_followup = models.BooleanField(default=False)
@@ -269,6 +270,15 @@ class CallDetail(models.Model):
     reservation_date = models.DateField(null=True, blank=True)
     reservation_time = models.TimeField(null=True, blank=True)
     special_requests = models.TextField(blank=True, default="")
+
+    # Sentiment
+    SENTIMENT_CHOICES = [
+        ("positive",   "Positive"),
+        ("neutral",    "Neutral"),
+        ("frustrated", "Frustrated"),
+        ("upset",      "Upset"),
+    ]
+    caller_sentiment = models.CharField(max_length=16, blank=True, default="neutral", choices=SENTIMENT_CHOICES)
 
     # Follow-up
     follow_up_needed = models.BooleanField(default=True)
