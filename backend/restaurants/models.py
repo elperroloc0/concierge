@@ -464,7 +464,7 @@ class RestaurantKnowledgeBase(models.Model):
     )
     stroller_friendly = models.BooleanField(default=False)
     has_valet         = models.BooleanField(default=False)
-    valet_cost        = models.CharField(max_length=64, blank=True, default="")
+    valet_cost        = models.TextField(blank=True, default="")
     free_parking_info = models.TextField(blank=True, default="")
 
     # ── Team ─────────────────────────────────────────────────────────────
