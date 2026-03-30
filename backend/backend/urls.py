@@ -25,4 +25,5 @@ urlpatterns = [
     path('api/stripe/webhook/', restaurant_views.stripe_webhook, name='stripe_webhook'),
     path('', restaurant_views.root_redirect),
     path('portal/', include('restaurants.portal_urls')),
+    path('demo/', restaurant_views.demo_call, name='demo_call'),
 ]

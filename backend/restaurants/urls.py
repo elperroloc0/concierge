@@ -14,4 +14,5 @@ urlpatterns = [
     path("tools/get-caller-profile/", views.retell_tool_get_caller_profile, name="retell_tool_get_caller_profile"),
     path("tools/resolve-date/", views.retell_tool_resolve_date, name="retell_tool_resolve_date"),
     path("twilio/sms-status/", views.twilio_sms_status_webhook, name="twilio_sms_status"),
+    path("demo/", views.demo_call, name="demo_call"),
 ]

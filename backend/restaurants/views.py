@@ -3501,3 +3501,7 @@ def stripe_webhook(request):
                 logger.exception("Failed to send payment_failed email | customer=%s", customer_id)
 
     return JsonResponse({"status": "ok"})
+
+
+def demo_call(request):
+    return render(request, "demo_call.html")

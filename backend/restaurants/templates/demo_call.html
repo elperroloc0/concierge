@@ -1,0 +1,323 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Concierge AI – Demo Call</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+    }
+
+    .phone {
+      width: 375px;
+      height: 812px;
+      background: linear-gradient(160deg, #1a1a2e 0%, #0f0f1a 100%);
+      border-radius: 55px;
+      box-shadow:
+        0 0 0 2px #2a2a3a,
+        0 0 0 4px #111,
+        0 40px 120px rgba(0,0,0,0.8),
+        inset 0 0 60px rgba(255,255,255,0.02);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* Notch */
+    .notch {
+      width: 150px;
+      height: 30px;
+      background: #000;
+      border-radius: 0 0 20px 20px;
+      margin-top: 12px;
+      position: relative;
+      z-index: 10;
+    }
+
+    /* Status bar */
+    .status-bar {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 28px 0;
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+      letter-spacing: 0.02em;
+      margin-top: -42px;
+      position: relative;
+      z-index: 11;
+    }
+    .status-bar .time { font-weight: 600; font-size: 14px; color: #fff; }
+    .status-icons { display: flex; gap: 5px; align-items: center; }
+    .status-icons svg { fill: white; opacity: 0.8; }
+
+    /* Call content */
+    .call-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 50px;
+      width: 100%;
+    }
+
+    .call-type {
+      font-size: 14px;
+      color: rgba(255,255,255,0.55);
+      letter-spacing: 0.04em;
+      margin-bottom: 14px;
+    }
+
+    .caller-name {
+      font-size: 38px;
+      font-weight: 300;
+      color: #fff;
+      letter-spacing: -0.5px;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    .caller-sub {
+      font-size: 15px;
+      color: rgba(255,255,255,0.45);
+      margin-bottom: 48px;
+    }
+
+    .avatar {
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6e40c9, #3d88d8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 48px;
+      box-shadow: 0 8px 32px rgba(100, 80, 200, 0.4);
+    }
+    .avatar-icon {
+      font-size: 52px;
+      line-height: 1;
+    }
+
+    .timer {
+      font-size: 18px;
+      color: rgba(255,255,255,0.6);
+      letter-spacing: 0.08em;
+      font-variant-numeric: tabular-nums;
+      min-height: 26px;
+      margin-bottom: 48px;
+    }
+
+    /* Controls row */
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(3, 72px);
+      gap: 28px 36px;
+      margin-bottom: 36px;
+    }
+
+    .ctrl-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      cursor: default;
+    }
+    .ctrl-circle {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .ctrl-circle svg { fill: white; opacity: 0.85; }
+    .ctrl-label {
+      font-size: 12px;
+      color: rgba(255,255,255,0.55);
+      letter-spacing: 0.02em;
+    }
+
+    /* Play / End row */
+    .action-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 72px;
+      padding-bottom: 48px;
+      margin-top: auto;
+    }
+
+    .play-btn {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: #34c759;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 24px rgba(52, 199, 89, 0.45);
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+      position: relative;
+    }
+    .play-btn:hover {
+      transform: scale(1.06);
+      box-shadow: 0 8px 30px rgba(52, 199, 89, 0.6);
+    }
+    .play-btn:active { transform: scale(0.96); }
+
+    /* Pulse ring when playing */
+    .play-btn.playing::before {
+      content: '';
+      position: absolute;
+      inset: -8px;
+      border-radius: 50%;
+      border: 2px solid rgba(52, 199, 89, 0.4);
+      animation: pulse-ring 1.4s ease-out infinite;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(1); opacity: 0.7; }
+      100% { transform: scale(1.35); opacity: 0; }
+    }
+
+    .play-icon, .pause-icon { display: flex; align-items: center; justify-content: center; }
+    .pause-icon { display: none; }
+
+    .end-btn {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: #ff3b30;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 24px rgba(255, 59, 48, 0.35);
+      cursor: pointer;
+      transition: transform 0.12s ease;
+    }
+    .end-btn:hover { transform: scale(1.06); }
+    .end-btn:active { transform: scale(0.96); }
+
+    audio { display: none; }
+
+    /* Home indicator */
+    .home-bar {
+      width: 134px;
+      height: 5px;
+      background: rgba(255,255,255,0.3);
+      border-radius: 3px;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="status-bar">
+    <span class="time" id="clock">9:41</span>
+    <div class="status-icons">
+      <!-- Signal -->
+      <svg width="17" height="12" viewBox="0 0 17 12"><rect x="0" y="3" width="3" height="9" rx="1"/><rect x="4.5" y="2" width="3" height="10" rx="1"/><rect x="9" y="1" width="3" height="11" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+      <!-- WiFi -->
+      <svg width="16" height="12" viewBox="0 0 16 12"><path d="M8 9.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm0-3.5C10.1 6 12 6.9 13.3 8.4l-1.4 1.4A4 4 0 0 0 8 8.5a4 4 0 0 0-3.9 1.3L2.7 8.4C4 6.9 5.9 6 8 6zm0-3.5c2.9 0 5.5 1.2 7.4 3.2L14 7.1A7.5 7.5 0 0 0 8 5 7.5 7.5 0 0 0 2 7.1L.6 5.7C2.5 3.7 5.1 2.5 8 2.5z"/></svg>
+      <!-- Battery -->
+      <svg width="25" height="12" viewBox="0 0 25 12"><rect x="0" y="1" width="22" height="10" rx="2.5" stroke="white" stroke-width="1" fill="none" opacity="0.5"/><rect x="22.5" y="4" width="2" height="4" rx="1" fill="white" opacity="0.4"/><rect x="1.5" y="2.5" width="16" height="7" rx="1.5" fill="white"/></svg>
+    </div>
+  </div>
+
+  <div class="notch"></div>
+
+  <div class="call-content">
+    <h1 class="caller-name">Calle Dragones</h1>
+
+    <div class="timer" id="timer"></div>
+
+    <div class="action-row">
+      <button class="play-btn" id="playBtn" onclick="togglePlay()">
+        <span class="play-icon" id="playIcon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+        </span>
+        <span class="pause-icon" id="pauseIcon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="white"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </span>
+      </button>
+      <button class="end-btn" onclick="togglePlay()">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="white"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.7l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.1-.7-.28-.79-.73-1.68-1.36-2.66-1.85-.33-.16-.56-.51-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="home-bar"></div>
+</div>
+
+<audio id="audio" src="{% static 'audio/demo_call.wav' %}"></audio>
+
+<script>
+  const audio = document.getElementById('audio');
+  const btn   = document.getElementById('playBtn');
+  const timer = document.getElementById('timer');
+  let interval = null;
+
+  // Live clock
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').textContent =
+      now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0');
+  }
+  updateClock();
+  setInterval(updateClock, 30000);
+
+  function togglePlay() {
+    if (audio.paused) {
+      audio.play();
+    } else {
+      audio.pause();
+    }
+  }
+
+  audio.addEventListener('play', () => {
+    btn.classList.add('playing');
+    document.getElementById('playIcon').style.display  = 'none';
+    document.getElementById('pauseIcon').style.display = 'flex';
+    interval = setInterval(updateTimer, 500);
+  });
+
+  audio.addEventListener('pause', () => {
+    btn.classList.remove('playing');
+    document.getElementById('playIcon').style.display  = 'flex';
+    document.getElementById('pauseIcon').style.display = 'none';
+    clearInterval(interval);
+  });
+
+  audio.addEventListener('ended', () => {
+    btn.classList.remove('playing');
+    document.getElementById('playIcon').style.display  = 'flex';
+    document.getElementById('pauseIcon').style.display = 'none';
+    clearInterval(interval);
+    timer.textContent = '';
+  });
+
+  function updateTimer() {
+    const s = Math.floor(audio.currentTime);
+    const m = Math.floor(s / 60);
+    timer.textContent = m + ':' + String(s % 60).padStart(2, '0');
+  }
+</script>
+</body>
+</html>
