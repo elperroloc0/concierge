@@ -1323,8 +1323,8 @@ def _send_knowledge_gap_alert(restaurant: Restaurant, detail) -> None:
     agent_response = (detail.call_signals.get("agent_response_to_unanswered") or "").strip()
     subject = f"El agente no pudo responder una pregunta — {restaurant.name}"
     text_body = (
-        f"Un cliente preguntó:\n  "{unanswered}"\n\n"
-        f"El agente respondió:\n  "{agent_response}"\n\n"
+        f'Un cliente preguntó:\n  "{unanswered}"\n\n'
+        f'El agente respondió:\n  "{agent_response}"\n\n'
         f"Actualiza el Knowledge Base para que el agente pueda responder esto en futuras llamadas:\n"
         f"{kb_url}\n"
     )
@@ -1602,6 +1602,7 @@ def retell_events_webhook(request):
                         _send_complaint_alert_email(call_event, restaurant)
                 if (not detail.is_spam
                         and detail.call_signals.get("agent_failed_to_answer")
+                        and (detail.call_signals.get("unanswered_question") or "").strip()
                         and restaurant.notify_via_email):
                     _send_knowledge_gap_alert(restaurant, detail)
         except Exception:

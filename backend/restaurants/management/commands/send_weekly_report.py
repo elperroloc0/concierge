@@ -19,6 +19,8 @@ import json
 import logging
 import os
 from collections import Counter
+
+import anthropic
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -188,8 +190,6 @@ def generate_report(restaurant: Restaurant, metrics: dict, summaries: list,
     """
     Call Claude API and return (owner_summary, prompt_suggestions, model_used, generation_cost).
     """
-    import anthropic
-
     language = restaurant.weekly_report_language or "es"
     lang_label = "Spanish" if language == "es" else "English"
 
