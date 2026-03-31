@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reporte Semanal — {{ restaurant_name }}</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;">
+  <tr><td align="center">
+  <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+
+    <!-- Header -->
+    <tr>
+      <td style="background:#1e1b4b;padding:20px 28px;">
+        <span style="color:#ffffff;font-size:17px;font-weight:700;letter-spacing:-.3px;">&#128222; Concierge</span>
+        <span style="color:#a5b4fc;font-size:13px;margin-left:10px;">{{ restaurant_name }}</span>
+      </td>
+    </tr>
+
+    <!-- Title -->
+    <tr>
+      <td style="padding:24px 28px 0;">
+        <p style="margin:0 0 2px;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;">Reporte Semanal</p>
+        <p style="margin:0 0 4px;font-size:22px;font-weight:700;color:#111827;line-height:1.2;">{{ week_start_str }} — {{ week_end_str }}</p>
+      </td>
+    </tr>
+
+    <!-- Stats row 1: Calls -->
+    <tr>
+      <td style="padding:20px 28px 0;">
+        <p style="margin:0 0 8px;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Llamadas</p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+          <tr>
+            <td style="text-align:center;padding:14px;border-right:1px solid #e5e7eb;width:33%;">
+              <p style="margin:0;font-size:26px;font-weight:700;color:#111827;">{{ metrics.total_calls }}</p>
+              <p style="margin:4px 0 0;font-size:10px;color:#6b7280;text-transform:uppercase;">Total</p>
+            </td>
+            <td style="text-align:center;padding:14px;border-right:1px solid #e5e7eb;width:33%;">
+              <p style="margin:0;font-size:26px;font-weight:700;color:#1d4ed8;">{{ metrics.real_calls }}</p>
+              <p style="margin:4px 0 0;font-size:10px;color:#6b7280;text-transform:uppercase;">Reales</p>
+            </td>
+            <td style="text-align:center;padding:14px;width:33%;">
+              <p style="margin:0;font-size:26px;font-weight:700;color:#9ca3af;">{{ metrics.spam_calls }}</p>
+              <p style="margin:4px 0 0;font-size:10px;color:#6b7280;text-transform:uppercase;">Spam/Ruido</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- Stats row 2: Business metrics -->
+    <tr>
+      <td style="padding:12px 28px 0;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+          <tr>
+            <td style="text-align:center;padding:14px;border-right:1px solid #e5e7eb;width:25%;">
+              <p style="margin:0;font-size:24px;font-weight:700;color:#0369a1;">{{ metrics.reservations }}</p>
+              <p style="margin:4px 0 0;font-size:10px;color:#6b7280;text-transform:uppercase;">Reservas</p>
+            </td>
+            <td style="text-align:center;padding:14px;border-right:1px solid #e5e7eb;width:25%;">
+              <p style="margin:0;font-size:24px;font-weight:700;color:#b91c1c;">{{ metrics.complaints }}</p>
+              <p style="margin:4px 0 0;font-size:10px;color:#6b7280;text-transform:uppercase;">Quejas</p>
+            </td>
+            <td style="text-align:center;padding:14px;border-right:1px solid #e5e7eb;width:25%;">
+              <p style="margin:0;font-size:24px;font-weight:700;color:#b45309;">{{ metrics.follow_ups }}</p>
+              <p style="margin:4px 0 0;font-size:10px;color:#6b7280;text-transform:uppercase;">Follow-ups</p>
+            </td>
+            <td style="text-align:center;padding:14px;width:25%;">
+              <p style="margin:0;font-size:24px;font-weight:700;color:#dc2626;">{{ metrics.agent_failures.total }}</p>
+              <p style="margin:4px 0 0;font-size:10px;color:#6b7280;text-transform:uppercase;">Fallos KB</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- Quality breakdown -->
+    {% if metrics.call_quality %}
+    <tr>
+      <td style="padding:16px 28px 0;">
+        <p style="margin:0 0 8px;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Calidad del Agente</p>
+        <table cellpadding="0" cellspacing="0">
+          {% if metrics.call_quality.excellent %}
+          <tr style="display:inline-block;margin-right:8px;">
+            <td style="display:inline-block;background:#dcfce7;color:#166534;font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;">
+              {{ metrics.call_quality.excellent }} excelente{{ metrics.call_quality.excellent|pluralize:"s" }}
+            </td>
+          </tr>
+          {% endif %}
+          {% if metrics.call_quality.good %}
+          <tr style="display:inline-block;margin-right:8px;">
+            <td style="display:inline-block;background:#dbeafe;color:#1e40af;font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;">
+              {{ metrics.call_quality.good }} buena{{ metrics.call_quality.good|pluralize:"s" }}
+            </td>
+          </tr>
+          {% endif %}
+          {% if metrics.call_quality.poor %}
+          <tr style="display:inline-block;">
+            <td style="display:inline-block;background:#fee2e2;color:#991b1b;font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;">
+              {{ metrics.call_quality.poor }} con problemas
+            </td>
+          </tr>
+          {% endif %}
+        </table>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- Owner summary from Claude -->
+    <tr>
+      <td style="padding:20px 28px 0;">
+        <p style="margin:0 0 10px;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Análisis de la Semana</p>
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;">
+          <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;white-space:pre-wrap;">{{ owner_summary }}</p>
+        </div>
+      </td>
+    </tr>
+
+    <!-- CTAs -->
+    <tr>
+      <td style="padding:24px 28px;">
+        <a href="{{ portal_url }}" style="display:inline-block;background:#4f46e5;color:#ffffff;font-size:13px;font-weight:600;padding:10px 20px;border-radius:8px;text-decoration:none;letter-spacing:-.1px;margin-right:10px;">
+          Ver Reporte Completo &#8594;
+        </a>
+        <a href="{{ calls_url }}" style="display:inline-block;background:#ffffff;color:#4f46e5;font-size:13px;font-weight:600;padding:10px 20px;border-radius:8px;text-decoration:none;letter-spacing:-.1px;border:1px solid #c7d2fe;">
+          Llamadas Pendientes &#8594;
+        </a>
+      </td>
+    </tr>
+
+    <!-- Footer -->
+    <tr>
+      <td style="background:#f9fafb;padding:14px 28px;border-top:1px solid #e5e7eb;">
+        <p style="margin:0;font-size:11px;color:#9ca3af;">
+          Reporte generado automáticamente por Concierge AI para {{ restaurant_name }}.
+          Gestiona tus preferencias de notificación en la configuración del portal.
+        </p>
+      </td>
+    </tr>
+
+  </table>
+  </td></tr>
+</table>
+</body>
+</html>
