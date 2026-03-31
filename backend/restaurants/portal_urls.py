@@ -35,4 +35,6 @@ urlpatterns = [
     path("<slug:slug>/account/remove-operator/", views.portal_remove_operator, name="portal_remove_operator"),
     path("<slug:slug>/account/update-operator/", views.portal_update_operator, name="portal_update_operator"),
     path("<slug:slug>/update-avg-cover/",   views.portal_update_avg_cover,       name="portal_update_avg_cover"),
+    path("<slug:slug>/reports/",                         views.portal_reports_list,   name="portal_reports_list"),
+    path("<slug:slug>/reports/<int:report_id>/",         views.portal_reports_detail, name="portal_reports_detail"),
 ]

@@ -36,6 +36,11 @@
         <i class="bi bi-people-fill"></i> Guests
       </a>
     </li>
+    <li class="nav-item">
+      <a class="nav-link {% block nav_reports %}{% endblock %}" href="{% url 'portal_reports_list' restaurant.slug %}">
+        <i class="bi bi-bar-chart-fill"></i> Reports
+      </a>
+    </li>
     {% if is_owner %}
     <li class="nav-item">
       <a class="nav-link {% block nav_billing %}{% endblock %}" href="{% url 'portal_billing' restaurant.slug %}">

@@ -26,7 +26,7 @@ from retell import Retell
 
 from .decorators import portal_view
 from .forms import KnowledgeBaseForm, RestaurantBasicForm, AccountEmailForm, PasswordUpdateForm
-from .models import CallDetail, CallEvent, CallerMemory, Restaurant, RestaurantKnowledgeBase, RestaurantMembership, SmsLog, Subscription, PendingEmailChange
+from .models import CallDetail, CallEvent, CallerMemory, Restaurant, RestaurantKnowledgeBase, RestaurantMembership, SmsLog, Subscription, PendingEmailChange, WeeklyReport
 from .services.retell_client import RetellClient
 from .services.retell_tools import build_tool_list
 
@@ -3457,6 +3457,56 @@ def portal_notifications(request, slug):
         "restaurant": restaurant,
         "saved":      saved,
         "operator":   operator_membership,
+    })
+
+
+@portal_view()
+def portal_reports_list(request, slug):
+    restaurant = request.restaurant
+    reports = WeeklyReport.objects.filter(restaurant=restaurant)
+    return render(request, "portal/reports_list.html", {
+        "restaurant": restaurant,
+        "reports":    reports,
+    })
+
+
+@portal_view()
+def portal_reports_detail(request, slug, report_id):
+    from django.http import HttpResponse
+    import csv as csv_module
+
+    restaurant = request.restaurant
+    report = get_object_or_404(WeeklyReport, pk=report_id, restaurant=restaurant)
+
+    # CSV export
+    if request.GET.get("export") == "csv":
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = (
+            f'attachment; filename="weekly_report_{report.week_start}.csv"'
+        )
+        writer = csv_module.writer(response)
+        writer.writerow(["Metric", "Value"])
+        for k, v in report.metrics.items():
+            writer.writerow([k, v])
+        return response
+
+    # Calls for the week — top 50 non-spam, ordered by most recent
+    week_calls = (
+        CallDetail.objects
+        .filter(
+            call_event__restaurant=restaurant,
+            call_event__created_at__date__gte=report.week_start,
+            call_event__created_at__date__lt=report.week_end,
+            is_spam=False,
+        )
+        .select_related("call_event")
+        .order_by("-call_event__created_at")[:50]
+    )
+
+    return render(request, "portal/reports_detail.html", {
+        "restaurant":  restaurant,
+        "report":      report,
+        "week_calls":  week_calls,
     })
 
 

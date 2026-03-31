@@ -1,0 +1,150 @@
+{% extends "portal/base.html" %}
+{% block title %}Report {{ report.week_start|date:"d M Y" }}{% endblock %}
+{% block page_title %}Weekly Report{% endblock %}
+{% block nav_reports %}active{% endblock %}
+
+{% block content %}
+
+<!-- Breadcrumb + actions -->
+<div class="mb-4 d-flex align-items-center justify-content-between flex-wrap gap-2">
+  <div>
+    <a href="{% url 'portal_reports_list' restaurant.slug %}" class="text-muted small text-decoration-none">
+      <i class="bi bi-arrow-left me-1"></i> Reports
+    </a>
+    <h4 class="fw-bold mb-0 mt-1">
+      {{ report.week_start|date:"d M" }} – {{ report.week_end|date:"d M Y" }}
+    </h4>
+    <p class="text-muted small mb-0">
+      Generated {{ report.generated_at|date:"d M Y, H:i" }}
+      {% if report.model_used %}&nbsp;·&nbsp;<span class="font-monospace">{{ report.model_used }}</span>{% endif %}
+    </p>
+  </div>
+  <a href="?export=csv" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-download me-1"></i> Export CSV
+  </a>
+</div>
+
+<!-- Stat cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body text-center">
+        <p class="display-6 fw-bold mb-0">{{ report.metrics.total_calls|default:"0" }}</p>
+        <p class="text-muted small mb-0 text-uppercase">Total Calls</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body text-center">
+        <p class="display-6 fw-bold mb-0 text-primary">{{ report.metrics.real_calls|default:"0" }}</p>
+        <p class="text-muted small mb-0 text-uppercase">Real Calls</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body text-center">
+        <p class="display-6 fw-bold mb-0 text-info">{{ report.metrics.reservations|default:"0" }}</p>
+        <p class="text-muted small mb-0 text-uppercase">Reservations</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body text-center">
+        <p class="display-6 fw-bold mb-0 text-danger">{{ report.metrics.agent_failures.total|default:"0" }}</p>
+        <p class="text-muted small mb-0 text-uppercase">KB Failures</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quality breakdown pills -->
+{% if report.metrics.call_quality %}
+<div class="mb-4">
+  <p class="text-uppercase small fw-semibold text-muted mb-2">Agent Quality</p>
+  <div class="d-flex flex-wrap gap-2">
+    {% if report.metrics.call_quality.excellent %}
+    <span class="badge rounded-pill px-3 py-2 fs-6" style="background:#dcfce7;color:#166534;">
+      {{ report.metrics.call_quality.excellent }} excellent
+    </span>
+    {% endif %}
+    {% if report.metrics.call_quality.good %}
+    <span class="badge rounded-pill px-3 py-2 fs-6" style="background:#dbeafe;color:#1e40af;">
+      {{ report.metrics.call_quality.good }} good
+    </span>
+    {% endif %}
+    {% if report.metrics.call_quality.poor %}
+    <span class="badge rounded-pill px-3 py-2 fs-6" style="background:#fee2e2;color:#991b1b;">
+      {{ report.metrics.call_quality.poor }} poor
+    </span>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Owner summary -->
+{% if report.owner_summary %}
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <p class="text-uppercase small fw-semibold text-muted mb-3">Weekly Analysis</p>
+    <div style="white-space:pre-wrap;font-size:0.93rem;line-height:1.65;color:#374151;">{{ report.owner_summary }}</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Call quality table -->
+{% if week_calls %}
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-white border-bottom">
+    <p class="mb-0 fw-semibold small text-uppercase text-muted">Calls This Week</p>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover table-sm mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Time</th>
+          <th>Caller</th>
+          <th>Reason</th>
+          <th>Quality</th>
+          <th>Unanswered Question</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for detail in week_calls %}
+        <tr>
+          <td class="ps-3 text-muted small text-nowrap">
+            {{ detail.call_event.created_at|date:"d M, H:i" }}
+          </td>
+          <td class="small">
+            {% if detail.caller_name %}{{ detail.caller_name }}{% else %}<span class="text-muted">Unknown</span>{% endif %}
+          </td>
+          <td class="small text-muted">{{ detail.call_reason|default:"—" }}</td>
+          <td>
+            {% with q=detail.call_signals.call_quality %}
+              {% if q == "excellent" %}
+                <span class="badge" style="background:#dcfce7;color:#166534;">excellent</span>
+              {% elif q == "good" %}
+                <span class="badge" style="background:#dbeafe;color:#1e40af;">good</span>
+              {% elif q == "poor" %}
+                <span class="badge" style="background:#fee2e2;color:#991b1b;">poor</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            {% endwith %}
+          </td>
+          <td class="small text-muted" style="max-width:260px;">
+            {% with uq=detail.call_signals.unanswered_question %}
+              {% if uq %}<span class="text-danger fst-italic">"{{ uq|truncatechars:80 }}"</span>{% else %}—{% endif %}
+            {% endwith %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

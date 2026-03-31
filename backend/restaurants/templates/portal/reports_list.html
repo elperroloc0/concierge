@@ -1,0 +1,83 @@
+{% extends "portal/base.html" %}
+{% block title %}Reports{% endblock %}
+{% block page_title %}Weekly Reports{% endblock %}
+{% block nav_reports %}active{% endblock %}
+
+{% block content %}
+<div class="mb-4 d-flex align-items-center justify-content-between flex-wrap gap-2">
+  <div>
+    <h4 class="fw-bold mb-1">Weekly Reports</h4>
+    <p class="text-muted small mb-0">Generated automatically every Monday at 8am.</p>
+  </div>
+</div>
+
+{% if reports %}
+<div class="card border-0 shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Week</th>
+          <th>Total Calls</th>
+          <th>Real</th>
+          <th>Quality</th>
+          <th>KB Failures</th>
+          <th>Generated</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for report in reports %}
+        <tr>
+          <td class="ps-3 fw-semibold">
+            {{ report.week_start|date:"d M" }} – {{ report.week_end|date:"d M Y" }}
+          </td>
+          <td>{{ report.metrics.total_calls|default:"—" }}</td>
+          <td class="text-muted">{{ report.metrics.real_calls|default:"—" }}</td>
+          <td>
+            {% if report.metrics.call_quality %}
+              {% if report.metrics.call_quality.excellent %}
+                <span class="badge rounded-pill" style="background:#dcfce7;color:#166534;">{{ report.metrics.call_quality.excellent }}✓</span>
+              {% endif %}
+              {% if report.metrics.call_quality.good %}
+                <span class="badge rounded-pill" style="background:#dbeafe;color:#1e40af;">{{ report.metrics.call_quality.good }}~</span>
+              {% endif %}
+              {% if report.metrics.call_quality.poor %}
+                <span class="badge rounded-pill" style="background:#fee2e2;color:#991b1b;">{{ report.metrics.call_quality.poor }}✗</span>
+              {% endif %}
+            {% else %}
+              <span class="text-muted small">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% with failures=report.metrics.agent_failures %}
+              {% if failures.total %}
+                <span class="text-danger fw-semibold">{{ failures.total }}</span>
+              {% else %}
+                <span class="text-muted">0</span>
+              {% endif %}
+            {% endwith %}
+          </td>
+          <td class="text-muted small">{{ report.generated_at|date:"d M Y, H:i" }}</td>
+          <td class="text-end pe-3">
+            <a href="{% url 'portal_reports_detail' restaurant.slug report.pk %}" class="btn btn-sm btn-outline-primary">
+              Ver <i class="bi bi-arrow-right"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-bar-chart fs-1 d-block mb-3 opacity-25"></i>
+  <p class="mb-1">No weekly reports yet.</p>
+  <p class="small">Reports are generated automatically every Monday at 8am.<br>
+    You can also run <code>python manage.py send_weekly_report --restaurant {{ restaurant.slug }}</code> manually.</p>
+</div>
+{% endif %}
+
+{% endblock %}
