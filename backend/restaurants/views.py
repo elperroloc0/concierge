@@ -852,6 +852,18 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
         except (ValueError, TypeError):
             party_size = None
 
+    # Quality signals from Retell post-call analysis
+    _SIGNAL_KEYS = {
+        "agent_failed_to_answer", "unanswered_question", "agent_response_to_unanswered",
+        "agent_confusion_moment", "caller_frustration", "transfer_was_necessary",
+        "language_consistency", "is_spam_or_robocall", "call_quality",
+    }
+    call_signals = {k: v for k, v in analysis.items() if k in _SIGNAL_KEYS}
+    is_spam = bool(call_signals.get("is_spam_or_robocall", False))
+
+    duration_ms = call.get("duration_ms")
+    duration_seconds = int(duration_ms / 1000) if duration_ms is not None else None
+
     CallDetail.objects.update_or_create(
         call_event=call_event,
         defaults={
@@ -868,6 +880,9 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
             "follow_up_needed":  _get_bool("follow_up_needed", True),
             "recording_url":     call.get("recording_url", ""),
             "call_summary":      (full_analysis.get("call_summary") or "").strip(),
+            "call_signals":      call_signals,
+            "duration_seconds":  duration_seconds,
+            "is_spam":           is_spam,
             "notes":             "",
         },
     )
@@ -1286,6 +1301,51 @@ def _send_payment_failed_email(restaurant: Restaurant) -> None:
         logger.exception("payment_failed_email: failed | restaurant=%s", restaurant.slug)
 
 
+def _send_knowledge_gap_alert(restaurant: Restaurant, detail) -> None:
+    """
+    Alert the owner immediately when Retell detected the agent couldn't answer a question.
+    Only fires when unanswered_question is non-empty (avoids false positives).
+    """
+    from django.core.mail import EmailMultiAlternatives
+    from django.template.loader import render_to_string
+
+    unanswered = (detail.call_signals.get("unanswered_question") or "").strip()
+    if not unanswered:
+        return
+
+    notify_email = restaurant.notify_email or (restaurant.user.email if restaurant.user else "")
+    if not notify_email:
+        return
+
+    base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
+    kb_url = f"{base_url}/portal/{restaurant.slug}/knowledge-base/"
+
+    agent_response = (detail.call_signals.get("agent_response_to_unanswered") or "").strip()
+    subject = f"El agente no pudo responder una pregunta — {restaurant.name}"
+    text_body = (
+        f"Un cliente preguntó:\n  "{unanswered}"\n\n"
+        f"El agente respondió:\n  "{agent_response}"\n\n"
+        f"Actualiza el Knowledge Base para que el agente pueda responder esto en futuras llamadas:\n"
+        f"{kb_url}\n"
+    )
+
+    html_body = render_to_string("emails/knowledge_gap_alert.html", {
+        "restaurant_name": restaurant.name,
+        "unanswered":      unanswered,
+        "agent_response":  agent_response,
+        "kb_url":          kb_url,
+    })
+
+    try:
+        msg = EmailMultiAlternatives(subject, text_body, settings.DEFAULT_FROM_EMAIL, [notify_email])
+        msg.attach_alternative(html_body, "text/html")
+        msg.send()
+        logger.info("knowledge_gap_alert: sent to %s | question=%r | restaurant=%s",
+                    notify_email, unanswered[:80], restaurant.slug)
+    except Exception:
+        logger.exception("knowledge_gap_alert: failed | restaurant=%s", restaurant.slug)
+
+
 def _send_post_call_sms(call_event: CallEvent, restaurant: Restaurant) -> None:
     """Send a contextual follow-up SMS after call_ended, but only if no SMS was already sent."""
     if not restaurant.enable_sms:
@@ -1540,6 +1600,10 @@ def retell_events_webhook(request):
                         _send_reservation_alert_email(call_event, restaurant)
                     if detail.call_reason == "complaint":
                         _send_complaint_alert_email(call_event, restaurant)
+                if (not detail.is_spam
+                        and detail.call_signals.get("agent_failed_to_answer")
+                        and restaurant.notify_via_email):
+                    _send_knowledge_gap_alert(restaurant, detail)
         except Exception:
             logger.exception("Failed to send alert email(s) for CallEvent pk=%s", call_event.pk)
 

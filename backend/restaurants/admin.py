@@ -188,6 +188,86 @@ POST_CALL_ANALYSIS_FIELDS = [
         ),
         "choices": ["positive", "neutral", "frustrated", "upset"],
     },
+    # ── Quality signals for weekly report ────────────────────────────────────
+    # After deploy: run "Retell: 1c — Configure post-call analysis fields" admin
+    # action on each active restaurant to push these fields to Retell.
+    {
+        "name": "agent_failed_to_answer",
+        "type": "boolean",
+        "description": (
+            "True if the agent was unable to answer a question the caller clearly asked — "
+            "responded with uncertainty, vagueness, or admitted not having the information."
+        ),
+    },
+    {
+        "name": "unanswered_question",
+        "type": "string",
+        "description": (
+            "If agent_failed_to_answer is true, quote the caller's exact words when they asked "
+            "the question the agent couldn't answer. Empty string if agent_failed_to_answer is false."
+        ),
+    },
+    {
+        "name": "agent_response_to_unanswered",
+        "type": "string",
+        "description": (
+            "If agent_failed_to_answer is true, quote the agent's exact response that showed "
+            "uncertainty or lack of information. Empty string if agent_failed_to_answer is false."
+        ),
+    },
+    {
+        "name": "agent_confusion_moment",
+        "type": "string",
+        "description": (
+            "If there was a moment where the agent clearly misunderstood the caller's intent, "
+            "describe it in one sentence. Empty string if none."
+        ),
+    },
+    {
+        "name": "caller_frustration",
+        "type": "boolean",
+        "description": (
+            "True if the caller showed frustration at any point: repeated themselves, "
+            "expressed dissatisfaction, gave up on getting an answer, or showed impatience."
+        ),
+    },
+    {
+        "name": "transfer_was_necessary",
+        "type": "boolean",
+        "description": (
+            "If the call was transferred to a human: true if the transfer was truly necessary "
+            "and the agent could not have resolved the need. False if the agent could have handled it. "
+            "Null/omit if no transfer occurred."
+        ),
+    },
+    {
+        "name": "language_consistency",
+        "type": "boolean",
+        "description": (
+            "True if the agent maintained consistent language throughout the entire call "
+            "(including greeting, body, and goodbye). False if the agent switched languages "
+            "or used the wrong language at any point."
+        ),
+    },
+    {
+        "name": "is_spam_or_robocall",
+        "type": "boolean",
+        "description": (
+            "True if this was a robocall, automated message, or commercial spam "
+            "rather than a real customer or human caller."
+        ),
+    },
+    {
+        "name": "call_quality",
+        "type": "enum",
+        "description": (
+            "Overall quality of the agent's handling. "
+            "'excellent': caller's need fully addressed, smooth interaction. "
+            "'good': mostly resolved with minor gaps or hesitations. "
+            "'poor': caller's need not addressed, caller left frustrated, or major agent failure."
+        ),
+        "choices": ["excellent", "good", "poor"],
+    },
 ]
 
 
@@ -707,6 +787,7 @@ class RestaurantAdmin(admin.ModelAdmin):
             "phone_mode", "existing_ph_numb",
             "notify_via_email", "notify_email",
             "notify_via_ws", "notify_ws_numb",
+            "notify_weekly_report", "weekly_report_language",
             "created_at", "updated_at",
         )}),
         ("Retell", {"fields": (
@@ -746,3 +827,32 @@ class RestaurantAdmin(admin.ModelAdmin):
         SmsLog.objects.filter(restaurant__in=queryset).delete()
 
         self.message_user(request, f"Successfully deleted {total_events} call events and {total_sms} SMS logs for {queryset.count()} restaurants.")
+
+
+# ─── WeeklyReport Admin ───────────────────────────────────────────────────────
+
+from .models import WeeklyReport  # noqa: E402
+
+
+@admin.register(WeeklyReport)
+class WeeklyReportAdmin(admin.ModelAdmin):
+    list_display = (
+        "restaurant", "week_start", "week_end", "generated_at",
+        "model_used", "generation_cost",
+        "has_owner_summary", "has_prompt_suggestions",
+    )
+    list_filter = ("restaurant",)
+    search_fields = ("restaurant__name",)
+    ordering = ("-week_start",)
+    readonly_fields = (
+        "generated_at", "model_used", "generation_cost",
+        "owner_summary", "prompt_suggestions", "metrics",
+    )
+
+    @admin.display(boolean=True, description="Owner Summary")
+    def has_owner_summary(self, obj):
+        return bool(obj.owner_summary)
+
+    @admin.display(boolean=True, description="Prompt Suggestions")
+    def has_prompt_suggestions(self, obj):
+        return bool(obj.prompt_suggestions)

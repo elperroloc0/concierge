@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>El agente no pudo responder — {{ restaurant_name }}</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;">
+  <tr><td align="center">
+  <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+
+    <!-- Header -->
+    <tr>
+      <td style="background:#1e1b4b;padding:20px 28px;">
+        <span style="color:#ffffff;font-size:17px;font-weight:700;letter-spacing:-.3px;">&#128222; Concierge</span>
+        <span style="color:#a5b4fc;font-size:13px;margin-left:10px;">{{ restaurant_name }}</span>
+      </td>
+    </tr>
+
+    <!-- Title -->
+    <tr>
+      <td style="padding:24px 28px 0;">
+        <p style="margin:0 0 2px;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;">Alerta de Knowledge Base</p>
+        <p style="margin:0 0 16px;font-size:20px;font-weight:700;color:#111827;line-height:1.2;">El agente no pudo responder una pregunta</p>
+        <p style="margin:0;font-size:13px;color:#6b7280;">Actualiza el Knowledge Base para que el agente pueda responder esto en futuras llamadas.</p>
+      </td>
+    </tr>
+
+    <!-- Question block -->
+    <tr>
+      <td style="padding:20px 28px 0;">
+        <p style="margin:0 0 6px;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">El cliente preguntó</p>
+        <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:14px 16px;">
+          <p style="margin:0;font-size:14px;color:#111827;font-style:italic;">"{{ unanswered }}"</p>
+        </div>
+      </td>
+    </tr>
+
+    <!-- Agent response block -->
+    {% if agent_response %}
+    <tr>
+      <td style="padding:16px 28px 0;">
+        <p style="margin:0 0 6px;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">El agente respondió</p>
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;">
+          <p style="margin:0;font-size:14px;color:#6b7280;font-style:italic;">"{{ agent_response }}"</p>
+        </div>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- CTA -->
+    <tr>
+      <td style="padding:24px 28px;">
+        <a href="{{ kb_url }}" style="display:inline-block;background:#4f46e5;color:#ffffff;font-size:13px;font-weight:600;padding:10px 22px;border-radius:8px;text-decoration:none;letter-spacing:-.1px;">
+          Actualizar Knowledge Base &#8594;
+        </a>
+      </td>
+    </tr>
+
+    <!-- Footer -->
+    <tr>
+      <td style="background:#f9fafb;padding:14px 28px;border-top:1px solid #e5e7eb;">
+        <p style="margin:0;font-size:11px;color:#9ca3af;">
+          Alerta automática de Concierge AI para {{ restaurant_name }}.
+          Gestiona tus notificaciones en la configuración del portal.
+        </p>
+      </td>
+    </tr>
+
+  </table>
+  </td></tr>
+</table>
+</body>
+</html>

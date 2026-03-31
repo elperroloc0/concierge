@@ -38,6 +38,9 @@ STRIPE_WEBHOOK_SECRET  = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 STRIPE_PRICE_ID        = os.environ.get("STRIPE_PRICE_ID", "")  # price_xxx from Stripe dashboard
 STRIPE_COMMUNICATION_PRICE_ID = os.environ.get("STRIPE_COMMUNICATION_PRICE_ID", "")
 
+# ── Anthropic ─────────────────────────────────────────────────────────────────
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
 # ── Twilio (SMS) ──────────────────────────────────────────────────────────────
 TWILIO_ACCOUNT_SID  = os.environ.get("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN   = os.environ.get("TWILIO_AUTH_TOKEN", "")

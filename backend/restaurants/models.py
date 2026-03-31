@@ -73,6 +73,16 @@ class Restaurant(models.Model):
         default=True,
         help_text="Morning digest email with previous day's call summary."
     )
+    notify_weekly_report = models.BooleanField(
+        default=True,
+        help_text="Monday morning weekly call quality report."
+    )
+    weekly_report_language = models.CharField(
+        max_length=2,
+        choices=[("es", "Español"), ("en", "English")],
+        default="es",
+        help_text="Language for the Claude-generated weekly report narrative."
+    )
 
     # whatsapp notifications
     notify_via_ws = models.BooleanField(default=False)
@@ -307,6 +317,11 @@ class CallDetail(models.Model):
 
     # AI-generated call summary from Retell (populated from call_ended event)
     call_summary = models.TextField(blank=True, default="")
+
+    # Quality signals from Retell post-call analysis (custom_analysis_data)
+    call_signals     = models.JSONField(default=dict, blank=True)
+    duration_seconds = models.PositiveIntegerField(null=True, blank=True)
+    is_spam          = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -665,3 +680,33 @@ class CallerMemory(models.Model):
     def __str__(self):
         label = self.name or self.phone
         return f"CallerMemory[{self.restaurant.slug} | {label}]"
+
+
+# ─── Weekly Report ────────────────────────────────────────────────────────────
+
+class WeeklyReport(models.Model):
+    restaurant   = models.ForeignKey(Restaurant, on_delete=models.CASCADE,
+                                     related_name="weekly_reports")
+    week_start   = models.DateField()
+    week_end     = models.DateField()
+    generated_at = models.DateTimeField(auto_now_add=True)
+
+    # Aggregated metrics — stored so the portal can render without re-computing
+    metrics = models.JSONField(default=dict)
+
+    # Claude output 1: narrative analysis for the owner (markdown)
+    owner_summary = models.TextField(blank=True)
+
+    # Claude output 2: technical prompt improvement suggestions (markdown)
+    prompt_suggestions = models.TextField(blank=True)
+
+    model_used      = models.CharField(max_length=64, blank=True)
+    generation_cost = models.DecimalField(max_digits=8, decimal_places=6,
+                                          null=True, blank=True)
+
+    class Meta:
+        ordering        = ["-week_start"]
+        unique_together = [("restaurant", "week_start")]
+
+    def __str__(self):
+        return f"WeeklyReport[{self.restaurant.slug} | {self.week_start}]"
