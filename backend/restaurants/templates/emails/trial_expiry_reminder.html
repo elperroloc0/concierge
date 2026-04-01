@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tu prueba gratuita vence pronto — {{ restaurant_name }}</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;">
+  <tr><td align="center">
+  <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+
+    <!-- Header -->
+    <tr>
+      <td style="background:#1e40af;padding:20px 28px;">
+        <span style="color:#ffffff;font-size:17px;font-weight:700;letter-spacing:-.3px;">&#9203; Concierge AI</span>
+        <span style="color:#93c5fd;font-size:13px;margin-left:10px;">{{ restaurant_name }}</span>
+      </td>
+    </tr>
+
+    <!-- Content -->
+    <tr>
+      <td style="padding:28px;">
+        <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;line-height:1.2;">
+          Tu prueba gratuita vence en {{ days_left }} día{% if days_left != 1 %}s{% endif %}
+        </p>
+        <p style="margin:0 0 16px;font-size:13px;color:#6b7280;">
+          Fecha de vencimiento: <strong>{{ expiry_date|date:"d \d\e N \d\e Y" }}</strong>
+        </p>
+        <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
+          Tu agente de IA de <strong>{{ restaurant_name }}</strong> dejará de contestar llamadas
+          cuando finalice el período de prueba. Para mantener el servicio activo sin interrupciones,
+          activa tu suscripción antes de esa fecha.
+        </p>
+
+        <!-- What they get box -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#eff6ff;border-radius:8px;border:1px solid #bfdbfe;margin-bottom:24px;">
+          <tr>
+            <td style="padding:16px 20px;">
+              <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#1e40af;">Incluido en tu plan:</p>
+              <p style="margin:0 0 6px;font-size:13px;color:#374151;">&#10003;&nbsp; Agente de voz disponible 24/7</p>
+              <p style="margin:0 0 6px;font-size:13px;color:#374151;">&#10003;&nbsp; Historial de llamadas y resúmenes con IA</p>
+              <p style="margin:0 0 6px;font-size:13px;color:#374151;">&#10003;&nbsp; Notificaciones de reservas y seguimientos</p>
+              <p style="margin:0;font-size:13px;color:#374151;">&#10003;&nbsp; Reportes semanales automáticos</p>
+            </td>
+          </tr>
+        </table>
+
+        <a href="{{ billing_url }}" style="display:inline-block;background:#1e40af;color:#ffffff;font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px;text-decoration:none;letter-spacing:-.1px;">
+          Activar suscripción &#8594;
+        </a>
+      </td>
+    </tr>
+
+    <!-- Footer -->
+    <tr>
+      <td style="background:#f9fafb;padding:14px 28px;border-top:1px solid #e5e7eb;">
+        <p style="margin:0;font-size:11px;color:#9ca3af;">
+          Enviado por Concierge AI para {{ restaurant_name }}.
+          Si tienes preguntas, responde este correo.
+        </p>
+      </td>
+    </tr>
+
+  </table>
+  </td></tr>
+</table>
+</body>
+</html>

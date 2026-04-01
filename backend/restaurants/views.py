@@ -498,7 +498,12 @@ def _resolve_relative_date(text: str, today: date):
             day_num = num
             break
 
-    if day_num is not None:
+    # If caller gave a specific month ("sábado 11 de abril"), skip day-name resolution
+    # and fall through to the month+day parser, which is more precise.
+    all_month_names = [v.lower() for v in _MONTHS_ES.values()] + [v.lower() for v in _MONTHS_EN.values()]
+    has_explicit_month = any(m in tl for m in all_month_names)
+
+    if day_num is not None and not has_explicit_month:
         days_until = (day_num - today.weekday()) % 7
         if days_until == 0:
             days_until = 7  # never today — push to next occurrence
@@ -3489,12 +3494,22 @@ def portal_reports_list(request, slug):
 
 def _run_generate_report_bg(report_pk, summaries, week_start, week_end):
     """Background thread: call Claude, update the WeeklyReport, close DB connection."""
+    from datetime import timedelta
     from django.db import connection as db_connection
     from restaurants.management.commands.send_weekly_report import generate_report as _generate_report
     try:
-        report = WeeklyReport.objects.select_related("restaurant").get(pk=report_pk)
+        report = WeeklyReport.objects.select_related(
+            "restaurant", "restaurant__knowledge_base"
+        ).get(pk=report_pk)
+        kb = getattr(report.restaurant, "knowledge_base", None)
+        prev_report = WeeklyReport.objects.filter(
+            restaurant=report.restaurant,
+            week_start=week_start - timedelta(days=7),
+        ).first()
+        prev_metrics = prev_report.metrics if prev_report else None
         owner_summary, prompt_suggestions, model_used, cost = _generate_report(
             report.restaurant, report.metrics, summaries, week_start, week_end,
+            kb=kb, prev_metrics=prev_metrics,
         )
         report.owner_summary      = owner_summary
         report.prompt_suggestions = prompt_suggestions

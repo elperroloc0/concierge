@@ -190,7 +190,7 @@ def aggregate_metrics(restaurant: Restaurant, week_start: date, week_end: date) 
 
 
 def select_relevant_summaries(restaurant: Restaurant, week_start: date, week_end: date,
-                               max_items: int = 8) -> list:
+                               max_items: int = 15) -> list:
     """Return up to max_items call_summary strings prioritized by diagnostic value."""
     base_qs = CallDetail.objects.filter(
         call_event__restaurant=restaurant,
@@ -237,42 +237,125 @@ def select_relevant_summaries(restaurant: Restaurant, week_start: date, week_end
 
 # ─── Claude generation ────────────────────────────────────────────────────────
 
-_KB_SECTIONS = """Secciones y campos editables del Knowledge Base en el portal del dueño:
-[Horarios] Horario de apertura · Cierre de cocina · Cierra en festivos · Notas festivos · Cierres por eventos privados
-[Menú] Resumen menú food · Resumen menú bar · Platos estrella · Rango de precios · Opciones dietéticas
-[Música en vivo] Tiene música en vivo · Detalles música (días, horarios, estilos) · Cover charge
-[Ambiente] Código de vestimenta · Nivel de ruido
-[Eventos especiales] Info eventos especiales
-[Parking] Tiene valet · Coste valet · Parking gratuito cerca
-[Equipo] Miembros del equipo (nombres y roles)
-[Llamadas no-clientes] Empresas partner · Gestión de llamadas de partners · Gestión de proveedores
-[Info adicional] Notas del dueño · Info adicional"""
+def _serialize_kb_for_report(kb) -> str:
+    """Serialize KB to a labeled key-value block for Claude. Empty fields show [no configurado]."""
+
+    def _v(v):
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return "[no configurado]"
+        if isinstance(v, bool):
+            return "Sí" if v else "No"
+        return str(v).strip()
+
+    lines = [
+        "[Horarios]",
+        f"  Horario apertura: {_v(kb.hours_of_operation)}",
+        f"  Cierre cocina: {_v(kb.kitchen_closing_time)}",
+        f"  Cierra en festivos: {'Sí' if kb.closes_on_holidays else 'No'}",
+        f"  Notas festivos: {_v(kb.holiday_closure_notes)}",
+        f"  Cierres por eventos privados: {_v(kb.private_event_closures)}",
+        "",
+        "[Menú y comida]",
+        f"  Tipo de cocina / concepto: {_v(kb.menu_cuisine_type)}",
+        f"  Resumen menú food: {_v(kb.food_menu_summary)}",
+        f"  Platos estrella: {_v(kb.menu_best_sellers)}",
+        f"  Rango de precios: {_v(kb.menu_price_range)}",
+        f"  Categorías menú: {_v(kb.menu_categories)}",
+        f"  Opciones dietéticas: {_v(kb.dietary_options)}",
+        "",
+        "[Barra]",
+        f"  Concepto barra: {_v(kb.bar_concept)}",
+        f"  Resumen menú barra: {_v(kb.bar_menu_summary)}",
+        f"  Cócteles firma: {_v(kb.bar_signature_drinks)}",
+        f"  Vino y cerveza: {_v(kb.bar_wine_beer)}",
+        f"  Bottle service: {_v(kb.bottle_service)}",
+        f"  Happy hour: {_v(kb.happy_hour_details)}",
+        "",
+        "[Ambiente y experiencia]",
+        f"  Música en vivo: {'Sí' if kb.has_live_music else 'No'}",
+        f"  Detalles música: {_v(kb.live_music_details)}",
+        f"  Hora ambiente fiesta: {_v(kb.party_vibe_start_time)}",
+        f"  Código de vestimenta: {_v(kb.dress_code)}",
+        f"  Cover charge: {_v(kb.cover_charge)}",
+        f"  Nivel de ruido: {_v(kb.noise_level)}",
+        "",
+        "[Parking]",
+        f"  Valet: {'Sí' if kb.has_valet else 'No'}",
+        f"  Coste valet: {_v(kb.valet_cost)}",
+        f"  Parking gratuito: {_v(kb.free_parking_info)}",
+        "",
+        "[Eventos privados y especiales]",
+        f"  Salón privado: {'Sí' if kb.has_private_dining else 'No'}",
+        f"  Mínimo gasto privado: {_v(kb.private_dining_min_spend)}",
+        f"  Eventos especiales: {_v(kb.special_events_info)}",
+        "",
+        "[Facturación]",
+        f"  Propina automática: {'Sí' if kb.auto_gratuity else 'No'}",
+        f"  % cargo servicio: {_v(kb.service_charge_pct)}",
+        f"  Política descorche: {_v(kb.corkage_policy)}",
+        f"  Máx tarjetas a dividir: {_v(kb.max_cards_to_split)}",
+        "",
+        "[Reservas]",
+        f"  Tiempo de gracia: {f'{kb.reservation_grace_min} min' if kb.reservation_grace_min else '[no configurado]'}",
+        f"  No-show fee: {_v(kb.no_show_fee)}",
+        f"  Grupo grande desde: {f'{kb.large_party_min_guests} personas' if kb.large_party_min_guests else '[no configurado]'}",
+        "",
+        "[Equipo]",
+        f"  Miembros del equipo: {_v(kb.team_members)}",
+        "",
+        "[Info adicional]",
+        f"  Notas del dueño: {_v(kb.owner_notes)}",
+        f"  Info adicional: {_v(kb.additional_info)}",
+    ]
+    return "\n".join(lines)
 
 
 def generate_report(restaurant: Restaurant, metrics: dict, summaries: list,
-                    week_start: date, week_end: date) -> tuple:
+                    week_start: date, week_end: date, kb=None,
+                    prev_metrics: dict | None = None) -> tuple:
     """
     Call Claude API and return (owner_summary, prompt_suggestions, model_used, generation_cost).
     """
     language = restaurant.weekly_report_language or "es"
     lang_label = "Spanish" if language == "es" else "English"
 
+    kb_section = _serialize_kb_for_report(kb) if kb else (
+        "Secciones y campos editables del Knowledge Base en el portal del dueño:\n"
+        "[Horarios] Horario de apertura · Cierre de cocina · Cierra en festivos · Notas festivos\n"
+        "[Menú] Resumen menú food · Resumen menú bar · Platos estrella · Rango de precios · Opciones dietéticas\n"
+        "[Música en vivo] Tiene música en vivo · Detalles música · Cover charge\n"
+        "[Ambiente] Código de vestimenta · Nivel de ruido\n"
+        "[Eventos especiales] Info eventos especiales\n"
+        "[Parking] Tiene valet · Coste valet · Parking gratuito cerca\n"
+        "[Equipo] Miembros del equipo\n"
+        "[Info adicional] Notas del dueño · Info adicional"
+    )
+
+    prev_section = ""
+    if prev_metrics:
+        prev_week_start = week_start - timedelta(days=7)
+        prev_section = (
+            f"\n--- PREVIOUS WEEK METRICS ({prev_week_start} → {week_start}) ---\n"
+            f"{json.dumps(prev_metrics, indent=2, ensure_ascii=False)}\n"
+        )
+
     user_prompt = (
         f"Restaurant: {restaurant.name}\n"
         f"Week: {week_start} to {week_end}\n"
         f"weekly_report_language: {lang_label}\n\n"
         f"--- METRICS ---\n"
-        f"{json.dumps(metrics, indent=2, ensure_ascii=False)}\n\n"
-        f"--- KNOWLEDGE BASE (editable sections in portal) ---\n"
-        f"{_KB_SECTIONS}\n\n"
-        f"--- RELEVANT CALL SUMMARIES (from Retell) ---\n"
+        f"{json.dumps(metrics, indent=2, ensure_ascii=False)}\n"
+        f"{prev_section}\n"
+        f"--- KNOWLEDGE BASE (actual content — [no configurado] = campo vacío) ---\n"
+        f"{kb_section}\n\n"
+        f"--- RELEVANT CALL SUMMARIES ({len(summaries)} calls) ---\n"
         + "\n".join(f"- {s}" for s in summaries)
     )
 
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
     response = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=2500,
+        max_tokens=4000,
         system=_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_prompt}],
     )
@@ -376,10 +459,17 @@ class Command(BaseCommand):
             return
 
         summaries = select_relevant_summaries(restaurant, week_start, week_end)
+        kb = getattr(restaurant, "knowledge_base", None)
+        prev_report = WeeklyReport.objects.filter(
+            restaurant=restaurant,
+            week_start=week_start - timedelta(days=7),
+        ).first()
+        prev_metrics = prev_report.metrics if prev_report else None
 
         try:
             owner_summary, prompt_suggestions, model_used, cost = generate_report(
                 restaurant, metrics, summaries, week_start, week_end,
+                kb=kb, prev_metrics=prev_metrics,
             )
         except Exception:
             logger.exception(
