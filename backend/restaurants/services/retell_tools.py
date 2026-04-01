@@ -125,11 +125,9 @@ def _escalation_tool_definition(transfer_number: str) -> dict:
             "type": "warm_transfer",
             "opt_out_initial_message": True,
             "opt_out_human_detection": False,
+            "agent_detection_timeout_ms": 4000,
             "on_hold_music": "ringtone",
-            "transfer_ring_duration_ms": 25000,
-            "voicemail_option": {
-                "type": "hangup",
-            },
+            "transfer_ring_duration_ms": 18000,
             "private_handoff_option": {
                 "type": "prompt",
                 "prompt": (
