@@ -977,8 +977,8 @@ class PortalGenerateReportViewTest(TestCase):
         self.client = Client()
         self.client.login(username="gen_user", password="pass")
         self.url = reverse("portal_generate_report", kwargs={"slug": self.restaurant.slug})
-        self.week_start = date.today() - timedelta(days=date.today().weekday())
-        self.week_end   = self.week_start + timedelta(days=7)
+        self.week_start = date.today() - timedelta(days=6)
+        self.week_end   = date.today() + timedelta(days=1)
         make_call(self.restaurant, days_ago=0, call_summary="Test call")
 
     @patch("threading.Thread")

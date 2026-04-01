@@ -3538,10 +3538,10 @@ def portal_generate_report(request, slug):
             django_messages.warning(request, "Ya generaste un reporte recientemente. Espera un poco antes de generar otro.")
             return redirect("portal_reports_list", slug=slug)
 
-    # Current week window (Monday → Monday)
+    # Rolling 7-day window ending today (inclusive)
     today = date_.today()
-    week_start = today - timedelta(days=today.weekday())
-    week_end = week_start + timedelta(days=7)
+    week_start = today - timedelta(days=6)
+    week_end = today + timedelta(days=1)
 
     from restaurants.management.commands.send_weekly_report import (
         aggregate_metrics, select_relevant_summaries,
