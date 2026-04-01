@@ -3,6 +3,30 @@
 {% block page_title %}Weekly Report{% endblock %}
 {% block nav_reports %}active{% endblock %}
 
+{% block extra_head %}
+<style>
+.report-narrative h2 {
+  font-size: 1rem; font-weight: 700;
+  margin: 1.4rem 0 0.4rem; color: #111827;
+  padding-bottom: 0.25rem; border-bottom: 1px solid #f3f4f6;
+}
+.report-narrative h3 {
+  font-size: 0.92rem; font-weight: 700;
+  margin: 1.1rem 0 0.3rem; color: #374151;
+}
+.report-narrative p { margin-bottom: 0.6rem; font-size: 0.93rem; line-height: 1.65; color: #374151; }
+.report-narrative ul, .report-narrative ol { padding-left: 1.3rem; margin-bottom: 0.75rem; }
+.report-narrative li { font-size: 0.93rem; line-height: 1.6; color: #374151; margin-bottom: 0.15rem; }
+.report-narrative strong { color: #111827; }
+.report-narrative hr { margin: 1rem 0; border-color: #e5e7eb; }
+.report-narrative blockquote {
+  margin: 0.5rem 0; padding: 0.5rem 1rem;
+  border-left: 3px solid #e5e7eb; color: #6b7280;
+  font-size: 0.9rem;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 
 <!-- Breadcrumb + actions -->
@@ -84,14 +108,20 @@
 </div>
 {% endif %}
 
-<!-- Owner summary -->
+<!-- Owner summary — rendered as markdown -->
 {% if report.owner_summary %}
 <div class="card border-0 shadow-sm mb-4">
   <div class="card-body">
     <p class="text-uppercase small fw-semibold text-muted mb-3">Weekly Analysis</p>
-    <div style="white-space:pre-wrap;font-size:0.93rem;line-height:1.65;color:#374151;">{{ report.owner_summary }}</div>
+    <div id="owner-summary-md" class="report-narrative"></div>
   </div>
 </div>
+{{ report.owner_summary|json_script:"owner-md-raw" }}
+<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+<script>
+  document.getElementById("owner-summary-md").innerHTML =
+    marked.parse(JSON.parse(document.getElementById("owner-md-raw").textContent));
+</script>
 {% endif %}
 
 <!-- Call quality table -->

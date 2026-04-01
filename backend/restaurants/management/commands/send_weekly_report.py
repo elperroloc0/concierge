@@ -36,7 +36,8 @@ logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """Eres un analista especializado en agentes de voz para restaurantes.
 Recibes el análisis agregado de una semana de llamadas: señales de calidad estructuradas
-extraídas por Retell sobre cada llamada, más resúmenes de las llamadas más relevantes.
+extraídas por Retell sobre cada llamada, resúmenes de las llamadas más relevantes, y el
+contenido actual del Knowledge Base del restaurante organizado por secciones del portal.
 
 Debes producir DOS outputs separados por los delimitadores exactos indicados.
 
@@ -45,12 +46,25 @@ Análisis ejecutivo para el dueño del restaurante.
 Tono: analista de negocio que conoce bien la industria — directo, sin relleno, accionable.
 No es un resumen de métricas, es interpretación de lo que significan para el negocio.
 Escribe en el idioma indicado en los datos (weekly_report_language).
+
+REGLA CRÍTICA para las Recomendaciones: solo incluye acciones que el dueño puede ejecutar
+directamente sin intervención técnica. Hay dos tipos válidos:
+1. Acciones operativas: decisiones de negocio, instrucciones al equipo, protocolos internos.
+2. Actualizaciones de Knowledge Base: cuando el agente no pudo responder algo porque el KB
+   lo tiene vacío o incompleto, indica exactamente qué sección del portal actualizar y qué
+   texto añadir. Usa el formato: KB → [Sección] → [Campo]: "[texto sugerido]"
+   Las secciones del portal son: Identity, Horarios, Menú, Música en vivo, Ambiente,
+   Eventos especiales, Parking, Equipo, Llamadas no-clientes, Info adicional.
+
+NUNCA recomiendes cambios al prompt del agente, flujos de conversación ni configuración
+del sistema — esos van en la sección PROMPT para el equipo técnico.
+
 Estructura obligatoria:
   Visión general
   Reservas
   Fricción y fallos del agente
   Escalaciones (omitir sección si no hubo transferencias)
-  Recomendaciones (máximo 3, concretas y priorizadas)
+  Recomendaciones (máximo 3, solo acciones del dueño o KB edits)
 
 ===PROMPT===
 Análisis técnico para el desarrollador del sistema.
@@ -185,6 +199,18 @@ def select_relevant_summaries(restaurant: Restaurant, week_start: date, week_end
 
 # ─── Claude generation ────────────────────────────────────────────────────────
 
+_KB_SECTIONS = """Secciones y campos editables del Knowledge Base en el portal del dueño:
+[Horarios] Horario de apertura · Cierre de cocina · Cierra en festivos · Notas festivos · Cierres por eventos privados
+[Menú] Resumen menú food · Resumen menú bar · Platos estrella · Rango de precios · Opciones dietéticas
+[Música en vivo] Tiene música en vivo · Detalles música (días, horarios, estilos) · Cover charge
+[Ambiente] Código de vestimenta · Nivel de ruido
+[Eventos especiales] Info eventos especiales
+[Parking] Tiene valet · Coste valet · Parking gratuito cerca
+[Equipo] Miembros del equipo (nombres y roles)
+[Llamadas no-clientes] Empresas partner · Gestión de llamadas de partners · Gestión de proveedores
+[Info adicional] Notas del dueño · Info adicional"""
+
+
 def generate_report(restaurant: Restaurant, metrics: dict, summaries: list,
                     week_start: date, week_end: date) -> tuple:
     """
@@ -199,6 +225,8 @@ def generate_report(restaurant: Restaurant, metrics: dict, summaries: list,
         f"weekly_report_language: {lang_label}\n\n"
         f"--- METRICS ---\n"
         f"{json.dumps(metrics, indent=2, ensure_ascii=False)}\n\n"
+        f"--- KNOWLEDGE BASE (editable sections in portal) ---\n"
+        f"{_KB_SECTIONS}\n\n"
         f"--- RELEVANT CALL SUMMARIES (from Retell) ---\n"
         + "\n".join(f"- {s}" for s in summaries)
     )

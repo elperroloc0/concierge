@@ -3463,12 +3463,93 @@ def portal_notifications(request, slug):
 
 @portal_view()
 def portal_reports_list(request, slug):
+    from datetime import timedelta
+    from django.utils import timezone
+
     restaurant = request.restaurant
     reports = WeeklyReport.objects.filter(restaurant=restaurant)
+
+    last_report = reports.order_by("-generated_at").first()
+    can_generate = True
+    next_available_at = None
+    if last_report:
+        next_available_at = last_report.generated_at + timedelta(hours=24)
+        if timezone.now() < next_available_at:
+            can_generate = False
+        else:
+            next_available_at = None
+
     return render(request, "portal/reports_list.html", {
-        "restaurant": restaurant,
-        "reports":    reports,
+        "restaurant":       restaurant,
+        "reports":          reports,
+        "can_generate":     can_generate,
+        "next_available_at": next_available_at,
     })
+
+
+@portal_view()
+def portal_generate_report(request, slug):
+    from datetime import timedelta, date as date_
+    from django.contrib import messages as django_messages
+    from django.utils import timezone
+
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    restaurant = request.restaurant
+
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        django_messages.error(request, "ANTHROPIC_API_KEY not configured.")
+        return redirect("portal_reports_list", slug=slug)
+
+    # Cooldown check
+    last_report = WeeklyReport.objects.filter(restaurant=restaurant).order_by("-generated_at").first()
+    if last_report:
+        next_available = last_report.generated_at + timedelta(hours=24)
+        if timezone.now() < next_available:
+            django_messages.warning(request, "Ya generaste un reporte recientemente. Espera un poco antes de generar otro.")
+            return redirect("portal_reports_list", slug=slug)
+
+    # Current week window (Monday → Monday)
+    today = date_.today()
+    week_start = today - timedelta(days=today.weekday())
+    week_end = week_start + timedelta(days=7)
+
+    from restaurants.management.commands.send_weekly_report import (
+        aggregate_metrics, select_relevant_summaries,
+        generate_report as _generate_report,
+    )
+
+    metrics = aggregate_metrics(restaurant, week_start, week_end)
+    if not metrics:
+        django_messages.warning(request, "No hay llamadas esta semana para generar un reporte.")
+        return redirect("portal_reports_list", slug=slug)
+
+    summaries = select_relevant_summaries(restaurant, week_start, week_end)
+
+    try:
+        owner_summary, prompt_suggestions, model_used, cost = _generate_report(
+            restaurant, metrics, summaries, week_start, week_end,
+        )
+    except Exception:
+        logger.exception("portal_generate_report: Claude API failed | restaurant=%s", restaurant.slug)
+        django_messages.error(request, "Error al generar el reporte. Intenta de nuevo.")
+        return redirect("portal_reports_list", slug=slug)
+
+    report, _ = WeeklyReport.objects.update_or_create(
+        restaurant=restaurant,
+        week_start=week_start,
+        defaults={
+            "week_end":           week_end,
+            "metrics":            metrics,
+            "owner_summary":      owner_summary,
+            "prompt_suggestions": prompt_suggestions,
+            "model_used":         model_used,
+            "generation_cost":    cost,
+        },
+    )
+
+    return redirect("portal_reports_detail", slug=slug, report_id=report.pk)
 
 
 @portal_view()
