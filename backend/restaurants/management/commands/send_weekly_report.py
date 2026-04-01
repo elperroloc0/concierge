@@ -67,12 +67,29 @@ Estructura obligatoria:
   Recomendaciones (máximo 3, solo acciones del dueño o KB edits)
 
 ===PROMPT===
-Análisis técnico para el desarrollador del sistema.
-Para cada fallo detectado: problema → causa probable → texto concreto a añadir o
-cambiar en el prompt del agente o en el knowledge base.
-Formato: ### N. [Título del problema] [N llamadas afectadas — PRIORIDAD]
-Prioriza por impacto (cuántas llamadas afectó).
-Incluye citas exactas de unanswered_question y agent_response_to_unanswered cuando estén disponibles."""
+Análisis técnico exclusivamente para el equipo de desarrollo. Destinatario: ingeniero que edita el prompt del agente de voz.
+
+REGLA ABSOLUTA: No parafrasees ni repitas ningún contenido de la sección ===OWNER===. Cero overlap. Si no tienes nada técnico que decir sobre un tema, omítelo.
+
+Tu output son instrucciones de edición concretas — no narrativa, no resumen. Cada issue sigue este formato exacto:
+
+### N. [Título del problema] [N llamadas — ALTA/MEDIA/BAJA]
+**Síntoma observado**: qué dijo el agente o qué pasó en la llamada (cita del call_summary o de unanswered_question si existe)
+**Causa probable**: qué falta o está mal en el prompt del agente o en el KB
+**Cambio propuesto**:
+```
+[copia exacta del texto a añadir o modificar en el prompt, con el contexto suficiente para ubicarlo]
+```
+O si es un campo del KB:
+KB → [Sección] → [Campo]: "[valor exacto a añadir]"
+
+Si no hay agent_failed_to_answer explícitos, analiza igualmente los call_summaries para detectar:
+- Respuestas genéricas del agente donde debería tener datos específicos
+- Llamadas donde el caller repitió la misma pregunta
+- Patrones de call_reason="other" que indican intents no cubiertos en el prompt
+- Cualquier señal de que el agente no manejó bien el cierre o la derivación
+
+Si la semana fue impecable y no hay nada que mejorar técnicamente, escribe únicamente: "Sin cambios recomendados esta semana." """
 
 
 # ─── Aggregation ──────────────────────────────────────────────────────────────
@@ -89,6 +106,19 @@ def aggregate_metrics(restaurant: Restaurant, week_start: date, week_end: date) 
 
     if not details:
         return {}
+
+    # Deduplicate by Retell call_id — Retell retries webhooks and can create
+    # multiple CallDetail records for the same physical call.
+    seen_ids: set = set()
+    deduped = []
+    for d in details:
+        cid = d.call_event.payload.get("call", {}).get("call_id", "")
+        if cid and cid in seen_ids:
+            continue
+        if cid:
+            seen_ids.add(cid)
+        deduped.append(d)
+    details = deduped
 
     real    = [d for d in details if not d.is_spam]
     spam    = [d for d in details if d.is_spam]
@@ -169,7 +199,15 @@ def select_relevant_summaries(restaurant: Restaurant, week_start: date, week_end
         is_spam=False,
     ).exclude(call_summary="")
 
-    seen, selected = set(), []
+    seen_pks, seen_call_ids, selected = set(), set(), []
+
+    def _already_seen(d) -> bool:
+        cid = d.call_event.payload.get("call", {}).get("call_id", "")
+        if cid and cid in seen_call_ids:
+            return True
+        if cid:
+            seen_call_ids.add(cid)
+        return False
 
     # Priority order: agent failures → frustration → poor quality → recent
     priority_filters = [
@@ -180,17 +218,17 @@ def select_relevant_summaries(restaurant: Restaurant, week_start: date, week_end
 
     for filt in priority_filters:
         for d in base_qs.filter(**filt).order_by("-call_event__created_at"):
-            if d.pk not in seen and d.call_summary:
+            if d.pk not in seen_pks and not _already_seen(d) and d.call_summary:
                 selected.append(d.call_summary)
-                seen.add(d.pk)
+                seen_pks.add(d.pk)
                 if len(selected) >= max_items:
                     return selected
 
     # Fill remaining slots with most recent calls
     for d in base_qs.order_by("-call_event__created_at"):
-        if d.pk not in seen and d.call_summary:
+        if d.pk not in seen_pks and not _already_seen(d) and d.call_summary:
             selected.append(d.call_summary)
-            seen.add(d.pk)
+            seen_pks.add(d.pk)
             if len(selected) >= max_items:
                 break
 

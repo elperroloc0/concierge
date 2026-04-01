@@ -3604,8 +3604,8 @@ def portal_reports_detail(request, slug, report_id):
             writer.writerow([k, v])
         return response
 
-    # Calls for the week — top 50 non-spam, ordered by most recent
-    week_calls = (
+    # Calls for the week — top 50 non-spam, deduped by Retell call_id
+    _raw_calls = (
         CallDetail.objects
         .filter(
             call_event__restaurant=restaurant,
@@ -3614,8 +3614,19 @@ def portal_reports_detail(request, slug, report_id):
             is_spam=False,
         )
         .select_related("call_event")
-        .order_by("-call_event__created_at")[:50]
+        .order_by("-call_event__created_at")
     )
+    _seen_call_ids: set = set()
+    week_calls = []
+    for _d in _raw_calls:
+        _cid = _d.call_event.payload.get("call", {}).get("call_id", "")
+        if _cid and _cid in _seen_call_ids:
+            continue
+        if _cid:
+            _seen_call_ids.add(_cid)
+        week_calls.append(_d)
+        if len(week_calls) >= 50:
+            break
 
     return render(request, "portal/reports_detail.html", {
         "restaurant":  restaurant,
