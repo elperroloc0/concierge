@@ -40,7 +40,6 @@
     </h4>
     <p class="text-muted small mb-0">
       Generated {{ report.generated_at|date:"d M Y, H:i" }}
-      {% if report.model_used %}&nbsp;·&nbsp;<span class="font-monospace">{{ report.model_used }}</span>{% endif %}
     </p>
   </div>
   {% if report.status == "done" %}
