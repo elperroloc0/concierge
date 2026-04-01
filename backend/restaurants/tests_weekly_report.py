@@ -878,3 +878,304 @@ class PortalReportsDetailViewTest(TestCase):
         self.client.logout()
         response = self.client.get(self.url)
         self.assertIn(response.status_code, [302, 301])
+
+    def test_pending_report_shows_spinner_not_content(self):
+        self.report.status = WeeklyReport.STATUS_PENDING
+        self.report.owner_summary = ""
+        self.report.save()
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "spinner-border")
+        self.assertNotContains(response, "Weekly Analysis")
+
+    def test_failed_report_shows_error_banner(self):
+        self.report.status = WeeklyReport.STATUS_FAILED
+        self.report.save()
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "alert-danger")
+
+    def test_pending_report_hides_csv_export_button(self):
+        self.report.status = WeeklyReport.STATUS_PENDING
+        self.report.save()
+        response = self.client.get(self.url)
+        self.assertNotContains(response, "Export CSV")
+
+    def test_done_report_shows_csv_export_button(self):
+        response = self.client.get(self.url)
+        self.assertContains(response, "Export CSV")
+
+
+# ─── portal_report_status view ────────────────────────────────────────────────
+
+class PortalReportStatusViewTest(TestCase):
+
+    def setUp(self):
+        self.user = make_user("status_user")
+        self.restaurant = make_restaurant(user=self.user)
+        RestaurantMembership.objects.create(
+            restaurant=self.restaurant, user=self.user, role="owner", is_active=True
+        )
+        self.report = WeeklyReport.objects.create(
+            restaurant=self.restaurant,
+            week_start=date(2026, 3, 24),
+            week_end=date(2026, 3, 31),
+            metrics={},
+            status=WeeklyReport.STATUS_PENDING,
+        )
+        self.client = Client()
+        self.client.login(username="status_user", password="pass")
+        self.url = reverse("portal_report_status", kwargs={
+            "slug": self.restaurant.slug, "report_id": self.report.pk,
+        })
+
+    def test_returns_pending_status(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "pending"})
+
+    def test_returns_done_status(self):
+        self.report.status = WeeklyReport.STATUS_DONE
+        self.report.save()
+        response = self.client.get(self.url)
+        self.assertEqual(response.json(), {"status": "done"})
+
+    def test_returns_failed_status(self):
+        self.report.status = WeeklyReport.STATUS_FAILED
+        self.report.save()
+        response = self.client.get(self.url)
+        self.assertEqual(response.json(), {"status": "failed"})
+
+    def test_404_for_report_from_other_restaurant(self):
+        other_user = make_user("other_status")
+        other = make_restaurant(name="Other", user=other_user)
+        other_report = WeeklyReport.objects.create(
+            restaurant=other, week_start=date(2026, 3, 24), week_end=date(2026, 3, 31),
+        )
+        url = reverse("portal_report_status", kwargs={
+            "slug": self.restaurant.slug, "report_id": other_report.pk,
+        })
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_requires_authentication(self):
+        self.client.logout()
+        response = self.client.get(self.url)
+        self.assertIn(response.status_code, [302, 301])
+
+
+# ─── portal_generate_report view (background thread) ─────────────────────────
+
+class PortalGenerateReportViewTest(TestCase):
+
+    def setUp(self):
+        self.user = make_user("gen_user")
+        self.restaurant = make_restaurant(user=self.user)
+        RestaurantMembership.objects.create(
+            restaurant=self.restaurant, user=self.user, role="owner", is_active=True
+        )
+        self.client = Client()
+        self.client.login(username="gen_user", password="pass")
+        self.url = reverse("portal_generate_report", kwargs={"slug": self.restaurant.slug})
+        self.week_start = date.today() - timedelta(days=date.today().weekday())
+        self.week_end   = self.week_start + timedelta(days=7)
+        make_call(self.restaurant, days_ago=0, call_summary="Test call")
+
+    @patch("threading.Thread")
+    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
+    def test_post_creates_pending_report_and_redirects(self, mock_thread):
+        mock_thread.return_value.start = lambda: None
+        response = self.client.post(self.url)
+        self.assertIn(response.status_code, [302, 301])
+        report = WeeklyReport.objects.get(restaurant=self.restaurant, week_start=self.week_start)
+        self.assertEqual(report.status, WeeklyReport.STATUS_PENDING)
+
+    @patch("threading.Thread")
+    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
+    def test_redirects_to_detail_page(self, mock_thread):
+        mock_thread.return_value.start = lambda: None
+        response = self.client.post(self.url)
+        report = WeeklyReport.objects.get(restaurant=self.restaurant, week_start=self.week_start)
+        expected = reverse("portal_reports_detail", kwargs={
+            "slug": self.restaurant.slug, "report_id": report.pk,
+        })
+        self.assertRedirects(response, expected, fetch_redirect_response=False)
+
+    @patch("threading.Thread")
+    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
+    def test_background_thread_is_started(self, mock_thread):
+        mock_thread.return_value.start = MagicMock()
+        self.client.post(self.url)
+        mock_thread.return_value.start.assert_called_once()
+
+    def test_get_request_returns_405(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 405)
+
+    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": ""})
+    def test_missing_api_key_shows_error_and_redirects_to_list(self):
+        response = self.client.post(self.url)
+        self.assertIn(response.status_code, [302, 301])
+        self.assertFalse(WeeklyReport.objects.filter(restaurant=self.restaurant).exists())
+
+    @patch("threading.Thread")
+    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
+    def test_cooldown_blocks_second_generation(self, mock_thread):
+        mock_thread.return_value.start = lambda: None
+        # Create a completed report generated just now
+        WeeklyReport.objects.create(
+            restaurant=self.restaurant,
+            week_start=self.week_start - timedelta(days=7),
+            week_end=self.week_start,
+            metrics={},
+            status=WeeklyReport.STATUS_DONE,
+        )
+        response = self.client.post(self.url)
+        self.assertIn(response.status_code, [302, 301])
+        # No new report should have been created for this week
+        self.assertFalse(
+            WeeklyReport.objects.filter(restaurant=self.restaurant, week_start=self.week_start).exists()
+        )
+
+    @patch("threading.Thread")
+    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
+    def test_already_pending_report_redirects_without_new_thread(self, mock_thread):
+        mock_thread.return_value.start = MagicMock()
+        existing = WeeklyReport.objects.create(
+            restaurant=self.restaurant,
+            week_start=self.week_start,
+            week_end=self.week_end,
+            metrics={},
+            status=WeeklyReport.STATUS_PENDING,
+        )
+        response = self.client.post(self.url)
+        expected = reverse("portal_reports_detail", kwargs={
+            "slug": self.restaurant.slug, "report_id": existing.pk,
+        })
+        self.assertRedirects(response, expected, fetch_redirect_response=False)
+        mock_thread.return_value.start.assert_not_called()
+
+    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
+    def test_no_calls_this_week_redirects_to_list(self):
+        # Use a restaurant with no calls
+        user2 = make_user("gen_user2")
+        r2 = make_restaurant(name="Empty", user=user2)
+        RestaurantMembership.objects.create(
+            restaurant=r2, user=user2, role="owner", is_active=True
+        )
+        client2 = Client()
+        client2.login(username="gen_user2", password="pass")
+        url2 = reverse("portal_generate_report", kwargs={"slug": r2.slug})
+        response = client2.post(url2)
+        self.assertIn(response.status_code, [302, 301])
+        self.assertFalse(WeeklyReport.objects.filter(restaurant=r2).exists())
+
+    def test_requires_authentication(self):
+        self.client.logout()
+        response = self.client.post(self.url)
+        self.assertIn(response.status_code, [302, 301])
+
+
+# ─── _run_generate_report_bg() ────────────────────────────────────────────────
+
+class RunGenerateReportBgTest(TestCase):
+    """Tests for the background worker called from the thread — run synchronously."""
+
+    def setUp(self):
+        self.restaurant = make_restaurant()
+        self.week_start = date(2026, 3, 24)
+        self.week_end   = date(2026, 3, 31)
+        self.report = WeeklyReport.objects.create(
+            restaurant=self.restaurant,
+            week_start=self.week_start,
+            week_end=self.week_end,
+            metrics={"total_calls": 5},
+            status=WeeklyReport.STATUS_PENDING,
+        )
+
+    def _mock_generate(self, owner="Summary", prompt="Suggestions",
+                       model="claude-sonnet-4-6", cost=None):
+        from decimal import Decimal
+        return MagicMock(return_value=(owner, prompt, model, cost or Decimal("0.001")))
+
+    @patch("restaurants.management.commands.send_weekly_report.anthropic")
+    def test_success_sets_status_done_and_saves_content(self, mock_anthropic):
+        raw = "===OWNER===\nGreat week.\n===PROMPT===\nUpdate KB."
+        mock_anthropic.Anthropic.return_value.messages.create.return_value = (
+            MagicMock(
+                content=[MagicMock(text=raw)],
+                model="claude-sonnet-4-6",
+                usage=MagicMock(input_tokens=100, output_tokens=200),
+            )
+        )
+        from restaurants.views import _run_generate_report_bg
+        _run_generate_report_bg(self.report.pk, [], self.week_start, self.week_end)
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.status, WeeklyReport.STATUS_DONE)
+        self.assertEqual(self.report.owner_summary, "Great week.")
+        self.assertEqual(self.report.prompt_suggestions, "Update KB.")
+        self.assertEqual(self.report.model_used, "claude-sonnet-4-6")
+        self.assertIsNotNone(self.report.generation_cost)
+
+    @patch("restaurants.management.commands.send_weekly_report.anthropic")
+    def test_exception_sets_status_failed(self, mock_anthropic):
+        mock_anthropic.Anthropic.return_value.messages.create.side_effect = RuntimeError("API down")
+        from restaurants.views import _run_generate_report_bg
+        _run_generate_report_bg(self.report.pk, [], self.week_start, self.week_end)
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.status, WeeklyReport.STATUS_FAILED)
+
+    @patch("restaurants.management.commands.send_weekly_report.anthropic")
+    def test_report_stays_failed_on_save_error(self, mock_anthropic):
+        """Even if the final save blows up, status ends up as failed (via .update())."""
+        mock_anthropic.Anthropic.return_value.messages.create.side_effect = Exception("network")
+        from restaurants.views import _run_generate_report_bg
+        # Should not raise — exception is caught internally
+        try:
+            _run_generate_report_bg(self.report.pk, [], self.week_start, self.week_end)
+        except Exception:
+            self.fail("_run_generate_report_bg should not propagate exceptions")
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.status, WeeklyReport.STATUS_FAILED)
+
+
+# ─── WeeklyReport.status field ────────────────────────────────────────────────
+
+class WeeklyReportStatusFieldTest(TestCase):
+
+    def setUp(self):
+        self.restaurant = make_restaurant()
+
+    def test_default_status_is_done(self):
+        report = WeeklyReport.objects.create(
+            restaurant=self.restaurant,
+            week_start=date(2026, 3, 24),
+            week_end=date(2026, 3, 31),
+        )
+        self.assertEqual(report.status, WeeklyReport.STATUS_DONE)
+
+    def test_status_can_be_set_to_pending(self):
+        report = WeeklyReport.objects.create(
+            restaurant=self.restaurant,
+            week_start=date(2026, 3, 24),
+            week_end=date(2026, 3, 31),
+            status=WeeklyReport.STATUS_PENDING,
+        )
+        self.assertEqual(report.status, "pending")
+
+    def test_status_transitions_pending_to_done(self):
+        report = WeeklyReport.objects.create(
+            restaurant=self.restaurant,
+            week_start=date(2026, 3, 24),
+            week_end=date(2026, 3, 31),
+            status=WeeklyReport.STATUS_PENDING,
+        )
+        report.status = WeeklyReport.STATUS_DONE
+        report.save()
+        report.refresh_from_db()
+        self.assertEqual(report.status, WeeklyReport.STATUS_DONE)
+
+    def test_status_constants_match_string_values(self):
+        self.assertEqual(WeeklyReport.STATUS_PENDING, "pending")
+        self.assertEqual(WeeklyReport.STATUS_DONE, "done")
+        self.assertEqual(WeeklyReport.STATUS_FAILED, "failed")

@@ -685,11 +685,22 @@ class CallerMemory(models.Model):
 # ─── Weekly Report ────────────────────────────────────────────────────────────
 
 class WeeklyReport(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_DONE    = "done"
+    STATUS_FAILED  = "failed"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_DONE,    "Done"),
+        (STATUS_FAILED,  "Failed"),
+    ]
+
     restaurant   = models.ForeignKey(Restaurant, on_delete=models.CASCADE,
                                      related_name="weekly_reports")
     week_start   = models.DateField()
     week_end     = models.DateField()
     generated_at = models.DateTimeField(auto_now_add=True)
+    status       = models.CharField(max_length=16, choices=STATUS_CHOICES,
+                                    default=STATUS_DONE)
 
     # Aggregated metrics — stored so the portal can render without re-computing
     metrics = models.JSONField(default=dict)

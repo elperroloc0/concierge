@@ -3487,8 +3487,34 @@ def portal_reports_list(request, slug):
     })
 
 
+def _run_generate_report_bg(report_pk, summaries, week_start, week_end):
+    """Background thread: call Claude, update the WeeklyReport, close DB connection."""
+    from django.db import connection as db_connection
+    from restaurants.management.commands.send_weekly_report import generate_report as _generate_report
+    try:
+        report = WeeklyReport.objects.select_related("restaurant").get(pk=report_pk)
+        owner_summary, prompt_suggestions, model_used, cost = _generate_report(
+            report.restaurant, report.metrics, summaries, week_start, week_end,
+        )
+        report.owner_summary      = owner_summary
+        report.prompt_suggestions = prompt_suggestions
+        report.model_used         = model_used
+        report.generation_cost    = cost
+        report.status             = WeeklyReport.STATUS_DONE
+        report.save()
+    except Exception:
+        logger.exception("_run_generate_report_bg failed | report_pk=%s", report_pk)
+        try:
+            WeeklyReport.objects.filter(pk=report_pk).update(status=WeeklyReport.STATUS_FAILED)
+        except Exception:
+            pass
+    finally:
+        db_connection.close()
+
+
 @portal_view()
 def portal_generate_report(request, slug):
+    import threading
     from datetime import timedelta, date as date_
     from django.contrib import messages as django_messages
     from django.utils import timezone
@@ -3502,9 +3528,11 @@ def portal_generate_report(request, slug):
         django_messages.error(request, "ANTHROPIC_API_KEY not configured.")
         return redirect("portal_reports_list", slug=slug)
 
-    # Cooldown check
+    # Cooldown check (skip if there's already a pending report)
     last_report = WeeklyReport.objects.filter(restaurant=restaurant).order_by("-generated_at").first()
     if last_report:
+        if last_report.status == WeeklyReport.STATUS_PENDING:
+            return redirect("portal_reports_detail", slug=slug, report_id=last_report.pk)
         next_available = last_report.generated_at + timedelta(hours=24)
         if timezone.now() < next_available:
             django_messages.warning(request, "Ya generaste un reporte recientemente. Espera un poco antes de generar otro.")
@@ -3517,7 +3545,6 @@ def portal_generate_report(request, slug):
 
     from restaurants.management.commands.send_weekly_report import (
         aggregate_metrics, select_relevant_summaries,
-        generate_report as _generate_report,
     )
 
     metrics = aggregate_metrics(restaurant, week_start, week_end)
@@ -3527,29 +3554,34 @@ def portal_generate_report(request, slug):
 
     summaries = select_relevant_summaries(restaurant, week_start, week_end)
 
-    try:
-        owner_summary, prompt_suggestions, model_used, cost = _generate_report(
-            restaurant, metrics, summaries, week_start, week_end,
-        )
-    except Exception:
-        logger.exception("portal_generate_report: Claude API failed | restaurant=%s", restaurant.slug)
-        django_messages.error(request, "Error al generar el reporte. Intenta de nuevo.")
-        return redirect("portal_reports_list", slug=slug)
-
     report, _ = WeeklyReport.objects.update_or_create(
         restaurant=restaurant,
         week_start=week_start,
         defaults={
             "week_end":           week_end,
             "metrics":            metrics,
-            "owner_summary":      owner_summary,
-            "prompt_suggestions": prompt_suggestions,
-            "model_used":         model_used,
-            "generation_cost":    cost,
+            "status":             WeeklyReport.STATUS_PENDING,
+            "owner_summary":      "",
+            "prompt_suggestions": "",
+            "model_used":         "",
+            "generation_cost":    None,
         },
     )
 
+    thread = threading.Thread(
+        target=_run_generate_report_bg,
+        args=(report.pk, summaries, week_start, week_end),
+        daemon=True,
+    )
+    thread.start()
+
     return redirect("portal_reports_detail", slug=slug, report_id=report.pk)
+
+
+@portal_view()
+def portal_report_status(request, slug, report_id):
+    report = get_object_or_404(WeeklyReport, pk=report_id, restaurant=request.restaurant)
+    return JsonResponse({"status": report.status})
 
 
 @portal_view()

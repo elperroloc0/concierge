@@ -43,10 +43,41 @@
       {% if report.model_used %}&nbsp;·&nbsp;<span class="font-monospace">{{ report.model_used }}</span>{% endif %}
     </p>
   </div>
+  {% if report.status == "done" %}
   <a href="?export=csv" class="btn btn-sm btn-outline-secondary">
     <i class="bi bi-download me-1"></i> Export CSV
   </a>
+  {% endif %}
 </div>
+
+{% if report.status == "pending" %}
+<div class="text-center py-5">
+  <div class="spinner-border text-primary mb-3" role="status" style="width:2.5rem;height:2.5rem;">
+    <span class="visually-hidden">Loading...</span>
+  </div>
+  <p class="fw-semibold mb-1">Generating report…</p>
+  <p class="text-muted small">This usually takes 30–60 seconds. The page will refresh automatically.</p>
+</div>
+<script>
+  (function poll() {
+    fetch("{% url 'portal_report_status' restaurant.slug report.pk %}")
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === "pending") {
+          setTimeout(poll, 4000);
+        } else {
+          location.reload();
+        }
+      })
+      .catch(() => setTimeout(poll, 6000));
+  })();
+</script>
+{% elif report.status == "failed" %}
+<div class="alert alert-danger">
+  <i class="bi bi-exclamation-triangle me-2"></i>
+  La generación del reporte falló. Por favor, intenta de nuevo desde la lista de reportes.
+</div>
+{% else %}
 
 <!-- Stat cards -->
 <div class="row g-3 mb-4">
@@ -176,5 +207,7 @@
   </div>
 </div>
 {% endif %}
+
+{% endif %}{# end status == "done" #}
 
 {% endblock %}
