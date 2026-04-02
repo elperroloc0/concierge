@@ -303,7 +303,8 @@ class InboundWebhookTest(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["call_inbound"]["dynamic_variables"]["account_status"], "inactive")
+        directive = response.json()["call_inbound"]["dynamic_variables"]["account_status_directive"]
+        self.assertTrue(directive, "Inactive accounts must inject a non-empty account_status_directive")
 
     def test_inactive_restaurant_returns_200_inactive(self):
         """An inactive restaurant should return 200 with inactive status."""
@@ -312,7 +313,8 @@ class InboundWebhookTest(TestCase):
 
         response = self._post()
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["call_inbound"]["dynamic_variables"]["account_status"], "inactive")
+        directive = response.json()["call_inbound"]["dynamic_variables"]["account_status_directive"]
+        self.assertTrue(directive, "Inactive accounts must inject a non-empty account_status_directive")
 
     # ── Payload validation ────────────────────────────────────────────────────
 
@@ -405,6 +407,7 @@ class InboundWebhookTest(TestCase):
         self.assertEqual(dv["welcome_phrase"], "Bienvenidos")
         self.assertEqual(dv["primary_lang"], "es")
         self.assertEqual(dv["timezone"], "America/New_York")
+        self.assertEqual(dv["account_status_directive"], "", "Active accounts must inject empty account_status_directive")
 
     def test_inactive_subscription_returns_200_inactive(self):
         """If the restaurant has no active subscription, return 200 inactive."""
@@ -416,7 +419,8 @@ class InboundWebhookTest(TestCase):
         response = self._post()
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["call_inbound"]["dynamic_variables"]["account_status"], "inactive")
+        directive = response.json()["call_inbound"]["dynamic_variables"]["account_status_directive"]
+        self.assertTrue(directive, "Inactive accounts must inject a non-empty account_status_directive")
 
     def test_insufficient_balance_returns_200_inactive(self):
         """If communication_balance <= 0, return 200 inactive."""
@@ -428,7 +432,8 @@ class InboundWebhookTest(TestCase):
         response = self._post()
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["call_inbound"]["dynamic_variables"]["account_status"], "inactive")
+        directive = response.json()["call_inbound"]["dynamic_variables"]["account_status_directive"]
+        self.assertTrue(directive, "Inactive accounts must inject a non-empty account_status_directive")
 
     def test_valid_request_calls_verify_with_correct_arguments(self):
         """

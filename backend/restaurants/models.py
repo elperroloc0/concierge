@@ -69,6 +69,10 @@ class Restaurant(models.Model):
         default=True,
         help_text="Email when the AI identifies a non-customer business call (vendor, press, sales, etc.)."
     )
+    notify_on_defective_call = models.BooleanField(
+        default=True,
+        help_text="Urgent email when the agent fails to complete a reservation (missing date, time, party size, or name)."
+    )
     notify_daily_digest = models.BooleanField(
         default=True,
         help_text="Morning digest email with previous day's call summary."
@@ -322,6 +326,10 @@ class CallDetail(models.Model):
     call_signals     = models.JSONField(default=dict, blank=True)
     duration_seconds = models.PositiveIntegerField(null=True, blank=True)
     is_spam          = models.BooleanField(default=False)
+
+    # Defective call flag — set when a reservation call is missing required fields
+    needs_review = models.BooleanField(default=False, db_index=True)
+    reviewed_at  = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

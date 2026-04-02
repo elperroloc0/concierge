@@ -25,12 +25,17 @@
   .outcome-escalated  { color: var(--color-danger);  font-weight: 600; }
   .outcome-incomplete { color: var(--color-warning); font-weight: 600; }
 
-  /* ── Follow-up badge ── */
+  /* ── Follow-up badge (color varies by severity) ── */
   .followup-badge {
     font-size: .7rem; font-weight: 600;
     padding: .2em .5em; border-radius: var(--radius-pill);
     background: var(--color-warning-light); color: var(--color-warning-text);
+    white-space: nowrap; display: inline-block;
   }
+  .followup-badge.urgent {
+    background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa;
+  }
+  tr.call-row.needs-review td:first-child { border-left: 3px solid #f97316; }
 
   /* ── Table row ── */
   tr.call-row { cursor: pointer; }
@@ -132,7 +137,7 @@
       <div class="form-check mt-4">
         <input class="form-check-input" type="checkbox" name="follow_up" value="1"
           id="chkFollowUp" {% if followup_filter == "1" %}checked{% endif %}>
-        <label class="form-check-label small" for="chkFollowUp">Follow-up only</label>
+        <label class="form-check-label small" for="chkFollowUp">Needs attention</label>
       </div>
     </div>
     <div class="col-auto">
@@ -175,7 +180,7 @@
       <tbody>
         {% for c in enriched %}
         <!-- Main row -->
-        <tr class="call-row"
+        <tr class="call-row {% if c.detail and c.detail.needs_review %}needs-review{% endif %}"
             id="call-{{ c.event.pk }}"
             data-bs-toggle="collapse"
             data-bs-target="#panel-{{ c.event.pk }}"
@@ -278,8 +283,10 @@
 
           <!-- Follow-up -->
           <td class="text-center">
-            {% if c.detail and c.detail.follow_up_needed %}
-              <span class="followup-badge"><i class="bi bi-bell-fill me-1"></i>Yes</span>
+            {% if c.detail and c.detail.needs_review %}
+              <span class="followup-badge urgent"><i class="bi bi-exclamation-triangle-fill me-1"></i>Follow-up</span>
+            {% elif c.detail and c.detail.follow_up_needed %}
+              <span class="followup-badge"><i class="bi bi-bell-fill me-1"></i>Follow-up</span>
             {% else %}
               <span class="text-muted small">—</span>
             {% endif %}
@@ -361,12 +368,12 @@
                     <div class="sms-entry" style="color:#374151;">{{ c.detail.notes }}</div>
                     {% endif %}
 
-                    {% if c.detail and c.detail.follow_up_needed %}
+                    {% if c.detail and c.detail.follow_up_needed or c.detail and c.detail.needs_review %}
                     <div class="mt-3" id="followup-block-{{ c.event.pk }}">
                       <button class="btn btn-sm btn-warning w-100 resolve-followup-btn"
                               data-url="{% url 'portal_resolve_followup' restaurant.slug c.event.pk %}"
                               data-event="{{ c.event.pk }}">
-                        <i class="bi bi-check2-circle me-1"></i>Mark Follow-up Resolved
+                        <i class="bi bi-check2-circle me-1"></i>Marcar como resuelto
                       </button>
                     </div>
                     {% endif %}
@@ -468,20 +475,18 @@ document.querySelectorAll('.resolve-followup-btn').forEach(btn => {
         headers: { 'X-CSRFToken': csrfToken },
       });
       if (res.ok) {
-        // Hide resolve button block
         document.getElementById('followup-block-' + eventPk)?.remove();
-        // Update the follow-up badge in the table row
         const row = document.querySelector(`[data-bs-target="#panel-${eventPk}"]`);
-        const badge = row?.querySelector('.followup-badge');
-        if (badge) badge.remove();
+        row?.querySelector('.followup-badge')?.remove();
+        row?.classList.remove('needs-review');
       } else {
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Mark Follow-up Resolved';
+        btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Marcar como resuelto';
         alert('Could not save — please try again.');
       }
     } catch {
       btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Mark Follow-up Resolved';
+      btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Marcar como resuelto';
     }
   });
 });

@@ -857,6 +857,29 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
         except (ValueError, TypeError):
             party_size = None
 
+    # Defective reservation detection — Level 1
+    # A reservation call is defective if wants_reservation=True but any required field is missing.
+    _wants_res = bool(analysis.get("wants_reservation") or fallback.get("wants_reservation"))
+    _def_flags = []
+    if _wants_res:
+        if not str(analysis.get("caller_name") or fallback.get("caller_name", "")).strip():
+            _def_flags.append("missing caller name")
+        if not _parse_reservation_date(_get("reservation_date", "")):
+            _def_flags.append("missing reservation date")
+        if not _parse_reservation_time(_get("reservation_time", "")):
+            _def_flags.append("missing reservation time")
+        _raw_ps = _get("party_size", None)
+        _parsed_ps = None
+        if _raw_ps is not None:
+            try:
+                _v = int(_raw_ps)
+                _parsed_ps = _v if _v > 0 else None
+            except (ValueError, TypeError):
+                pass
+        if not _parsed_ps:
+            _def_flags.append("missing party size")
+    needs_review = bool(_def_flags)
+
     # Quality signals from Retell post-call analysis
     _SIGNAL_KEYS = {
         "agent_failed_to_answer", "unanswered_question", "agent_response_to_unanswered",
@@ -865,6 +888,13 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
     }
     call_signals = {k: v for k, v in analysis.items() if k in _SIGNAL_KEYS}
     is_spam = bool(call_signals.get("is_spam_or_robocall", False))
+
+    # Level 2: quality-based failure (caller unsatisfied or agent error)
+    _sentiment = _get("caller_sentiment", "neutral")
+    _sentiment_fail = _sentiment in ("frustrated", "upset")
+    _quality_fail = call_signals.get("call_quality") == "poor"
+    if not needs_review and (_quality_fail or _sentiment_fail):
+        needs_review = True
 
     duration_ms = call.get("duration_ms")
     duration_seconds = int(duration_ms / 1000) if duration_ms is not None else None
@@ -888,6 +918,7 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
             "call_signals":      call_signals,
             "duration_seconds":  duration_seconds,
             "is_spam":           is_spam,
+            "needs_review":      needs_review,
             "notes":             "",
         },
     )
@@ -1013,9 +1044,15 @@ def retell_inbound_webhook(request, rest_id):
             is_valid_account = False
 
     # If the account is invalid, we MUST return 200 OK so Retell doesn't fall back to defaults.
-    # We pass account_status="inactive" so the LLM knows to hang up immediately.
+    # Inject account_status_directive so the LLM knows to hang up immediately.
     if not is_valid_account:
-        return JsonResponse({"call_inbound": {"dynamic_variables": {"account_status": "inactive"}}}, status=200)
+        _inactive_directive = (
+            "⚠ SYSTEM ALERT — This account is currently inactive. "
+            "Your ONLY task: politely tell the caller this phone line is temporarily unavailable, "
+            "then end the call immediately using `end_call`. "
+            "Do not take reservations or answer any other questions."
+        )
+        return JsonResponse({"call_inbound": {"dynamic_variables": {"account_status_directive": _inactive_directive}}}, status=200)
 
     # From here on, restaurant is guaranteed to be valid and active
     to_number = (
@@ -1036,7 +1073,7 @@ def retell_inbound_webhook(request, rest_id):
     logger.info("Retell inbound | restaurant=%s | active=True → building dynamic vars", restaurant.slug)
 
     dyn_vars = _build_dynamic_variables(restaurant)
-    dyn_vars["account_status"] = "active"
+    dyn_vars["account_status_directive"] = ""   # active — no override needed
     dyn_vars["caller_from_number"] = _from if _from != "?" else ""
     dyn_vars["caller_summary"] = _get_caller_summary(_from if _from != "?" else "", restaurant)
     dyn_response = {"call_inbound": {"dynamic_variables": dyn_vars}}
@@ -1211,6 +1248,65 @@ def _send_complaint_alert_email(call_event: CallEvent, restaurant: Restaurant) -
         reason_bg="#fee2e2", reason_color="#991b1b", reason_border="#fca5a5",
         text_body_extra="A caller raised a complaint. Immediate attention may be required.\n",
         extra_recipients=[op.notify_email or op.user.email] if op else None,
+    )
+
+
+def _send_defective_call_alert_email(call_event: CallEvent, restaurant: Restaurant) -> None:
+    """Send defective-call alert: incomplete reservation (Level 1) or quality failure (Level 2)."""
+    if not restaurant.notify_via_email or not restaurant.notify_on_defective_call:
+        return
+    try:
+        detail = call_event.detail
+    except CallDetail.DoesNotExist:
+        return
+
+    # ── Level 1: incomplete reservation ───────────────────────────────────────
+    if detail.wants_reservation:
+        flags = []
+        if not detail.caller_name:
+            flags.append("nombre del caller")
+        if not detail.reservation_date:
+            flags.append("fecha de reservación")
+        if not detail.reservation_time:
+            flags.append("hora de reservación")
+        if not detail.party_size:
+            flags.append("número de personas")
+        missing_str = ", ".join(flags) if flags else "información incompleta"
+        extra = f"El agente no completó la reservación.\nFalta: {missing_str}.\n"
+        _send_call_alert_email(
+            call_event, restaurant,
+            subject_prefix="⚠️ Reservación incompleta",
+            reason_display="Reservación incompleta",
+            reason_bg="#fff7ed", reason_color="#c2410c", reason_border="#fed7aa",
+            text_body_extra=extra,
+            extra_recipients=None,
+        )
+        return
+
+    # ── Level 2: quality failure (no reservation involved) ────────────────────
+    signals = detail.call_signals
+    reasons = []
+    sentiment = detail.caller_sentiment or ""
+    if sentiment in ("frustrated", "upset"):
+        reasons.append(f"Caller {sentiment}")
+    if signals.get("agent_confusion_moment"):
+        reasons.append(f"Confusión del agente: {signals['agent_confusion_moment']}")
+    if signals.get("agent_failed_to_answer") and signals.get("unanswered_question"):
+        reasons.append(f"Pregunta sin respuesta: \"{signals['unanswered_question']}\"")
+    if signals.get("language_consistency") is False:
+        reasons.append("Inconsistencia de idioma")
+    if signals.get("call_quality") == "poor":
+        reasons.append("Calidad de llamada: poor")
+
+    reasons_str = "\n".join(f"  • {r}" for r in reasons) if reasons else "  • Calidad de llamada deficiente"
+    extra = f"El agente tuvo problemas en esta llamada:\n{reasons_str}\n"
+    _send_call_alert_email(
+        call_event, restaurant,
+        subject_prefix="⚠️ Llamada con problemas",
+        reason_display="Problema de calidad",
+        reason_bg="#fff7ed", reason_color="#c2410c", reason_border="#fed7aa",
+        text_body_extra=extra,
+        extra_recipients=None,
     )
 
 
@@ -1599,10 +1695,14 @@ def retell_events_webhook(request):
                 if detail.call_reason == "non_customer":
                     _send_non_customer_alert_email(call_event, restaurant)
                 else:
-                    if detail.follow_up_needed:
-                        _send_followup_alert_email(call_event, restaurant)
-                    if detail.wants_reservation:
+                    # Priority order prevents duplicate emails for the same call:
+                    # defective > reservation > follow-up
+                    if detail.needs_review:
+                        _send_defective_call_alert_email(call_event, restaurant)
+                    elif detail.wants_reservation:
                         _send_reservation_alert_email(call_event, restaurant)
+                    elif detail.follow_up_needed:
+                        _send_followup_alert_email(call_event, restaurant)
                     if detail.call_reason == "complaint":
                         _send_complaint_alert_email(call_event, restaurant)
                 if (not detail.is_spam
@@ -1708,9 +1808,6 @@ def _format_kb_topic(kb, topic: str) -> str:
         lines.append(f"Stroller-friendly: {'Yes' if kb.stroller_friendly else 'No'}")
 
     elif topic == "special_events":
-        # Redirects to ambience — entertainment info is now stored there
-        if kb.has_live_music:
-            add("Live music", kb.live_music_details)
         add("Special events & entertainment", kb.special_events_info)
         if not lines:
             lines.append("No specific event details are available right now.")
@@ -3004,7 +3101,9 @@ def portal_calls(request, slug):
     total_calls          = base_qs.count()
     reservation_intents  = base_qs.filter(detail__wants_reservation=True).count()
     reservations_pending = base_qs.filter(detail__wants_reservation=True, detail__reservation_status="pending").count()
-    follow_ups_pending   = base_qs.filter(detail__follow_up_needed=True).count()
+    follow_ups_pending   = base_qs.filter(
+        Q(detail__follow_up_needed=True) | Q(detail__needs_review=True)
+    ).count()
     sms_sent            = SmsLog.objects.filter(
         call_event__restaurant=restaurant, status="sent"
     ).count()
@@ -3014,7 +3113,7 @@ def portal_calls(request, slug):
     if reason_filter:
         qs = qs.filter(detail__call_reason=reason_filter)
     if followup_filter == "1":
-        qs = qs.filter(detail__follow_up_needed=True)
+        qs = qs.filter(Q(detail__follow_up_needed=True) | Q(detail__needs_review=True))
     if reservation_filter == "1":
         qs = qs.filter(detail__wants_reservation=True)
     if date_from:
@@ -3089,8 +3188,11 @@ def portal_resolve_followup(request, slug, event_pk):
     restaurant = request.restaurant
     event = get_object_or_404(CallEvent, pk=event_pk, restaurant=restaurant)
     try:
-        event.detail.follow_up_needed = False
-        event.detail.save(update_fields=["follow_up_needed"])
+        detail = event.detail
+        detail.follow_up_needed = False
+        detail.needs_review = False
+        detail.reviewed_at = timezone.now()
+        detail.save(update_fields=["follow_up_needed", "needs_review", "reviewed_at"])
     except CallDetail.DoesNotExist:
         pass
     return JsonResponse({"ok": True})
@@ -3112,6 +3214,23 @@ def portal_reservation_status(request, slug, event_pk):
         detail.reservation_confirmed_at = timezone.now() if status == "confirmed" else None
         detail.save(update_fields=["reservation_status", "reservation_confirmed_at"])
         return JsonResponse({"ok": True, "status": status})
+    except CallDetail.DoesNotExist:
+        return JsonResponse({"ok": False, "error": "No detail"}, status=404)
+
+
+@portal_view()
+def portal_mark_reviewed(request, slug, event_pk):
+    """AJAX: mark a defective call as reviewed."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    restaurant = request.restaurant
+    event = get_object_or_404(CallEvent, pk=event_pk, restaurant=restaurant)
+    try:
+        detail = event.detail
+        detail.needs_review = False
+        detail.reviewed_at = timezone.now()
+        detail.save(update_fields=["needs_review", "reviewed_at"])
+        return JsonResponse({"ok": True})
     except CallDetail.DoesNotExist:
         return JsonResponse({"ok": False, "error": "No detail"}, status=404)
 

@@ -3,11 +3,7 @@ Retell LLM tool definitions — shared between admin actions and the portal view
 """
 
 
-def _sms_tool_definition(base_url: str, lang: str = "en") -> dict:
-    execution_msg = "Perfect — I'm sending that to your number right now."
-    if lang == "es":
-        execution_msg = "Perfecto — te lo estoy enviando a tu número ahora mismo."
-
+def _sms_tool_definition(base_url: str) -> dict:
     return {
         "type": "custom",
         "name": "send_sms",
@@ -17,7 +13,7 @@ def _sms_tool_definition(base_url: str, lang: str = "en") -> dict:
         ),
         "url": f"{base_url}/api/retell/tools/send-sms/",
         "speak_during_execution": True,
-        "execution_message_description": execution_msg,
+        "execution_message_description": "Perfect — I'm sending that to your number right now.",
         "execution_message_type": "static_text",
         "parameters": {
             "type": "object",
@@ -91,7 +87,11 @@ def _get_info_tool_definition(base_url: str) -> dict:
     return {
         "type": "custom",
         "name": "get_info",
-        "description": "Retrieve restaurant information from the knowledge base.",
+        "description": (
+            "Look up a specific topic from the restaurant's knowledge base. "
+            "Always call this before answering factual questions — never guess. "
+            "Extract only what answers the caller's question from the result."
+        ),
         "url": f"{base_url}/api/retell/tools/get-info/",
         "speak_during_execution": False,
         "parameters": {
@@ -104,7 +104,22 @@ def _get_info_tool_definition(base_url: str) -> dict:
                         "parking", "billing", "reservations", "private_events",
                         "ambience", "facilities", "special_events", "additional",
                     ],
-                    "description": "The topic to look up.",
+                    "description": (
+                        "Choose the topic that best matches the caller's question: "
+                        "'hours' = schedule, closings, holidays. "
+                        "'menu' = food, dishes, prices, cuisine. "
+                        "'bar_menu' = cocktails, wine, beer, bottle service. "
+                        "'happy_hour' = happy hour specials and times. "
+                        "'dietary' = allergies, vegan, gluten-free options. "
+                        "'parking' = parking info, valet. "
+                        "'billing' = gratuity, service charge, payment, corkage. "
+                        "'reservations' = booking policies, grace period. "
+                        "'private_events' = private dining, buyouts, press contact. "
+                        "'ambience' = music, dress code, noise, vibe, entertainment. "
+                        "'facilities' = terrace, AC, stroller access. "
+                        "'special_events' = live shows, tonight's entertainment. "
+                        "'additional' = anything not covered above."
+                    ),
                 }
             },
             "required": ["topic"],
