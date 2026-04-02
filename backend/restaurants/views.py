@@ -3485,8 +3485,18 @@ def portal_billing_topup(request, slug):
     restaurant = request.restaurant
     sub = _get_or_create_subscription(restaurant)
 
-    if not settings.STRIPE_SECRET_KEY or not settings.STRIPE_COMMUNICATION_PRICE_ID:
+    if not settings.STRIPE_SECRET_KEY:
         messages.error(request, "Stripe is not configured yet. Please contact support.")
+        return redirect("portal_billing", slug=slug)
+
+    from decimal import Decimal, InvalidOperation
+    MIN_TOPUP = Decimal("3.50")
+    try:
+        amount = Decimal(request.POST.get("amount", "20"))
+    except (InvalidOperation, TypeError):
+        amount = Decimal("20")
+    if amount < MIN_TOPUP:
+        messages.error(request, f"Minimum top-up is ${MIN_TOPUP}.")
         return redirect("portal_billing", slug=slug)
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -3504,7 +3514,14 @@ def portal_billing_topup(request, slug):
     session = stripe.checkout.Session.create(
         customer=sub.stripe_customer_id,
         payment_method_types=["card"],
-        line_items=[{"price": settings.STRIPE_COMMUNICATION_PRICE_ID, "quantity": 1}],
+        line_items=[{
+            "price_data": {
+                "currency": "usd",
+                "product_data": {"name": "Concierge Communication Credits"},
+                "unit_amount": int(amount * 100),
+            },
+            "quantity": 1,
+        }],
         mode="payment",
         success_url=f"{base_url}/portal/{slug}/billing/?topup_success=1",
         cancel_url=f"{base_url}/portal/{slug}/billing/?cancelled=1",

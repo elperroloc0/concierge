@@ -3,7 +3,9 @@ Retell LLM tool definitions — shared between admin actions and the portal view
 """
 
 
-def _sms_tool_definition(base_url: str) -> dict:
+def _sms_tool_definition(base_url: str, lang: str = "en") -> dict:
+    execution_msg = "Perfect — I'm sending that to your number right now."
+
     return {
         "type": "custom",
         "name": "send_sms",
@@ -13,7 +15,7 @@ def _sms_tool_definition(base_url: str) -> dict:
         ),
         "url": f"{base_url}/api/retell/tools/send-sms/",
         "speak_during_execution": True,
-        "execution_message_description": "Perfect — I'm sending that to your number right now.",
+        "execution_message_description": execution_msg,
         "execution_message_type": "static_text",
         "parameters": {
             "type": "object",

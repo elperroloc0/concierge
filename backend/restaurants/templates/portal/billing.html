@@ -13,6 +13,8 @@
   .expense-stat { text-align: center; padding: 12px; }
   .expense-stat .value { font-size: 1.5rem; font-weight: 700; }
   .expense-stat .label { font-size: .75rem; text-transform: uppercase; color: #6b7280; }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 </style>
 {% endblock %}
 
@@ -133,9 +135,14 @@
         <p class="small text-muted mb-3"><i class="bi bi-info-circle me-1"></i> Costs are deducted in real-time after each call.</p>
         <form method="post" action="{% url 'portal_billing_topup' restaurant.slug %}">
           {% csrf_token %}
-          <button type="submit" class="btn btn-primary w-100 fw-bold py-2">
-            <i class="bi bi-plus-circle-dotted me-1"></i> Add Credits ($20.00)
-          </button>
+          <div class="input-group mb-2">
+            <span class="input-group-text">$</span>
+            <input type="number" name="amount" class="form-control" value="20" min="3.50" step="0.01" style="-moz-appearance:textfield;" onwheel="this.blur()" required>
+            <button type="submit" class="btn btn-primary fw-bold">
+              <i class="bi bi-plus-circle-dotted me-1"></i> Add Credits
+            </button>
+          </div>
+          <p class="small text-muted mb-0">Minimum: $3.50</p>
         </form>
       </div>
     </div>
