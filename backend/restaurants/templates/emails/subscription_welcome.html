@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Welcome — {{ restaurant_name }}</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;">
+  <tr><td align="center">
+  <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+
+    <!-- Header -->
+    <tr>
+      <td style="background:#065f46;padding:20px 28px;">
+        <span style="color:#ffffff;font-size:17px;font-weight:700;letter-spacing:-.3px;">&#10003; Subscription Active</span>
+        <span style="color:#6ee7b7;font-size:13px;margin-left:10px;">{{ restaurant_name }}</span>
+      </td>
+    </tr>
+
+    <!-- Content -->
+    <tr>
+      <td style="padding:28px;">
+        <p style="margin:0 0 16px;font-size:22px;font-weight:700;color:#111827;line-height:1.2;">
+          Your AI agent is live
+        </p>
+        <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
+          Your <strong>Concierge AI</strong> subscription for <strong>{{ restaurant_name }}</strong> is now active.
+          Your AI phone agent is ready to answer calls 24/7.
+        </p>
+
+        {% if period_end %}
+        <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
+          Next billing date: <strong>{{ period_end }}</strong>
+        </p>
+        {% endif %}
+
+        <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#111827;">From your portal you can:</p>
+        <ul style="margin:0 0 24px;padding-left:20px;font-size:14px;color:#374151;line-height:1.8;">
+          <li>Update your restaurant info and knowledge base</li>
+          <li>View call history and guest profiles</li>
+          <li>Manage billing and communication credits</li>
+          <li>Access weekly performance reports</li>
+        </ul>
+
+        <a href="{{ portal_url }}" style="display:inline-block;background:#4f46e5;color:#ffffff;font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px;text-decoration:none;letter-spacing:-.1px;">
+          Go to Portal &#8594;
+        </a>
+      </td>
+    </tr>
+
+    <!-- Footer -->
+    <tr>
+      <td style="background:#f9fafb;padding:14px 28px;border-top:1px solid #e5e7eb;">
+        <p style="margin:0;font-size:11px;color:#9ca3af;">
+          Sent by Concierge AI for {{ restaurant_name }}.
+        </p>
+      </td>
+    </tr>
+
+  </table>
+  </td></tr>
+</table>
+</body>
+</html>

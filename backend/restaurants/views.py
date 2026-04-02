@@ -1402,6 +1402,75 @@ def _send_payment_failed_email(restaurant: Restaurant) -> None:
         logger.exception("payment_failed_email: failed | restaurant=%s", restaurant.slug)
 
 
+def _send_subscription_welcome_email(restaurant: Restaurant) -> None:
+    """Send a welcome email when a subscription is activated."""
+    from django.core.mail import EmailMultiAlternatives
+    from django.template.loader import render_to_string
+
+    notify_email = restaurant.notify_email or (restaurant.user.email if restaurant.user else "")
+    if not notify_email:
+        return
+
+    base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
+    sub = getattr(restaurant, "subscription", None)
+    ctx = {
+        "restaurant_name": restaurant.name,
+        "portal_url": f"{base_url}/portal/{restaurant.slug}/",
+        "period_end": sub.current_period_end.strftime("%B %-d, %Y") if sub and sub.current_period_end else "",
+    }
+
+    html_body = render_to_string("emails/subscription_welcome.html", ctx)
+    text_body = (
+        f"Your Concierge AI subscription for {restaurant.name} is now active.\n"
+        f"Your AI phone agent is ready to answer calls 24/7.\n\n"
+        f"Go to your portal: {ctx['portal_url']}\n"
+    )
+    subject = f"Your AI agent is live — {restaurant.name}"
+
+    try:
+        msg = EmailMultiAlternatives(subject, text_body, settings.DEFAULT_FROM_EMAIL, [notify_email])
+        msg.attach_alternative(html_body, "text/html")
+        msg.send()
+        logger.info("subscription_welcome_email: sent to %s | restaurant=%s", notify_email, restaurant.slug)
+    except Exception:
+        logger.exception("subscription_welcome_email: failed | restaurant=%s", restaurant.slug)
+
+
+def _send_subscription_cancelled_email(restaurant: Restaurant) -> None:
+    """Send a confirmation email when a subscription is cancelled."""
+    from django.core.mail import EmailMultiAlternatives
+    from django.template.loader import render_to_string
+
+    notify_email = restaurant.notify_email or (restaurant.user.email if restaurant.user else "")
+    if not notify_email:
+        return
+
+    base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
+    sub = getattr(restaurant, "subscription", None)
+    ctx = {
+        "restaurant_name": restaurant.name,
+        "billing_url": f"{base_url}/portal/{restaurant.slug}/billing/",
+        "period_end": sub.current_period_end.strftime("%B %-d, %Y") if sub and sub.current_period_end else "",
+    }
+
+    html_body = render_to_string("emails/subscription_cancelled.html", ctx)
+    text_body = (
+        f"Your Concierge AI subscription for {restaurant.name} has been cancelled.\n"
+    )
+    if ctx["period_end"]:
+        text_body += f"Your agent will remain active until {ctx['period_end']}.\n"
+    text_body += f"\nResubscribe: {ctx['billing_url']}\n"
+    subject = f"Subscription cancelled — {restaurant.name}"
+
+    try:
+        msg = EmailMultiAlternatives(subject, text_body, settings.DEFAULT_FROM_EMAIL, [notify_email])
+        msg.attach_alternative(html_body, "text/html")
+        msg.send()
+        logger.info("subscription_cancelled_email: sent to %s | restaurant=%s", notify_email, restaurant.slug)
+    except Exception:
+        logger.exception("subscription_cancelled_email: failed | restaurant=%s", restaurant.slug)
+
+
 def _send_knowledge_gap_alert(restaurant: Restaurant, detail) -> None:
     """
     Alert the owner immediately when Retell detected the agent couldn't answer a question.
@@ -3426,17 +3495,23 @@ def portal_cancel_subscription(request, slug):
     if sub.stripe_subscription_id:
         try:
             stripe.api_key = settings.STRIPE_SECRET_KEY
-            stripe.Subscription.cancel(sub.stripe_subscription_id)
-            logger.info("portal_cancel: cancelled Stripe sub %s | restaurant=%s",
+            stripe.Subscription.modify(
+                sub.stripe_subscription_id,
+                cancel_at_period_end=True,
+            )
+            logger.info("portal_cancel: set cancel_at_period_end | sub=%s | restaurant=%s",
                         sub.stripe_subscription_id, restaurant.slug)
         except Exception:
             logger.exception("portal_cancel: Stripe API error | restaurant=%s", restaurant.slug)
             messages.error(request, "Could not cancel subscription. Please try again or contact support.")
             return redirect("portal_billing", slug=slug)
-
-    sub.status = "cancelled"
-    sub.save(update_fields=["status"])
-    messages.success(request, "Your subscription has been cancelled.")
+        messages.success(request, "Your subscription will be cancelled at the end of the current billing period.")
+        _send_subscription_cancelled_email(restaurant)
+    else:
+        sub.status = "cancelled"
+        sub.save(update_fields=["status"])
+        messages.success(request, "Your subscription has been cancelled.")
+        _send_subscription_cancelled_email(restaurant)
     return redirect("portal_billing", slug=slug)
 
 
@@ -3456,6 +3531,17 @@ def portal_billing_checkout(request, slug):
     base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
 
     # Reuse existing Stripe customer or create a new one
+    if sub.stripe_customer_id:
+        try:
+            cust = stripe.Customer.retrieve(sub.stripe_customer_id)
+            if getattr(cust, "deleted", False):
+                raise stripe.error.InvalidRequestError("Customer deleted", param="id")
+        except stripe.error.InvalidRequestError:
+            logger.warning("portal_checkout: stale customer %s, creating new one", sub.stripe_customer_id)
+            sub.stripe_customer_id = ""
+            sub.stripe_subscription_id = ""
+            sub.save(update_fields=["stripe_customer_id", "stripe_subscription_id"])
+
     if not sub.stripe_customer_id:
         customer = stripe.Customer.create(
             email=restaurant.contact_email or request.user.email,
@@ -3465,15 +3551,20 @@ def portal_billing_checkout(request, slug):
         sub.stripe_customer_id = customer.id
         sub.save(update_fields=["stripe_customer_id"])
 
-    session = stripe.checkout.Session.create(
-        customer=sub.stripe_customer_id,
-        payment_method_types=["card"],
-        line_items=[{"price": settings.STRIPE_PRICE_ID, "quantity": 1}],
-        mode="subscription",
-        success_url=f"{base_url}/portal/{slug}/billing/?success=1",
-        cancel_url=f"{base_url}/portal/{slug}/billing/?cancelled=1",
-        metadata={"restaurant_id": str(restaurant.pk), "type": "subscription"},
-    )
+    checkout_kwargs = {
+        "customer": sub.stripe_customer_id,
+        "payment_method_types": ["card"],
+        "line_items": [{"price": settings.STRIPE_PRICE_ID, "quantity": 1}],
+        "mode": "subscription",
+        "success_url": f"{base_url}/portal/{slug}/billing/?success=1",
+        "cancel_url": f"{base_url}/portal/{slug}/billing/?cancelled=1",
+        "metadata": {"restaurant_id": str(restaurant.pk), "type": "subscription"},
+    }
+    trial_days = getattr(settings, "STRIPE_TRIAL_PERIOD_DAYS", 0)
+    if trial_days and not sub.stripe_subscription_id and not sub.is_active:
+        checkout_kwargs["subscription_data"] = {"trial_period_days": trial_days}
+
+    session = stripe.checkout.Session.create(**checkout_kwargs)
     return redirect(session.url, permanent=False)
 
 
@@ -3501,6 +3592,16 @@ def portal_billing_topup(request, slug):
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
     base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
+
+    if sub.stripe_customer_id:
+        try:
+            cust = stripe.Customer.retrieve(sub.stripe_customer_id)
+            if getattr(cust, "deleted", False):
+                raise stripe.error.InvalidRequestError("Customer deleted", param="id")
+        except stripe.error.InvalidRequestError:
+            logger.warning("portal_topup: stale customer %s, creating new one", sub.stripe_customer_id)
+            sub.stripe_customer_id = ""
+            sub.save(update_fields=["stripe_customer_id"])
 
     if not sub.stripe_customer_id:
         customer = stripe.Customer.create(
@@ -3828,12 +3929,27 @@ def stripe_webhook(request):
                     logger.info("Stripe Webhook | Top-up successful | restaurant_id=%s | amount=%.2f",
                                 restaurant_id, amount_total)
         else:
-            # Legacy or subscription logic
+            # Subscription checkout completed
             sub = Subscription.objects.filter(stripe_customer_id=customer_id).first()
             if sub and subscription_id:
                 sub.stripe_subscription_id = subscription_id
                 sub.status = "active"
-                sub.save(update_fields=["stripe_subscription_id", "status"])
+                # Fetch period_end from Stripe subscription
+                try:
+                    stripe.api_key = settings.STRIPE_SECRET_KEY
+                    stripe_sub = stripe.Subscription.retrieve(subscription_id)
+                    period_end = stripe_sub["items"]["data"][0].get("current_period_end")
+                    if period_end:
+                        from datetime import datetime as dt
+                        sub.current_period_end = dt.fromtimestamp(period_end, tz=timezone.utc)
+                except Exception:
+                    logger.exception("Stripe webhook | failed to fetch subscription period_end")
+                sub.save(update_fields=["stripe_subscription_id", "status", "current_period_end"])
+                # Send welcome email
+                try:
+                    _send_subscription_welcome_email(sub.restaurant)
+                except Exception:
+                    logger.exception("Failed to send welcome email | customer=%s", customer_id)
 
     elif event["type"] in ("customer.subscription.updated", "customer.subscription.created"):
         customer_id = data.get("customer")
@@ -3841,10 +3957,11 @@ def stripe_webhook(request):
         if sub:
             sub.stripe_subscription_id = data["id"]
             sub.status = data["status"]  # active / trialing / past_due / etc.
-            period_end = data.get("current_period_end")
+            items = data.get("items", {}).get("data", [])
+            period_end = items[0].get("current_period_end") if items else None
             if period_end:
-                from django.utils.timezone import datetime as tz_datetime
-                sub.current_period_end = tz_datetime.fromtimestamp(
+                from datetime import datetime as dt
+                sub.current_period_end = dt.fromtimestamp(
                     period_end, tz=timezone.utc
                 )
             sub.save(update_fields=["stripe_subscription_id", "status", "current_period_end"])

@@ -37,6 +37,7 @@ STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 STRIPE_WEBHOOK_SECRET  = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 STRIPE_PRICE_ID        = os.environ.get("STRIPE_PRICE_ID", "")  # price_xxx from Stripe dashboard
 STRIPE_COMMUNICATION_PRICE_ID = os.environ.get("STRIPE_COMMUNICATION_PRICE_ID", "")
+STRIPE_TRIAL_PERIOD_DAYS = int(os.environ.get("STRIPE_TRIAL_PERIOD_DAYS", "0"))  # 0 = no trial
 
 # ── Anthropic ─────────────────────────────────────────────────────────────────
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
