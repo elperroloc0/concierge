@@ -332,12 +332,18 @@ def _build_dynamic_variables(restaurant):
         "location_reference":    restaurant.location_reference,
         "website":               restaurant.website,
         "website_domain":        domain,
-        "website_domain_spoken": _spoken_domain(domain, lang),
+        "website_domain_spoken_es": _spoken_domain(domain, "es"),
+        "website_domain_spoken_en": _spoken_domain(domain, "en"),
         "contact_email":         restaurant.contact_email or "",
-        "contact_email_spoken":  (
+        "contact_email_spoken_es": (
             kb.contact_email_spoken
-            if kb and kb.contact_email_spoken
-            else _spoken_email(restaurant.contact_email or "", lang)
+            if kb and kb.contact_email_spoken and lang == "es"
+            else _spoken_email(restaurant.contact_email or "", "es")
+        ),
+        "contact_email_spoken_en": (
+            kb.contact_email_spoken
+            if kb and kb.contact_email_spoken and lang == "en"
+            else _spoken_email(restaurant.contact_email or "", "en")
         ),
         "welcome_phrase":        restaurant.welcome_phrase,
         "primary_lang":          restaurant.primary_lang,
@@ -3497,7 +3503,7 @@ def portal_cancel_subscription(request, slug):
             stripe.api_key = settings.STRIPE_SECRET_KEY
             stripe.Subscription.modify(
                 sub.stripe_subscription_id,
-                cancel_at_period_end=True,
+                cancel_at="min_period_end",
             )
             logger.info("portal_cancel: set cancel_at_period_end | sub=%s | restaurant=%s",
                         sub.stripe_subscription_id, restaurant.slug)
@@ -3553,7 +3559,6 @@ def portal_billing_checkout(request, slug):
 
     checkout_kwargs = {
         "customer": sub.stripe_customer_id,
-        "payment_method_types": ["card"],
         "line_items": [{"price": settings.STRIPE_PRICE_ID, "quantity": 1}],
         "mode": "subscription",
         "success_url": f"{base_url}/portal/{slug}/billing/?success=1",
@@ -3614,7 +3619,6 @@ def portal_billing_topup(request, slug):
 
     session = stripe.checkout.Session.create(
         customer=sub.stripe_customer_id,
-        payment_method_types=["card"],
         line_items=[{
             "price_data": {
                 "currency": "usd",
@@ -3899,7 +3903,7 @@ def stripe_webhook(request):
         event = stripe.Webhook.construct_event(
             payload, sig, settings.STRIPE_WEBHOOK_SECRET
         )
-    except stripe.errors.SignatureVerificationError:
+    except stripe.error.SignatureVerificationError:
         logger.warning("Stripe webhook: invalid signature")
         return JsonResponse({"detail": "invalid signature"}, status=400)
     except Exception:
