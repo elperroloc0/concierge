@@ -329,7 +329,6 @@ def _build_dynamic_variables(restaurant):
     dyn = {
         "restaurant_name":       restaurant.name,
         "address_full":          _spoken_address(restaurant.address_full, lang),
-        "location_reference":    restaurant.location_reference,
         "website":               restaurant.website,
         "website_domain":        domain,
         "website_domain_spoken_es": _spoken_domain(domain, "es"),
@@ -357,16 +356,10 @@ def _build_dynamic_variables(restaurant):
     # KB fields that the agent needs at call-start (reservation routing + escalation).
     # All other KB data is fetched on demand via the get_info tool.
     if kb:
-        # Pre-compute effective menu URLs: use KB-specific URL if set, else fall back to restaurant website
-        _site = restaurant.website or ""
         dyn.update({
-            "affiliated_restaurants":   kb.affiliated_restaurants,
-            "reservation_grace_min":    str(kb.reservation_grace_min) if kb.reservation_grace_min else "N/A",
             "large_party_min_guests":   str(kb.large_party_min_guests) if kb.large_party_min_guests else "N/A",
             "escalation_enabled":       "yes" if kb.escalation_enabled else "no",
             "escalation_conditions":    kb.escalation_conditions or "",
-            "food_menu_url":            kb.food_menu_url or _site,
-            "bar_menu_url":             kb.bar_menu_url  or _site,
             "brand_voice_notes":        kb.brand_voice_notes or "",
             "team_members":             kb.team_members or "",
             "non_customer_call_rules":  _build_non_customer_rules(kb),
@@ -374,13 +367,9 @@ def _build_dynamic_variables(restaurant):
         })
     else:
         dyn.update({
-            "affiliated_restaurants":   "",
-            "reservation_grace_min":    "N/A",
             "large_party_min_guests":   "N/A",
             "escalation_enabled":       "no",
             "escalation_conditions":    "",
-            "food_menu_url":            restaurant.website or "",
-            "bar_menu_url":             restaurant.website or "",
             "team_members":             "",
             "brand_voice_notes":        "",
             "non_customer_call_rules":  "",
@@ -1266,6 +1255,14 @@ def _send_defective_call_alert_email(call_event: CallEvent, restaurant: Restaura
     except CallDetail.DoesNotExist:
         return
 
+    # Skip spam and abandoned calls (under 20 seconds)
+    if detail.is_spam:
+        return
+    call_data = call_event.payload.get("call", {})
+    duration = (call_data.get("end_timestamp", 0) - call_data.get("start_timestamp", 0)) / 1000
+    if duration < 20:
+        return
+
     # ── Level 1: incomplete reservation ───────────────────────────────────────
     if detail.wants_reservation:
         flags = []
@@ -1304,7 +1301,10 @@ def _send_defective_call_alert_email(call_event: CallEvent, restaurant: Restaura
     if signals.get("call_quality") == "poor":
         reasons.append("Calidad de llamada: poor")
 
-    reasons_str = "\n".join(f"  • {r}" for r in reasons) if reasons else "  • Calidad de llamada deficiente"
+    if not reasons:
+        return
+
+    reasons_str = "\n".join(f"  • {r}" for r in reasons)
     extra = f"El agente tuvo problemas en esta llamada:\n{reasons_str}\n"
     _send_call_alert_email(
         call_event, restaurant,
@@ -1798,7 +1798,7 @@ def retell_events_webhook(request):
 
 # ─── get_info Tool ────────────────────────────────────────────────────────────
 
-def _format_kb_topic(kb, topic: str) -> str:
+def _format_kb_topic(kb, topic: str, restaurant=None) -> str:
     """Return a clean text block for a given KB topic. Empty fields are omitted."""
     lines = []
 
@@ -1878,6 +1878,8 @@ def _format_kb_topic(kb, topic: str) -> str:
         add("Special events & entertainment", kb.special_events_info)
 
     elif topic == "facilities":
+        if restaurant and restaurant.location_reference:
+            add("Location & how to find us", restaurant.location_reference)
         lines.append(f"Terrace: {'Yes' if kb.has_terrace else 'No'}")
         add("Air conditioning", kb.get_ac_intensity_display() if kb.ac_intensity else None)
         lines.append(f"Stroller-friendly: {'Yes' if kb.stroller_friendly else 'No'}")
@@ -1888,6 +1890,7 @@ def _format_kb_topic(kb, topic: str) -> str:
             lines.append("No specific event details are available right now.")
 
     elif topic == "additional":
+        add("Affiliated restaurants", kb.affiliated_restaurants)
         add("Additional info", kb.additional_info)
         if kb.owner_notes.strip():
             lines.append(kb.owner_notes.strip())
@@ -1921,7 +1924,7 @@ def retell_tool_get_info(request):
     if not kb:
         return JsonResponse({"result": "No information configured for this topic yet."})
 
-    result = _format_kb_topic(kb, topic)
+    result = _format_kb_topic(kb, topic, restaurant=restaurant)
     logger.info("get_info: restaurant=%s topic=%r → %d chars", restaurant.slug, topic, len(result))
     return JsonResponse({"result": result})
 
