@@ -145,138 +145,105 @@ def _build_non_customer_rules(kb) -> str:
     Assemble the NON-CUSTOMER CALL HANDLING block injected into the agent prompt.
     Returns an empty string if all categories are set to 'ignore' / defaults.
     """
-    lines = []
+    rules = []
 
-    urgent_outcome = (
-        "transfer the call to a staff member"
-        if kb.urgent_call_action == "transfer"
-        else "take an urgent message — get their name, company, and reason, then call save_caller_info with follow_up_needed=true"
-    )
+    # ── Determine which action labels are used ──
+    # Maps each handling value to a compact label + definition
+    ACTION_LABEL = {
+        "message":      "MSG",
+        "transfer":     "TRANSFER",
+        "decline":      "DECLINE",
+        "give_contact": "CONTACT",
+        "end_call":     "END",
+    }
 
-    # Natural offer of options (adapt phrasing to the caller's language)
-    urgent_offer = (
-        "Before applying the default action, naturally offer two options in whatever language the caller is using — "
-        "something like: 'If it's something time-sensitive I can connect you with a team member right away, "
-        "or I can take a note and someone will get back to you — whichever works best.' "
-        f"If they want the urgent option, {urgent_outcome}. "
-        "If they prefer a callback or it's not urgent, apply the default action for this category."
-    )
+    ACTION_DEF = {
+        "MSG":      "name + company + reason → save_caller_info(follow_up_needed=true)",
+        "TRANSFER": "transfer call",
+        "DECLINE":  "decline, suggest email → end_call",
+        "CONTACT":  "press contact via get_info(\"private_events\")",
+        "END":      "end_call",
+    }
 
-    def cap(s: str) -> str:
-        """Capitalize only the first character, leaving the rest untouched."""
-        return s[0].upper() + s[1:] if s else s
+    used_actions = set()
 
-    def urgency_clause(ask: bool, action: str) -> str:
-        # No point asking if the default action already escalates
-        if not ask or action == "transfer":
-            return ""
-        return " If urgency is not already apparent from context, offer the two options before acting."
+    def add_rule(category: str, handling: str, ask_urgency: bool = False, extra: str = ""):
+        label = ACTION_LABEL.get(handling, "MSG")
+        used_actions.add(label)
+        urgency = ", check urgency" if ask_urgency and handling != "transfer" else ""
+        suffix = f" ({extra})" if extra else ""
+        rules.append(f"- {category}: {label}{urgency}{suffix}")
 
     # Partner companies
     if kb.partner_call_handling != "ignore":
         partners = ", ".join(
             p.strip() for p in kb.partner_companies.splitlines() if p.strip()
-        ) if kb.partner_companies.strip() else "your known business partners"
-        action_map = {
-            "message":  "take a message — get their name, company, and reason, then call save_caller_info with follow_up_needed=true",
-            "transfer": "transfer the call to a staff member",
-        }
-        action = action_map.get(kb.partner_call_handling, "take a message")
-        lines.append(
-            f"- Partner companies ({partners}): Recognize callers from these companies by name. {cap(action)}.{urgency_clause(kb.partner_call_ask_urgency, kb.partner_call_handling)}"
-        )
+        ) if kb.partner_companies.strip() else "known partners"
+        add_rule(f"Partners ({partners})", kb.partner_call_handling, kb.partner_call_ask_urgency)
 
     # Vendors / Suppliers
     if kb.vendor_call_handling != "ignore":
-        action_map = {
-            "decline":  "politely inform them the owner handles supplier relationships directly and is unavailable on this line — suggest they reach out via email or call back another time, then end the call",
-            "message":  "take a message — get their name, company, and reason, then call save_caller_info with follow_up_needed=true",
-            "transfer": "transfer the call to a staff member",
-        }
-        action = action_map.get(kb.vendor_call_handling, "take a message")
-        lines.append(
-            f"- Vendors/suppliers (delivery, orders, accounts, distribution): {cap(action)}.{urgency_clause(kb.vendor_call_ask_urgency, kb.vendor_call_handling)}"
-        )
+        add_rule("Vendors/suppliers", kb.vendor_call_handling, kb.vendor_call_ask_urgency)
 
     # Press / Media / Influencers
     if kb.press_call_handling != "ignore":
-        action_map = {
-            "give_contact": "retrieve the press contact via get_info(\"private_events\") and provide it. Offer to take a message if they need a follow-up",
-            "message":      "take a message — get their name, outlet, and purpose, then call save_caller_info with follow_up_needed=true",
-            "transfer":     "transfer the call to a staff member",
-        }
-        action = action_map.get(kb.press_call_handling, "take a message")
-        lines.append(
-            f"- Press/media/influencers (journalists, bloggers, content creators): {cap(action)}.{urgency_clause(kb.press_call_ask_urgency, kb.press_call_handling)}"
-        )
+        add_rule("Press/media/influencers", kb.press_call_handling, kb.press_call_ask_urgency)
 
     # External services
     if kb.service_call_handling != "ignore":
-        action_map = {
-            "decline":  "politely inform them the owner is unavailable and suggest they try again later or contact via email, then end the call",
-            "message":  "take a message — get their name, company, and what they needed, then call save_caller_info with follow_up_needed=true",
-            "transfer": "transfer the call to a staff member",
-        }
-        action = action_map.get(kb.service_call_handling, "take a message")
-        lines.append(
-            f"- External service providers (plumbers, cleaners, pest control, maintenance): {cap(action)}.{urgency_clause(kb.service_call_ask_urgency, kb.service_call_handling)}"
-        )
+        add_rule("Service providers (plumbers, cleaners, maintenance)", kb.service_call_handling, kb.service_call_ask_urgency)
 
     # Sales / Marketing
     if kb.sales_call_handling != "ignore":
-        action_map = {
-            "decline": "politely inform them the owner is not available for this type of call and suggest they reach out via email, then end the call",
-            "message": "take a message — get their name, company, and offer, then call save_caller_info with follow_up_needed=true",
-        }
-        action = action_map.get(kb.sales_call_handling, "decline")
-        lines.append(
-            f"- Sales/marketing calls (unsolicited offers, promotions, SEO, advertising): {cap(action)}."
-        )
+        add_rule("Sales/marketing", kb.sales_call_handling)
 
     # Financial / Legal / Collections
     if kb.financial_call_handling != "ignore":
-        action_map = {
-            "message":  "take a message — get their name, company, and reason, then call save_caller_info with follow_up_needed=true",
-            "transfer": "transfer the call to a staff member",
-        }
-        action = action_map.get(kb.financial_call_handling, "take a message")
-        lines.append(
-            f"- Financial/legal/collection calls (banks, attorneys, collection agencies): {cap(action)}."
-        )
+        add_rule("Financial/legal/collections", kb.financial_call_handling)
 
     # Spam / Robocalls
-    spam_map = {
-        "decline":  "politely but briefly inform them this line is for restaurant guests only, then end the call",
-        "end_call": "end the call immediately without engaging further",
-    }
-    spam_action = spam_map.get(kb.spam_call_handling, "end the call immediately without engaging further")
-    lines.append(f"- Robocalls/spam (automated voices, sweepstakes, generic mass marketing): {cap(spam_action)}.")
+    spam_handling = kb.spam_call_handling if kb.spam_call_handling in ("decline", "end_call") else "end_call"
+    if spam_handling == "decline":
+        used_actions.add("DECLINE")
+        rules.append("- Spam/robocalls: DECLINE")
+    else:
+        used_actions.add("END")
+        rules.append("- Spam/robocalls: END")
 
-    if not lines:
+    if not rules:
         return ""
 
-    # Build the passive urgency detection instruction (only if any category uses urgency)
+    # ── Build urgency block (only if any category uses it) ──
     any_urgency = any([
         kb.partner_call_handling  != "ignore" and kb.partner_call_ask_urgency,
         kb.vendor_call_handling   != "ignore" and kb.vendor_call_ask_urgency,
         kb.press_call_handling    != "ignore" and kb.press_call_ask_urgency,
         kb.service_call_handling  != "ignore" and kb.service_call_ask_urgency,
     ])
-    passive_detection = (
-        f"Throughout the conversation, also watch passively for urgency signals — phrases like "
-        f"'right now', 'today', 'in X hours', 'we're waiting outside', 'it's urgent', 'emergency', "
-        f"'same-day', or visible stress in the caller's tone. "
-        f"If you detect these signals, proactively offer the two options without waiting to be asked: {urgent_offer}\n"
+
+    urgent_outcome = (
+        "TRANSFER" if kb.urgent_call_action == "transfer"
+        else "take urgent message → save_caller_info(follow_up_needed=true)"
+    )
+
+    urgency_block = (
+        f"Urgency: if caller signals time-sensitivity ('urgent', 'right now', 'waiting outside'), "
+        f"offer: connect now or take a message. Urgent → {urgent_outcome}.\n"
     ) if any_urgency else ""
+
+    # ── Assemble ──
+    # Only include definitions for actions actually used
+    action_defs = " | ".join(
+        f"{k} = {ACTION_DEF[k]}" for k in ("MSG", "TRANSFER", "DECLINE", "CONTACT", "END") if k in used_actions
+    )
 
     header = (
         "NON-CUSTOMER CALL HANDLING\n"
-        "Identify non-customer callers by context: they introduce themselves as a company representative, "
-        "mention deliveries, orders, accounts, services, or are clearly automated. "
-        f"{passive_detection}"
-        "Apply the matching rule below:\n"
+        "Detect by context: company intro, deliveries, orders, services, automated voice.\n"
+        f"Actions — {action_defs}\n"
+        f"{urgency_block}"
     )
-    return header + "\n".join(lines)
+    return header + "\n".join(rules)
 
 
 def _get_caller_summary(from_number: str, restaurant) -> str:

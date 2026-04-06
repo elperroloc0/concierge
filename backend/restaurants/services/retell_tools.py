@@ -117,10 +117,10 @@ def _get_info_tool_definition(base_url: str) -> dict:
                         "'billing' = gratuity, service charge, payment, corkage. "
                         "'reservations' = booking policies, grace period. "
                         "'private_events' = private dining, buyouts, press contact. "
-                        "'ambience' = music, dress code, noise, vibe, entertainment. "
-                        "'facilities' = terrace, AC, stroller access. "
-                        "'special_events' = live shows, tonight's entertainment. "
-                        "'additional' = anything not covered above."
+                        "'ambience' = live music schedule, dress code, noise level, vibe. "
+                        "'facilities' = terrace, AC, stroller access, location, how to find us. "
+                        "'special_events' = one-off concerts, pop-ups, themed nights (NOT regular live music). "
+                        "'additional' = affiliated restaurants, anything not covered above."
                     ),
                 }
             },
