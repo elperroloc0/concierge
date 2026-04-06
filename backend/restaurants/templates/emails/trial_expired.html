@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tu prueba gratuita ha finalizado — {{ restaurant_name }}</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;">
+  <tr><td align="center">
+  <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+
+    <!-- Header -->
+    <tr>
+      <td style="background:#991b1b;padding:20px 28px;">
+        <span style="color:#ffffff;font-size:17px;font-weight:700;letter-spacing:-.3px;">Concierge AI</span>
+        <span style="color:#fca5a5;font-size:13px;margin-left:10px;">{{ restaurant_name }}</span>
+      </td>
+    </tr>
+
+    <!-- Content -->
+    <tr>
+      <td style="padding:28px;">
+        <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;line-height:1.2;">
+          Tu prueba gratuita ha finalizado
+        </p>
+        <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
+          El agente de IA de <strong>{{ restaurant_name }}</strong> ya no est&aacute; contestando llamadas.
+          Para reactivar el servicio, activa tu suscripci&oacute;n.
+        </p>
+
+        <!-- Urgency box -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef2f2;border-radius:8px;border:1px solid #fecaca;margin-bottom:24px;">
+          <tr>
+            <td style="padding:16px 20px;">
+              <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#991b1b;">Mientras el servicio est&eacute; inactivo:</p>
+              <p style="margin:0 0 6px;font-size:13px;color:#374151;">&#10007;&nbsp; Las llamadas entrantes no ser&aacute;n contestadas por el agente</p>
+              <p style="margin:0;font-size:13px;color:#374151;">&#10007;&nbsp; No se generar&aacute;n res&uacute;menes ni notificaciones de llamadas</p>
+            </td>
+          </tr>
+        </table>
+
+        <a href="{{ billing_url }}" style="display:inline-block;background:#1e40af;color:#ffffff;font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px;text-decoration:none;letter-spacing:-.1px;">
+          Activar suscripci&oacute;n &#8594;
+        </a>
+      </td>
+    </tr>
+
+    <!-- Footer -->
+    <tr>
+      <td style="background:#f9fafb;padding:14px 28px;border-top:1px solid #e5e7eb;">
+        <p style="margin:0;font-size:11px;color:#9ca3af;">
+          Enviado por Concierge AI para {{ restaurant_name }}.
+          Si tienes preguntas, responde este correo.
+        </p>
+      </td>
+    </tr>
+
+  </table>
+  </td></tr>
+</table>
+</body>
+</html>
