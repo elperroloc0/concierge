@@ -3861,6 +3861,33 @@ def portal_reports_detail(request, slug, report_id):
     })
 
 
+def _disconnect_retell_phone(restaurant):
+    """Disconnect phone number from Retell agent so calls don't reach Retell."""
+    if restaurant.retell_api_key and restaurant.retell_phone_number:
+        try:
+            from restaurants.services.retell_client import RetellClient
+            client = RetellClient(api_key=restaurant.retell_api_key)
+            client.update_phone_number(restaurant.retell_phone_number, inbound_agents=[])
+            logger.info("Retell phone disconnected | restaurant=%s", restaurant.slug)
+        except Exception:
+            logger.exception("Failed to disconnect Retell phone | restaurant=%s", restaurant.slug)
+
+
+def _reconnect_retell_phone(restaurant):
+    """Reconnect phone number to Retell agent after reactivation."""
+    if restaurant.retell_api_key and restaurant.retell_phone_number and restaurant.retell_agent_id:
+        try:
+            from restaurants.services.retell_client import RetellClient
+            client = RetellClient(api_key=restaurant.retell_api_key)
+            client.update_phone_number(
+                restaurant.retell_phone_number,
+                inbound_agents=[{"agent_id": restaurant.retell_agent_id, "weight": 1.0}],
+            )
+            logger.info("Retell phone reconnected | restaurant=%s", restaurant.slug)
+        except Exception:
+            logger.exception("Failed to reconnect Retell phone | restaurant=%s", restaurant.slug)
+
+
 @csrf_exempt
 def stripe_webhook(request):
     if request.method != "POST":
@@ -3919,6 +3946,8 @@ def stripe_webhook(request):
                 except Exception:
                     logger.exception("Stripe webhook | failed to fetch subscription period_end")
                 sub.save(update_fields=["stripe_subscription_id", "status", "current_period_end"])
+                # Reconnect Retell phone if it was disconnected during inactive period
+                _reconnect_retell_phone(sub.restaurant)
                 # Send welcome email
                 try:
                     _send_subscription_welcome_email(sub.restaurant)
@@ -3946,6 +3975,7 @@ def stripe_webhook(request):
         if sub:
             sub.status = "cancelled"
             sub.save(update_fields=["status"])
+            _disconnect_retell_phone(sub.restaurant)
 
     elif event["type"] == "customer.subscription.paused":
         customer_id = data.get("customer")
@@ -3953,6 +3983,7 @@ def stripe_webhook(request):
         if sub:
             sub.status = "inactive"
             sub.save(update_fields=["status"])
+            _disconnect_retell_phone(sub.restaurant)
             logger.info("Stripe webhook | subscription paused | customer=%s", customer_id)
 
     elif event["type"] == "invoice.paid":

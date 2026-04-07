@@ -17,6 +17,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from restaurants.models import Subscription
+from restaurants.views import _disconnect_retell_phone
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,9 @@ class Command(BaseCommand):
             sub.status = "inactive"
             sub.save(update_fields=["status"])
             logger.info("expire_trials: %s → inactive", restaurant.slug)
+
+            # Disconnect phone from Retell agent so calls don't reach Retell
+            _disconnect_retell_phone(restaurant)
 
             # Send notification email
             if restaurant.notify_via_email and restaurant.notify_email:
