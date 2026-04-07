@@ -14,7 +14,6 @@ def get_membership(slug, user):
         restaurant__slug=slug,
         user=user,
         is_active=True,
-        restaurant__is_active=True,
     )
 
 

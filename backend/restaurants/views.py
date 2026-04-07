@@ -2357,7 +2357,7 @@ def _classify_call(payload):
 def _get_login_redirect(user):
     """Return redirect to dashboard (single membership) or selector (multiple), or None."""
     memberships = RestaurantMembership.objects.filter(
-        user=user, is_active=True, restaurant__is_active=True
+        user=user, is_active=True,
     ).select_related("restaurant")
     count = memberships.count()
     if count == 0:
@@ -2371,7 +2371,7 @@ def _get_login_redirect(user):
 def portal_select_restaurant(request):
     """Show a restaurant picker for users with multiple memberships."""
     memberships = RestaurantMembership.objects.filter(
-        user=request.user, is_active=True, restaurant__is_active=True
+        user=request.user, is_active=True,
     ).select_related("restaurant").order_by("restaurant__name")
 
     if memberships.count() <= 1:
