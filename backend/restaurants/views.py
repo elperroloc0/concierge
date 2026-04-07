@@ -1671,6 +1671,11 @@ def retell_events_webhook(request):
                     logger.info("Retell call_ended | base_cost_usd=%.4f × markup=%.2f = final_deduction=%.4f | balance=%.2f | restaurant=%s",
                                 raw_cost_usd, markup, marked_up_cost, balance_after, restaurant.slug)
 
+                    # Disconnect Retell if balance depleted
+                    if balance_after <= 0:
+                        _disconnect_retell_phone(restaurant)
+                        _notify_service_disconnected(restaurant, "Tu saldo de comunicación se ha agotado. Tu agente de IA ya no está contestando llamadas. Recarga tu saldo para reactivar el servicio.")
+
                     # Send low-balance alert on first threshold crossing
                     from decimal import Decimal as _D
                     if balance_before > _D("3") and balance_after <= _D("3"):
@@ -3888,6 +3893,54 @@ def _reconnect_retell_phone(restaurant):
             logger.exception("Failed to reconnect Retell phone | restaurant=%s", restaurant.slug)
 
 
+def _notify_service_disconnected(restaurant, reason):
+    """Send email notification when service is disconnected."""
+    if not restaurant.notify_via_email or not restaurant.notify_email:
+        return
+    base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
+    ctx = {
+        "restaurant_name": restaurant.name,
+        "reason": reason,
+        "billing_url": f"{base_url}/portal/{restaurant.slug}/billing/",
+    }
+    try:
+        html_body = render_to_string("emails/service_disconnected.html", ctx)
+        text_body = (
+            f"{restaurant.name} — Servicio desactivado\n\n"
+            f"{reason}\n\n"
+            f"Reactivar: {ctx['billing_url']}\n"
+        )
+        msg = EmailMultiAlternatives(
+            f"Servicio desactivado — {restaurant.name}",
+            text_body, from_email=None, to=[restaurant.notify_email],
+        )
+        msg.attach_alternative(html_body, "text/html")
+        msg.send()
+    except Exception:
+        logger.exception("Failed to send service_disconnected email | restaurant=%s", restaurant.slug)
+
+
+def _notify_service_reconnected(restaurant):
+    """Send email notification when service is reconnected."""
+    if not restaurant.notify_via_email or not restaurant.notify_email:
+        return
+    ctx = {"restaurant_name": restaurant.name}
+    try:
+        html_body = render_to_string("emails/service_reconnected.html", ctx)
+        text_body = (
+            f"{restaurant.name} — Servicio reactivado\n\n"
+            "Tu agente de IA está contestando llamadas nuevamente.\n"
+        )
+        msg = EmailMultiAlternatives(
+            f"Servicio reactivado — {restaurant.name}",
+            text_body, from_email=None, to=[restaurant.notify_email],
+        )
+        msg.attach_alternative(html_body, "text/html")
+        msg.send()
+    except Exception:
+        logger.exception("Failed to send service_reconnected email | restaurant=%s", restaurant.slug)
+
+
 @csrf_exempt
 def stripe_webhook(request):
     if request.method != "POST":
@@ -3925,10 +3978,16 @@ def stripe_webhook(request):
                 from decimal import Decimal
                 sub = Subscription.objects.filter(restaurant_id=restaurant_id).first()
                 if sub:
+                    balance_before = sub.communication_balance
                     sub.communication_balance += Decimal(str(amount_total))
                     sub.save(update_fields=["communication_balance"])
                     logger.info("Stripe Webhook | Top-up successful | restaurant_id=%s | amount=%.2f",
                                 restaurant_id, amount_total)
+                    # Reconnect Retell if balance was zero and is now positive
+                    if balance_before <= 0 and sub.communication_balance > 0:
+                        restaurant = sub.restaurant
+                        _reconnect_retell_phone(restaurant)
+                        _notify_service_reconnected(restaurant)
         else:
             # Subscription checkout completed
             sub = Subscription.objects.filter(stripe_customer_id=customer_id).first()
@@ -3976,6 +4035,7 @@ def stripe_webhook(request):
             sub.status = "cancelled"
             sub.save(update_fields=["status"])
             _disconnect_retell_phone(sub.restaurant)
+            _notify_service_disconnected(sub.restaurant, "Tu suscripción ha sido cancelada. Tu agente de IA ya no está contestando llamadas.")
 
     elif event["type"] == "customer.subscription.paused":
         customer_id = data.get("customer")
@@ -3984,6 +4044,7 @@ def stripe_webhook(request):
             sub.status = "inactive"
             sub.save(update_fields=["status"])
             _disconnect_retell_phone(sub.restaurant)
+            _notify_service_disconnected(sub.restaurant, "Tu suscripción ha sido pausada. Tu agente de IA ya no está contestando llamadas.")
             logger.info("Stripe webhook | subscription paused | customer=%s", customer_id)
 
     elif event["type"] == "invoice.paid":

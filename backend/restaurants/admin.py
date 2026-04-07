@@ -813,6 +813,17 @@ class RestaurantAdmin(admin.ModelAdmin):
         "clear_call_history",
     ]
 
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if change and "is_active" in form.changed_data:
+            from restaurants.views import _disconnect_retell_phone, _reconnect_retell_phone
+            if obj.is_active:
+                _reconnect_retell_phone(obj)
+                self.message_user(request, f"Retell phone reconnected for {obj.name}.")
+            else:
+                _disconnect_retell_phone(obj)
+                self.message_user(request, f"Retell phone disconnected for {obj.name}.")
+
     @admin.action(description="Danger: Clear ALL Call & SMS History")
     def clear_call_history(self, request, queryset):
         from .models import CallEvent, SmsLog
