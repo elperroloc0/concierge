@@ -709,6 +709,20 @@ class SubscriptionAdmin(admin.ModelAdmin):
         count = queryset.update(stripe_customer_id="", stripe_subscription_id="")
         messages.success(request, f"Successfully cleared Stripe IDs for {count} subscriptions. New IDs will be generated on next payment attempt.")
 
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if change and "status" in form.changed_data:
+            from restaurants.views import _disconnect_retell_phone, _reconnect_retell_phone
+            active_statuses = ("active", "trialing")
+            old_status = form.initial.get("status", "")
+            new_status = obj.status
+            if new_status in active_statuses and old_status not in active_statuses:
+                _reconnect_retell_phone(obj.restaurant)
+                self.message_user(request, f"Retell phone reconnected for {obj.restaurant.name}.")
+            elif new_status not in active_statuses and old_status in active_statuses:
+                _disconnect_retell_phone(obj.restaurant)
+                self.message_user(request, f"Retell phone disconnected for {obj.restaurant.name}.")
+
 
 class CallDetailInline(admin.StackedInline):
     model = CallDetail
