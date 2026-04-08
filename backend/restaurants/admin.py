@@ -699,6 +699,29 @@ class SubscriptionAdmin(admin.ModelAdmin):
             messages.warning(request, "⚠️ STRIPE WARNING: STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET is missing from your .env file. Payment flows will fail.")
         return super().changelist_view(request, extra_context=extra_context)
 
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        try:
+            obj = self.get_object(request, object_id)
+            if obj:
+                restaurant = obj.restaurant
+                if restaurant.is_active and not obj.is_active:
+                    self.message_user(
+                        request,
+                        f"⚠ Restaurant is_active=True but subscription is '{obj.status}' — "
+                        "the agent will reject all calls. Activate the subscription to restore service.",
+                        level=messages.WARNING,
+                    )
+                elif not restaurant.is_active and obj.is_active:
+                    self.message_user(
+                        request,
+                        f"⚠ Subscription is active ('{obj.status}') but restaurant is_active=False — "
+                        "Retell is disconnected. Set restaurant is_active=True to restore service.",
+                        level=messages.WARNING,
+                    )
+        except Exception:
+            pass
+        return super().change_view(request, object_id, form_url, extra_context)
+
     @admin.action(description="Stripe: Show Webhook Configuration URL")
     def show_webhook_url(self, request, queryset):
         domain = request.get_host()
@@ -826,6 +849,30 @@ class RestaurantAdmin(admin.ModelAdmin):
         reprocess_call_events,
         "clear_call_history",
     ]
+
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        try:
+            obj = self.get_object(request, object_id)
+            if obj:
+                sub = getattr(obj, "subscription", None)
+                sub_active = sub and sub.is_active if sub else False
+                if obj.is_active and not sub_active:
+                    self.message_user(
+                        request,
+                        f"⚠ Restaurant is_active=True but subscription is '{sub.status if sub else 'missing'}' — "
+                        "the agent will reject all calls. Activate the subscription to restore service.",
+                        level=messages.WARNING,
+                    )
+                elif not obj.is_active and sub_active:
+                    self.message_user(
+                        request,
+                        f"⚠ Subscription is active ('{sub.status}') but restaurant is_active=False — "
+                        "Retell is disconnected. Set is_active=True to restore service.",
+                        level=messages.WARNING,
+                    )
+        except Exception:
+            pass
+        return super().change_view(request, object_id, form_url, extra_context)
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)

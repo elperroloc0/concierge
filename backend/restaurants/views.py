@@ -1008,6 +1008,14 @@ def retell_inbound_webhook(request, rest_id):
     # If the account is invalid, we MUST return 200 OK so Retell doesn't fall back to defaults.
     # Inject account_status_directive so the LLM knows to hang up immediately.
     if not is_valid_account:
+        # Self-heal: if the phone is still connected to Retell despite being inactive,
+        # disconnect it now so future calls never reach here.
+        if restaurant and restaurant.retell_phone_number:
+            _disconnect_retell_phone(restaurant)
+            logger.warning(
+                "Retell inbound webhook | Auto-disconnected phone for inactive account | restaurant=%s",
+                restaurant.slug,
+            )
         _inactive_directive = (
             "⚠ SYSTEM ALERT — This account is currently inactive. "
             "Your ONLY task: politely tell the caller this phone line is temporarily unavailable, "
@@ -1622,7 +1630,7 @@ def retell_events_webhook(request):
     logger.info("Retell event=%s | call_id=%s | from=%s → to=%s%s", _evt, _cid, _from, _to, _dur)
 
     to_number = (data.get("to_number") or data.get("call", {}).get("to_number") or "").strip()
-    restaurant = Restaurant.objects.filter(retell_phone_number=to_number, is_active=True).first()
+    restaurant = Restaurant.objects.filter(retell_phone_number=to_number).first()
     if not restaurant:
         logger.warning("Retell events webhook | Unknown number: %r", to_number)
         return JsonResponse({"detail": "unknown number"}, status=404)
