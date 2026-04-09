@@ -858,12 +858,36 @@ class CallDetailInline(admin.StackedInline):
     )
 
 
+@admin.action(description="Re-send follow-up alert email")
+def resend_followup_email(_modeladmin, request, queryset):
+    from .views import _send_followup_alert_email
+    sent = skipped = failed = 0
+    for event in queryset.select_related("restaurant", "detail"):
+        detail = getattr(event, "detail", None)
+        if not detail or not detail.follow_up_needed:
+            skipped += 1
+            continue
+        try:
+            _send_followup_alert_email(event, event.restaurant)
+            sent += 1
+        except Exception as exc:
+            failed += 1
+            messages.error(request, f"[{event.pk}] Failed: {exc}")
+    if sent:
+        messages.success(request, f"Sent {sent} follow-up email(s).")
+    if skipped:
+        messages.warning(request, f"Skipped {skipped} (no follow-up flag).")
+    if failed:
+        messages.error(request, f"{failed} failed — see errors above.")
+
+
 @admin.register(CallEvent)
 class CallEventAdmin(admin.ModelAdmin):
     list_display  = ("restaurant", "event_type", "created_at")
     list_filter   = ("event_type", "restaurant")
     readonly_fields = ("created_at",)
     inlines       = [CallDetailInline]
+    actions       = [resend_followup_email]
 
 
 @admin.register(CallDetail)
