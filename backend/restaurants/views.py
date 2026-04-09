@@ -1778,13 +1778,12 @@ def retell_events_webhook(request):
                 if detail.call_reason == "non_customer":
                     _send_non_customer_alert_email(call_event, restaurant)
                 else:
-                    # Priority order prevents duplicate emails for the same call:
-                    # defective > reservation > follow-up
+                    # Each alert type is independent — a call can trigger multiple
                     if detail.needs_review:
                         _send_defective_call_alert_email(call_event, restaurant)
-                    elif detail.wants_reservation:
+                    if detail.wants_reservation:
                         _send_reservation_alert_email(call_event, restaurant)
-                    elif detail.follow_up_needed:
+                    if detail.follow_up_needed:
                         _send_followup_alert_email(call_event, restaurant)
                     if detail.call_reason == "complaint":
                         _send_complaint_alert_email(call_event, restaurant)
