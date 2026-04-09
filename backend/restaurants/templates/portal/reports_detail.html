@@ -1,4 +1,5 @@
 {% extends "portal/base.html" %}
+{% load markdown_extras %}
 {% block title %}Report {{ report.week_start|date:"d M Y" }}{% endblock %}
 {% block page_title %}Weekly Report{% endblock %}
 {% block nav_reports %}active{% endblock %}
@@ -138,20 +139,14 @@
 </div>
 {% endif %}
 
-<!-- Owner summary — rendered as markdown -->
+<!-- Owner summary — rendered as markdown server-side -->
 {% if report.owner_summary %}
 <div class="card border-0 shadow-sm mb-4">
   <div class="card-body">
     <p class="text-uppercase small fw-semibold text-muted mb-3">Weekly Analysis</p>
-    <div id="owner-summary-md" class="report-narrative"></div>
+    <div class="report-narrative">{{ report.owner_summary|render_markdown }}</div>
   </div>
 </div>
-{{ report.owner_summary|json_script:"owner-md-raw" }}
-<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
-<script>
-  document.getElementById("owner-summary-md").innerHTML =
-    marked.parse(JSON.parse(document.getElementById("owner-md-raw").textContent));
-</script>
 {% endif %}
 
 <!-- Call quality table -->
