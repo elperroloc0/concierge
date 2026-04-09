@@ -902,7 +902,7 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
             "reservation_time":  _parse_reservation_time(_get("reservation_time", "")),
             "special_requests":  str(_get("special_requests", "")),
             "caller_sentiment":  _get("caller_sentiment", "neutral"),
-            "follow_up_needed":  _get_bool("follow_up_needed", True),
+            "follow_up_needed":  _get_bool("follow_up_needed", False),
             "recording_url":     call.get("recording_url", ""),
             "call_summary":      (full_analysis.get("call_summary") or "").strip(),
             "call_signals":      call_signals,
