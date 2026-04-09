@@ -30,6 +30,7 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-^3n8^%=#y%w(j#
 RETELL_WEBHOOK_BASE_URL = os.environ.get("RETELL_WEBHOOK_URL", "").rstrip("/")
 
 LOGIN_URL = "/portal/login/"
+CSRF_FAILURE_VIEW = "restaurants.views.csrf_failure"
 
 # Stripe
 STRIPE_SECRET_KEY      = os.environ.get("STRIPE_SECRET_KEY", "")

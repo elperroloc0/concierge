@@ -4,31 +4,45 @@ Retell LLM tool definitions — shared between admin actions and the portal view
 
 
 def _sms_tool_definition(base_url: str, lang: str = "en") -> dict:
-    execution_msg = "Perfect — I'm sending that to your number right now."
-
     return {
         "type": "custom",
         "name": "send_sms",
         "description": (
-            "Send a text message to the caller with a link or useful info they requested. "
-            "Only call this tool AFTER the caller explicitly says yes to receiving a text."
+            "Send a text message to the caller. "
+            "Only call this tool AFTER the caller explicitly says yes to receiving a text. "
+            "Pick the sms_type that matches what was discussed."
         ),
         "url": f"{base_url}/api/retell/tools/send-sms/",
-        "speak_during_execution": True,
-        "execution_message_description": execution_msg,
-        "execution_message_type": "static_text",
+        "speak_during_execution": False,
         "parameters": {
             "type": "object",
             "properties": {
+                "sms_type": {
+                    "type": "string",
+                    "enum": [
+                        "menu_link", "bar_menu_link", "hours", "music", "valet",
+                        "social_media", "address", "event_inquiry", "website", "custom",
+                    ],
+                    "description": (
+                        "What to send: "
+                        "menu_link = food menu URL; "
+                        "bar_menu_link = bar/cocktail menu URL; "
+                        "hours = hours of operation; "
+                        "music = live music info; "
+                        "valet = valet & parking info; "
+                        "social_media = Instagram or social link; "
+                        "address = physical address; "
+                        "event_inquiry = private events contact; "
+                        "website = general website; "
+                        "custom = free-form message you compose (requires message field)."
+                    ),
+                },
                 "message": {
                     "type": "string",
-                    "description": (
-                        "The complete SMS to send. Keep under 160 characters. "
-                        "Include the relevant link and a warm closing."
-                    ),
-                }
+                    "description": "Required when sms_type is 'custom'. Your composed message, under 160 characters.",
+                },
             },
-            "required": ["message"],
+            "required": ["sms_type"],
         },
     }
 

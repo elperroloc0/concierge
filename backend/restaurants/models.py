@@ -30,6 +30,10 @@ class Restaurant(models.Model):
     address_full = models.CharField(max_length=512, blank=True, default="")
     location_reference = models.TextField(blank=True, default="")
     website = models.URLField(blank=True, default="")
+    social_media_url = models.URLField(
+        blank=True, default="",
+        help_text="Instagram, Facebook, or any social media link to share with callers.",
+    )
     timezone = models.CharField(max_length=100, default="America/New_York")
 
     # user prefs
@@ -105,6 +109,10 @@ class Restaurant(models.Model):
     retell_agent_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
     retell_phone_number = models.CharField(max_length=64, blank=True, default="", db_index=True)
     retell_llm_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    retell_conversation_flow_id = models.CharField(
+        max_length=64, blank=True, default="",
+        help_text="Retell Conversation Flow ID. If set, the agent uses conversation-flow instead of retell-llm."
+    )
     retell_voice_id = models.CharField(max_length=64, blank=True, default="retell-Claudia")
     retell_area_code = models.PositiveSmallIntegerField(
         null=True, blank=True,
@@ -231,6 +239,12 @@ class Subscription(models.Model):
         max_digits=4, decimal_places=2, default=1.30,
         help_text="Multiplier applied to Retell's combined_cost before deducting from balance. "
                   "e.g. 1.30 = 30% markup. Set to 1.00 for no markup."
+    )
+    sms_unit_cost = models.DecimalField(
+        max_digits=6, decimal_places=4, default=0.0100,
+        help_text="Fixed amount deducted from balance per SMS sent using platform Twilio. "
+                  "Set to 0.00 to not charge for SMS. "
+                  "e.g. 0.01 = $0.01/message. No charge if restaurant uses its own Twilio credentials."
     )
 
     created_at             = models.DateTimeField(auto_now_add=True)

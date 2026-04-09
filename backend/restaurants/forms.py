@@ -41,7 +41,7 @@ class RestaurantBasicForm(forms.ModelForm):
     class Meta:
         model = Restaurant
         fields = [
-            "name", "address_full", "location_reference", "website",
+            "name", "address_full", "location_reference", "website", "social_media_url",
             "timezone", "primary_lang", "conversation_tone", "welcome_phrase",
             "contact_phone", "contact_email",
         ]
@@ -55,6 +55,7 @@ class RestaurantBasicForm(forms.ModelForm):
             "welcome_phrase":     forms.Textarea(attrs=_ta(2)),
             "contact_phone":      forms.TextInput(attrs=_TEXT),
             "contact_email":      forms.EmailInput(attrs=_TEXT),
+            "social_media_url":   forms.URLInput(attrs=_TEXT),
         }
 
     def clean_website(self):
@@ -100,7 +101,7 @@ class KnowledgeBaseForm(forms.ModelForm):
             # Private events
             "has_private_dining", "private_dining_min_spend",
             "allows_decorations", "decoration_cleaning_fee",
-            "press_contact", "special_events_info",
+            "press_contact", "additional_info", "special_events_info",
             # Ambience
             "has_live_music", "live_music_details", "party_vibe_start_time",
             "noise_level", "dress_code", "cover_charge",
@@ -156,6 +157,7 @@ class KnowledgeBaseForm(forms.ModelForm):
             "allows_decorations":       forms.CheckboxInput(attrs=_CHECK),
             "decoration_cleaning_fee":  forms.TextInput(attrs=_TEXT),
             "press_contact":            forms.TextInput(attrs=_TEXT),
+            "additional_info":          forms.Textarea(attrs=_ta(5)),
             "special_events_info":      forms.Textarea(attrs=_ta(5)),
             # Ambience
             "has_live_music":         forms.CheckboxInput(attrs=_CHECK),

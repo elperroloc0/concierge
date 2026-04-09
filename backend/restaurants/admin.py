@@ -81,7 +81,7 @@ You are the voice of {{restaurant_name}} — a seasoned host who's handled thous
    Or you don't (result says "depends", "varies", "check website",
    or doesn't contain the exact detail) → tell the caller you can
    connect them with someone who can confirm → transfer or [4].
-If SMS enabled, offer to text a link.
+If SMS enabled: AFTER giving your answer, ALWAYS offer to send the info by text. Say something like "¿Le envío eso por mensaje de texto?" then wait. If yes → call `send_sms` with the matching type: menu → `menu_link` | bar/cocktails → `bar_menu_link` | hours → `hours` | music → `music` | valet/parking → `valet` | social media → `social_media` | location → `address` | events → `event_inquiry` | other → `custom`. Only offer once per call.
 Your goal is to fully answer client questions. Either specific answer or escalate.
 IMPORTANT!!! IF YOU DONT HAVE THE ANSWER THE CLIENT IS ASKING ABOUT - TRANSFER!!
 
@@ -95,7 +95,7 @@ Collect one at a time: Date, Time, Party Size, Name (Rule 3), Phone (Rule 4), Sp
 - Modify/cancel existing (change time, party size, cancel, etc.): You CANNOT look up or modify reservations directly. Acknowledge warmly → collect: name on the reservation and date if not given, save in → `save_caller_info` with `follow_up_needed=true` and a clear note describing the change requested → tell the caller the team member in charge will receive the request and verify the update. → WRAP UP.
 - References existing reservation: don't look it up (no access). Acknowledge naturally, address their question. Changes → same flow above.
 - If caller showed reservation interest earlier, return to it once after questions — not after each answer. If they decline, drop it.
-Confirmed → WRAP UP.
+Once all info is collected → `save_caller_info` → tell the caller: their reservation will be processed and once confirmed they will receive a text directly from, OpenTable (reservation service). → WRAP UP.
 
 **[4] MESSAGES**
 Collect contact (Rule 4). Team member will call back.
@@ -106,10 +106,11 @@ Private event, buyout, large party from [3].
 1. Call `get_info("private_events")`.
 2. Collect: name, phone (Rule 4), brief description.
 3. `save_caller_info` with `follow_up_needed=true`.
-4. If SMS enabled, offer Party Inquiry link.
+4. If SMS enabled, offer to send event contact by text → `send_sms(sms_type="event_inquiry")`.
 Events team will follow up → WRAP UP.
 
 **[WRAP UP]**
+If SMS enabled AND no SMS was sent during the call: offer once to send something useful by text (menu, address, social media, etc.) before saying goodbye. If caller declines or nothing relevant, skip.
 Warm goodbye in the caller's language. Wait for hangup or `end_call`.
 \""""
 
@@ -314,8 +315,24 @@ def _build_agent_prompt(restaurant: Restaurant) -> str:
 
     if not restaurant.enable_sms:
         # Remove SMS offer sentences from the prompt
-        prompt = prompt.replace("If SMS enabled, offer to text a link.\n", "")
-        prompt = prompt.replace("If SMS enabled, offer Party Inquiry link.\n", "")
+        prompt = prompt.replace(
+            "If SMS enabled: AFTER giving your answer, ALWAYS offer to send the info by text. "
+            "Say something like \"¿Le envío eso por mensaje de texto?\" then wait. "
+            "If yes → call `send_sms` with the matching type: menu → `menu_link` | "
+            "bar/cocktails → `bar_menu_link` | hours → `hours` | music → `music` | "
+            "valet/parking → `valet` | social media → `social_media` | location → `address` | "
+            "events → `event_inquiry` | other → `custom`. Only offer once per call.\n",
+            "",
+        )
+        prompt = prompt.replace(
+            '4. If SMS enabled, offer to send event contact by text → `send_sms(sms_type="event_inquiry")`.\n',
+            "",
+        )
+        prompt = prompt.replace(
+            "If SMS enabled AND no SMS was sent during the call: offer once to send something useful by text "
+            "(menu, address, social media, etc.) before saying goodbye. If caller declines or nothing relevant, skip.\n",
+            "",
+        )
 
         # Hard prohibition — catches anything the string replacements miss
         prompt += "\n\n### SMS DISABLED\nNever offer, suggest, or mention texting. If asked, explain that you cannot currently send texts."
@@ -505,6 +522,82 @@ def retell_create_agent(modeladmin, request, queryset):
         messages.success(request, f"[{r.slug}] Agent created: {r.retell_agent_id} | events → {events_url}")
 
 
+@admin.action(description="Retell: CF-1 — Create Agent (Conversation Flow) — set retell_conversation_flow_id first")
+def retell_create_agent_cf(modeladmin, request, queryset):
+    """Create a new Retell agent using an existing Conversation Flow as the response engine."""
+    for r in queryset:
+        if not r.retell_api_key:
+            messages.error(request, f"[{r.slug}] API key is empty.")
+            continue
+        if not r.retell_conversation_flow_id:
+            messages.error(request, f"[{r.slug}] retell_conversation_flow_id is empty — fill it in and save first.")
+            continue
+        if not settings.RETELL_WEBHOOK_BASE_URL:
+            messages.error(request, f"[{r.slug}] RETELL_WEBHOOK_BASE_URL not set in .env — cannot build webhook URL.")
+            continue
+
+        events_url = f"{settings.RETELL_WEBHOOK_BASE_URL}/api/retell/events/"
+        lang = LANG_MAP.get(r.primary_lang, "multi")
+
+        client = RetellClient(api_key=r.retell_api_key)
+        agent = client.create_agent(
+            agent_name=f"{r.name} — Inbound Agent (CF)",
+            voice_id=r.retell_voice_id,
+            voice_speed=1.05,
+            voice_temperature=1.2,
+            language=lang,
+            response_engine={"type": "conversation-flow", "conversation_flow_id": r.retell_conversation_flow_id},
+            webhook_url=events_url,
+        )
+        r.retell_agent_id = agent.agent_id
+        r.save(update_fields=["retell_agent_id"])
+        messages.success(request, f"[{r.slug}] CF Agent created: {r.retell_agent_id} | events → {events_url}")
+
+
+@admin.action(description="Retell: CF-2 — Switch existing agent to Conversation Flow")
+def retell_attach_conversation_flow(modeladmin, request, queryset):
+    """Switch an existing agent's response engine to conversation-flow."""
+    for r in queryset:
+        if not r.retell_api_key:
+            messages.error(request, f"[{r.slug}] API key is empty.")
+            continue
+        if not r.retell_agent_id:
+            messages.error(request, f"[{r.slug}] No Agent ID — run 'Create Agent' first.")
+            continue
+        if not r.retell_conversation_flow_id:
+            messages.error(request, f"[{r.slug}] retell_conversation_flow_id is empty — fill it in and save first.")
+            continue
+
+        client = RetellClient(api_key=r.retell_api_key)
+        client.update_agent(
+            r.retell_agent_id,
+            response_engine={"type": "conversation-flow", "conversation_flow_id": r.retell_conversation_flow_id},
+        )
+        messages.success(request, f"[{r.slug}] Agent switched to Conversation Flow: {r.retell_conversation_flow_id}")
+
+
+@admin.action(description="Retell: CF-3 — Revert agent to Single Prompt (retell-llm)")
+def retell_detach_conversation_flow(modeladmin, request, queryset):
+    """Revert agent's response engine back to retell-llm (single prompt)."""
+    for r in queryset:
+        if not r.retell_api_key:
+            messages.error(request, f"[{r.slug}] API key is empty.")
+            continue
+        if not r.retell_agent_id:
+            messages.error(request, f"[{r.slug}] No Agent ID.")
+            continue
+        if not r.retell_llm_id:
+            messages.error(request, f"[{r.slug}] No LLM ID — cannot revert to single prompt.")
+            continue
+
+        client = RetellClient(api_key=r.retell_api_key)
+        client.update_agent(
+            r.retell_agent_id,
+            response_engine={"type": "retell-llm", "llm_id": r.retell_llm_id},
+        )
+        messages.success(request, f"[{r.slug}] Agent reverted to single prompt (retell-llm): {r.retell_llm_id}")
+
+
 @admin.action(description="Retell: 2b — Update Agent language to multilingual (fixes Spanish/English switching)")
 def retell_update_agent_language(modeladmin, request, queryset):
     """Set language='multi' on the Retell agent so TTS auto-detects Spanish/English per utterance."""
@@ -680,7 +773,7 @@ class SubscriptionInline(admin.StackedInline):
     can_delete = False
     extra = 0
     fields = (
-        "status", "communication_balance", "communication_markup",
+        "status", "communication_balance", "communication_markup", "sms_unit_cost",
         "stripe_customer_id", "stripe_subscription_id", "current_period_end",
     )
 
@@ -736,7 +829,10 @@ class SubscriptionAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
         if change and "status" in form.changed_data:
-            from restaurants.views import _disconnect_retell_phone, _reconnect_retell_phone
+            from restaurants.views import (
+                _disconnect_retell_phone,
+                _reconnect_retell_phone,
+            )
             active_statuses = ("active", "trialing")
             old_status = form.initial.get("status", "")
             new_status = obj.status
@@ -781,12 +877,70 @@ class CallDetailAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at", "updated_at")
 
 
+from .views import _send_sms_via_twilio  # noqa: E402 — defined after models are loaded
+
+
+@admin.action(description="Send corrected SMS")
+def send_corrected_sms(modeladmin, request, queryset):
+    if queryset.count() != 1:
+        modeladmin.message_user(request, "Select exactly one SMS log entry.", level="error")
+        return
+
+    log = queryset.first()
+
+    if "send_corrected" in request.POST:
+        message = request.POST.get("corrected_message", "").strip()[:320]
+        if not message:
+            modeladmin.message_user(request, "Message cannot be empty.", level="error")
+            return
+        try:
+            sid = _send_sms_via_twilio(log.restaurant, log.to_number, message)
+            SmsLog.objects.create(
+                restaurant=log.restaurant,
+                call_event=log.call_event,
+                to_number=log.to_number,
+                message=message,
+                status=SmsLog.STATUS_SENT,
+                twilio_sid=sid,
+            )
+            modeladmin.message_user(request, f"Corrected SMS sent to {log.to_number} (sid={sid}).")
+        except Exception as exc:
+            modeladmin.message_user(request, f"Failed to send: {exc}", level="error")
+        return
+
+    from django.http import HttpResponse
+    html = f"""<!DOCTYPE html><html><head>
+<title>Send corrected SMS</title>
+<link rel="stylesheet" href="/static/admin/css/base.css">
+</head><body id="django-admin-body" class="default">
+<div id="content-main" style="padding:20px;max-width:600px">
+  <h1>Send corrected SMS</h1>
+  <p><strong>To:</strong> {log.to_number}</p>
+  <p><strong>Original message:</strong><br><em>{log.message}</em></p>
+  <form method="post">
+    <input type="hidden" name="csrfmiddlewaretoken" value="{request.META.get('CSRF_COOKIE', '')}">
+    <input type="hidden" name="action" value="send_corrected_sms">
+    <input type="hidden" name="_selected_action" value="{log.pk}">
+    <input type="hidden" name="send_corrected" value="1">
+    <p><label><strong>Corrected message (max 320 chars):</strong><br>
+    <textarea name="corrected_message" rows="4" cols="60" maxlength="320">{log.message}</textarea>
+    </label></p>
+    <input type="submit" value="Send corrected SMS" class="button default">
+    &nbsp;<a href=".." class="button">Cancel</a>
+  </form>
+</div></body></html>"""
+    from django.middleware.csrf import get_token
+    get_token(request)  # ensure CSRF cookie is set
+    return HttpResponse(html)
+
+
 @admin.register(SmsLog)
 class SmsLogAdmin(admin.ModelAdmin):
     list_display   = ("created_at", "restaurant", "to_number", "status", "delivered_at", "twilio_sid")
     list_filter    = ("status", "restaurant")
     search_fields  = ("to_number", "message", "twilio_sid")
     readonly_fields = ("created_at", "delivered_at", "twilio_sid", "error_message")
+    actions        = [send_corrected_sms]
 
 
 @admin.register(CallerMemory)
@@ -824,7 +978,7 @@ class RestaurantAdmin(admin.ModelAdmin):
         (None, {"fields": (
             "name", "slug", "user", "is_active", "public_id",
             "primary_lang", "conversation_tone", "timezone",
-            "website", "contact_email", "contact_phone",
+            "website", "social_media_url", "contact_email", "contact_phone",
             "address_full", "location_reference",
             "welcome_phrase",
             "phone_mode", "existing_ph_numb",
@@ -833,10 +987,13 @@ class RestaurantAdmin(admin.ModelAdmin):
             "notify_weekly_report", "weekly_report_language",
             "created_at", "updated_at",
         )}),
-        ("Retell", {"fields": (
+        ("Retell — Single Prompt", {"fields": (
             "retell_api_key", "retell_llm_id", "retell_agent_id",
             "retell_phone_number", "retell_voice_id", "retell_area_code",
         )}),
+        ("Retell — Conversation Flow", {"fields": (
+            "retell_conversation_flow_id",
+        ), "description": "Set the Conversation Flow ID (from Retell dashboard), then use the CF actions to create or switch the agent."}),
         ("Twilio SMS (per-restaurant billing)", {"fields": (
             "enable_sms", "twilio_account_sid", "twilio_auth_token", "twilio_from_number",
         ), "description": "Enable Twilio integration, or leave credentials blank to use the platform-level Twilio from .env."}),
@@ -846,6 +1003,7 @@ class RestaurantAdmin(admin.ModelAdmin):
         retell_create_llm, retell_update_llm_prompt, retell_configure_call_analysis,
         retell_configure_sms_tool, retell_configure_escalation_tool,
         retell_create_agent, retell_update_agent_language, retell_update_agent_voice, retell_update_agent_webhook, retell_update_agent_events_webhook,
+        retell_create_agent_cf, retell_attach_conversation_flow, retell_detach_conversation_flow,
         retell_create_phone,
         reprocess_call_events,
         "clear_call_history",
@@ -878,7 +1036,10 @@ class RestaurantAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
         if change and "is_active" in form.changed_data:
-            from restaurants.views import _disconnect_retell_phone, _reconnect_retell_phone
+            from restaurants.views import (
+                _disconnect_retell_phone,
+                _reconnect_retell_phone,
+            )
             if obj.is_active:
                 _reconnect_retell_phone(obj)
                 self.message_user(request, f"Retell phone reconnected for {obj.name}.")

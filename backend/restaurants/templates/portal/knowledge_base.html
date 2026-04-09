@@ -307,6 +307,11 @@
             <label class="kb-label">{{ basic_form.website.label }}</label>
             {{ basic_form.website }}
           </div>
+          <div class="col-md-6">
+            <label class="kb-label">{{ basic_form.social_media_url.label }}</label>
+            {{ basic_form.social_media_url }}
+            <p class="kb-hint">Instagram, Facebook, or any social link sent via SMS.</p>
+          </div>
           <div class="col-12">
             <label class="kb-label">{{ basic_form.address_full.label }}</label>
             {{ basic_form.address_full }}
@@ -680,10 +685,19 @@
         </div>
 
         <p class="kb-section-title">Press &amp; Partnerships</p>
-        <div class="row g-3">
+        <div class="row g-3 mb-4">
           <div class="col-12">
             <label class="kb-label">{{ kb_form.press_contact.label }}</label>
             {{ kb_form.press_contact }}
+          </div>
+        </div>
+
+        <p class="kb-section-title">Additional Info</p>
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="kb-label">{{ kb_form.additional_info.label }}</label>
+            {{ kb_form.additional_info }}
+            <p class="kb-hint">{{ kb_form.additional_info.field.help_text }}</p>
           </div>
         </div>
 
@@ -1044,12 +1058,12 @@ const EXAMPLES = {
 
 // ── Tab → field IDs map (for completion counters) ────────────────────────────
 const TAB_FIELDS = {
-  "tab-basic":        ["id_name","id_website","id_address_full","id_location_reference","id_welcome_phrase","id_contact_phone","id_contact_email"],
+  "tab-basic":        ["id_name","id_website","id_social_media_url","id_address_full","id_location_reference","id_welcome_phrase","id_contact_phone","id_contact_email"],
   "tab-hours":        ["id_hours_of_operation","id_kitchen_closing_time","id_holiday_closure_notes","id_private_event_closures"],
   "tab-menu":         ["id_food_menu_url","id_menu_cuisine_type","id_menu_best_sellers","id_menu_price_range","id_menu_categories","id_bar_menu_url","id_bar_concept","id_bar_signature_drinks","id_bar_wine_beer","id_bottle_service","id_happy_hour_details","id_dietary_options"],
   "tab-billing":      ["id_service_charge_pct","id_max_cards_to_split","id_cover_charge","id_no_show_fee","id_corkage_policy"],
   "tab-reservations": ["id_reservation_grace_min","id_large_party_min_guests"],
-  "tab-events":       ["id_private_dining_min_spend","id_press_contact"],
+  "tab-events":       ["id_private_dining_min_spend","id_press_contact","id_additional_info"],
   "tab-ambience":     ["id_live_music_details","id_party_vibe_start_time","id_dress_code","id_special_events_info"],
   "tab-facilities":   ["id_valet_cost","id_free_parking_info"],
   "tab-agent":        ["id_partner_companies","id_vendor_call_handling","id_press_call_handling","id_service_call_handling","id_sales_call_handling","id_financial_call_handling","id_escalation_transfer_number","id_escalation_conditions","id_team_members","id_affiliated_restaurants"],

@@ -3,6 +3,31 @@ import logging
 import os
 import re
 import threading
+
+
+def csrf_failure(request, reason=""):
+    from django.shortcuts import redirect
+    return redirect(f"/portal/login/?next={request.path}")
+
+
+def bad_request(request, exception=None):
+    from django.shortcuts import render
+    return render(request, "400.html", status=400)
+
+
+def permission_denied(request, exception=None):
+    from django.shortcuts import render
+    return render(request, "403.html", status=403)
+
+
+def page_not_found(request, exception=None):
+    from django.shortcuts import render
+    return render(request, "404.html", status=404)
+
+
+def server_error(request):
+    from django.shortcuts import render
+    return render(request, "500.html", status=500)
 import urllib.parse
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
@@ -360,7 +385,10 @@ _REASON_KEYWORDS = [
     ("menu",          ["menu", "carta", "food", "comida", "dish", "plato", "drink", "bebida", "cocktail", "eat"]),
     ("billing",       ["precio", "price", "cost", "charge", "tip", "propina", "gratuity", "pago", "card", "split"]),
     ("parking",       ["parking", "park", "valet", "estacionamiento", "carro", "car"]),
-    ("private_event", ["evento", "event", "private", "privado", "buyout", "party", "fiesta", "celebration"]),
+    ("private_event", ["evento", "event", "private", "privado", "buyout", "party", "fiesta", "celebration",
+                       "video", "videoclip", "video clip", "music video", "filming", "film shoot",
+                       "grabacion", "grabación", "filmacion", "filmación", "produccion", "producción",
+                       "production", "shoot", "rodaje"]),
     ("complaint",     ["complaint", "queja", "upset", "frustrated", "bad experience", "problema", "wrong"]),
 ]
 
@@ -1768,17 +1796,18 @@ def retell_events_webhook(request):
         except Exception:
             logger.exception("Failed to send alert email(s) for CallEvent pk=%s", call_event.pk)
 
-        try:
-            _send_post_call_sms(call_event, restaurant)
-        except Exception:
-            logger.exception("Failed to send post-call SMS for CallEvent pk=%s", call_event.pk)
+        # Automatic post-call SMS disabled — only consent-based SMS via retell_tool_send_sms
+        # try:
+        #     _send_post_call_sms(call_event, restaurant)
+        # except Exception:
+        #     logger.exception("Failed to send post-call SMS for CallEvent pk=%s", call_event.pk)
 
     return JsonResponse({"status": "ok"}, status=200)
 
 
 # ─── get_info Tool ────────────────────────────────────────────────────────────
 
-def _format_kb_topic(kb, topic: str, restaurant=None) -> str:
+def _format_kb_topic(kb, topic: str, restaurant=None, lang: str = "en") -> str:
     """Return a clean text block for a given KB topic. Empty fields are omitted."""
     lines = []
 
@@ -1847,7 +1876,15 @@ def _format_kb_topic(kb, topic: str, restaurant=None) -> str:
         add("Minimum spend", kb.private_dining_min_spend)
         lines.append(f"Decorations: {'Allowed' if kb.allows_decorations else 'Not allowed'}")
         add("Cleaning fee", kb.decoration_cleaning_fee)
-        add("Press / partnerships", kb.press_contact)
+        if kb.press_contact:
+            import re as _re
+            spoken = _re.sub(
+                r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}',
+                lambda m: _spoken_email(m.group(), lang),
+                kb.press_contact,
+            )
+            lines.append(f"Press / partnerships: {spoken}")
+        add("Additional info", kb.additional_info)
 
     elif topic == "ambience":
         if kb.has_live_music:
@@ -1904,7 +1941,7 @@ def retell_tool_get_info(request):
     if not kb:
         return JsonResponse({"result": "No information configured for this topic yet."})
 
-    result = _format_kb_topic(kb, topic, restaurant=restaurant)
+    result = _format_kb_topic(kb, topic, restaurant=restaurant, lang=restaurant.primary_lang)
     logger.info("get_info: restaurant=%s topic=%r → %d chars", restaurant.slug, topic, len(result))
     return JsonResponse({"result": result})
 
@@ -1963,6 +2000,134 @@ def retell_tool_get_caller_profile(request):
     return JsonResponse({"result": "\n".join(parts)})
 
 
+def _send_sms_via_twilio(restaurant, to_number: str, message: str) -> str:
+    """Send an SMS using restaurant or platform Twilio credentials. Returns Twilio SID.
+
+    Deducts sms_unit_cost from the restaurant's communication_balance only when
+    using platform credentials (not when the restaurant has its own Twilio account).
+    """
+    from twilio.rest import Client as TwilioClient
+    from decimal import Decimal
+
+    using_own_credentials = bool(
+        restaurant and
+        restaurant.twilio_account_sid and
+        restaurant.twilio_auth_token and
+        restaurant.twilio_from_number
+    )
+
+    if using_own_credentials:
+        account_sid = restaurant.twilio_account_sid
+        auth_token  = restaurant.twilio_auth_token
+        from_number = restaurant.twilio_from_number
+    else:
+        account_sid = settings.TWILIO_ACCOUNT_SID
+        auth_token  = settings.TWILIO_AUTH_TOKEN
+        from_number = settings.TWILIO_FROM_NUMBER
+
+    client = TwilioClient(account_sid, auth_token)
+    msg = client.messages.create(body=message, from_=from_number, to=to_number)
+
+    # Deduct from balance only when using platform Twilio
+    if not using_own_credentials and restaurant:
+        sub = getattr(restaurant, "subscription", None)
+        if sub:
+            unit_cost = sub.sms_unit_cost or Decimal("0")
+            if unit_cost > 0:
+                sub.communication_balance -= unit_cost
+                sub.save(update_fields=["communication_balance"])
+                logger.info(
+                    "sms_billing: deducted %.4f for SMS to %s | balance=%.2f | restaurant=%s",
+                    unit_cost, to_number, sub.communication_balance, restaurant.slug,
+                )
+
+    return msg.sid
+
+
+def _build_sms_message(sms_type: str, restaurant, kb, custom_message: str = "") -> str | None:
+    """Build an SMS message from DB data based on the requested type."""
+    name = restaurant.name if restaurant else ""
+    lang = restaurant.primary_lang if restaurant else "en"
+
+    if sms_type == "menu_link":
+        url = (kb.food_menu_url if kb else "") or (restaurant.website if restaurant else "")
+        if not url:
+            return None
+        return (f"Menú de {name}: {url}" if lang == "es" else f"{name} menu: {url}")[:160]
+
+    if sms_type == "bar_menu_link":
+        url = (kb.bar_menu_url if kb else "") or (restaurant.website if restaurant else "")
+        if not url:
+            return None
+        return (f"Carta de bar de {name}: {url}" if lang == "es" else f"{name} bar menu: {url}")[:160]
+
+    if sms_type == "hours":
+        hours = (kb.hours_of_operation if kb else "") or ""
+        if not hours:
+            return None
+        return (f"{name} — horario: {hours}" if lang == "es" else f"{name} — hours: {hours}")[:160]
+
+    if sms_type == "music":
+        details = (kb.live_music_details if kb else "") or ""
+        url     = restaurant.social_media_url if restaurant else ""
+        if details:
+            base = f"{name} - música en vivo: {details}" if lang == "es" else f"{name} - live music: {details}"
+            if url and len(base) + len(url) + 2 <= 160:
+                base += f" {url}"
+            return base[:160]
+        if url:
+            return (f"{name} - música en vivo: {url}" if lang == "es" else f"{name} - live music: {url}")[:160]
+        return None
+
+    if sms_type == "valet":
+        if not kb:
+            return None
+        parts = []
+        if kb.has_valet:
+            valet = f"Valet disponible" if lang == "es" else "Valet available"
+            if kb.valet_cost:
+                valet += f" — {kb.valet_cost}"
+            parts.append(valet)
+        if kb.free_parking_info:
+            parts.append(kb.free_parking_info)
+        if not parts:
+            return None
+        body = f"{name}: " + " | ".join(parts)
+        return body[:160]
+
+    if sms_type == "social_media":
+        url = (restaurant.social_media_url if restaurant else "") or (restaurant.website if restaurant else "")
+        if not url:
+            return None
+        return (f"Síguenos en {name}: {url}" if lang == "es" else f"Follow {name}: {url}")[:160]
+
+    if sms_type == "address":
+        address = restaurant.address_full if restaurant else ""
+        if not address:
+            return None
+        return (f"{name} está en: {address}" if lang == "es" else f"{name} is at: {address}")[:160]
+
+    if sms_type == "event_inquiry":
+        email = restaurant.contact_email if restaurant else ""
+        url   = restaurant.website if restaurant else ""
+        if email:
+            return (f"Eventos en {name}: {email}" if lang == "es" else f"{name} events: {email}")[:160]
+        if url:
+            return (f"Eventos en {name}: {url}" if lang == "es" else f"{name} events: {url}")[:160]
+        return None
+
+    if sms_type == "website":
+        url = restaurant.website if restaurant else ""
+        if not url:
+            return None
+        return f"{name}: {url}"[:160]
+
+    if sms_type == "custom":
+        return custom_message[:160] if custom_message else None
+
+    return None
+
+
 @csrf_exempt
 def retell_tool_send_sms(request):
     """Retell custom tool webhook — sends an SMS to the caller via Twilio."""
@@ -1977,17 +2142,25 @@ def retell_tool_send_sms(request):
     call      = data.get("call", {})
     to_number = call.get("from_number", "").strip()   # caller's number → SMS destination
     to_retell = call.get("to_number", "").strip()     # our Retell number → identify restaurant
-    message   = data.get("args", {}).get("message", "").strip()[:320]  # hard cap at 2 segments
+    sms_type       = data.get("args", {}).get("sms_type", "").strip()
+    custom_message = data.get("args", {}).get("message", "").strip()
 
-    if not to_number or not message:
-        return JsonResponse({"result": "error: missing to_number or message"})
+    if not to_number or not sms_type:
+        return JsonResponse({"result": "error: missing to_number or sms_type"})
 
-    restaurant = Restaurant.objects.filter(retell_phone_number=to_retell, is_active=True).first()
+    restaurant = Restaurant.objects.select_related("knowledge_base").filter(
+        retell_phone_number=to_retell, is_active=True
+    ).first()
+    kb         = getattr(restaurant, "knowledge_base", None)
     call_id    = call.get("call_id")
     call_event = (
         CallEvent.objects.filter(payload__call__call_id=call_id).first()
         if call_id else None
     )
+
+    message = _build_sms_message(sms_type, restaurant, kb, custom_message)
+    if not message:
+        return JsonResponse({"result": f"error: no content available for sms_type '{sms_type}'"})
 
     log = SmsLog(
         restaurant=restaurant,
@@ -1997,29 +2170,8 @@ def retell_tool_send_sms(request):
     )
 
     try:
-        from twilio.rest import Client as TwilioClient
-        # Use restaurant-specific credentials; fall back to platform defaults
-        # Only use restaurant credentials if ALL three are present — mixing accounts
-        # causes "Mismatch between From number and account" errors.
-        if restaurant and restaurant.twilio_account_sid and restaurant.twilio_auth_token and restaurant.twilio_from_number:
-            account_sid = restaurant.twilio_account_sid
-            auth_token  = restaurant.twilio_auth_token
-            from_number = restaurant.twilio_from_number
-        else:
-            account_sid = settings.TWILIO_ACCOUNT_SID
-            auth_token  = settings.TWILIO_AUTH_TOKEN
-            from_number = settings.TWILIO_FROM_NUMBER
-        callback_url = (
-            f"{settings.RETELL_WEBHOOK_BASE_URL}/api/retell/twilio/sms-status/"
-            if settings.RETELL_WEBHOOK_BASE_URL else None
-        )
-        twilio_client = TwilioClient(account_sid, auth_token)
-        create_kwargs = {"body": message, "from_": from_number, "to": to_number}
-        if callback_url:
-            create_kwargs["status_callback"] = callback_url
-        msg = twilio_client.messages.create(**create_kwargs)
+        log.twilio_sid = _send_sms_via_twilio(restaurant, to_number, message)
         log.status     = SmsLog.STATUS_SENT
-        log.twilio_sid = msg.sid
         log.save()
         return JsonResponse({"result": f"SMS sent successfully to {to_number}"})
     except Exception as e:
@@ -3237,6 +3389,52 @@ def portal_calls(request, slug):
         "follow_ups_pending":  follow_ups_pending,
         "sms_sent":            sms_sent,
     })
+
+
+@portal_view()
+def portal_send_sms(request, slug, event_pk):
+    """AJAX: send a manual SMS to the caller from the portal call history."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    restaurant = request.restaurant
+    event      = get_object_or_404(CallEvent, pk=event_pk, restaurant=restaurant)
+
+    # Resolve caller phone: prefer detail.caller_phone, fall back to call payload
+    detail    = getattr(event, "detail", None)
+    to_number = (
+        (detail.caller_phone if detail and detail.caller_phone else "") or
+        event.payload.get("call", {}).get("from_number", "")
+    ).strip()
+
+    if not to_number:
+        return JsonResponse({"error": "No phone number on record for this call."}, status=400)
+
+    sms_type       = request.POST.get("sms_type", "").strip()
+    custom_message = request.POST.get("message", "").strip()
+
+    if not sms_type:
+        return JsonResponse({"error": "sms_type is required."}, status=400)
+
+    kb      = getattr(restaurant, "knowledge_base", None)
+    message = _build_sms_message(sms_type, restaurant, kb, custom_message)
+
+    if not message:
+        return JsonResponse({"error": f"No content available for type '{sms_type}'. Check that the relevant URL or info is filled in."}, status=400)
+
+    log = SmsLog(restaurant=restaurant, call_event=event, to_number=to_number, message=message)
+    try:
+        log.twilio_sid = _send_sms_via_twilio(restaurant, to_number, message)
+        log.status     = SmsLog.STATUS_SENT
+        log.save()
+        logger.info("portal_send_sms: sent to %s for event %s", to_number, event_pk)
+        return JsonResponse({"ok": True, "message": message, "to_number": to_number})
+    except Exception as exc:
+        log.status        = SmsLog.STATUS_FAILED
+        log.error_message = str(exc)
+        log.save()
+        logger.exception("portal_send_sms: failed for event %s", event_pk)
+        return JsonResponse({"error": str(exc)}, status=500)
 
 
 @portal_view()

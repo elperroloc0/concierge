@@ -56,6 +56,8 @@
   .sms-entry .sms-time           { color: var(--color-text-tertiary); font-size: .7rem; }
   .sms-entry .sms-status-sent    { color: var(--color-success); }
   .sms-entry .sms-status-failed  { color: var(--color-danger); }
+  .sms-send-form select, .sms-send-form textarea { font-size: .8rem; }
+  .sms-send-form .btn { font-size: .78rem; }
 
   /* ── Stat card accent lines ── */
   .stat-accent-blue   { border-left: 3px solid var(--color-primary-500); }
@@ -368,6 +370,35 @@
                     <div class="sms-entry" style="color:#374151;">{{ c.detail.notes }}</div>
                     {% endif %}
 
+                    {% if restaurant.enable_sms %}
+                    <div class="mt-3">
+                      <p class="small fw-semibold text-muted mb-2"><i class="bi bi-send me-1"></i>Send SMS</p>
+                      <form class="sms-send-form"
+                            data-url="{% url 'portal_send_sms' restaurant.slug c.event.pk %}"
+                            onclick="event.stopPropagation()">
+                        <select name="sms_type" class="form-select form-select-sm mb-2 sms-type-select">
+                          <option value="menu_link">Menu link</option>
+                          <option value="bar_menu_link">Bar menu link</option>
+                          <option value="hours">Hours</option>
+                          <option value="music">Live music info</option>
+                          <option value="valet">Valet &amp; parking</option>
+                          <option value="social_media">Social media</option>
+                          <option value="address">Address</option>
+                          <option value="event_inquiry">Events contact</option>
+                          <option value="website">Website</option>
+                          <option value="custom">Custom message…</option>
+                        </select>
+                        <textarea name="message" class="form-control form-control-sm mb-2 sms-custom-msg"
+                                  rows="2" maxlength="320" placeholder="Write your message…"
+                                  style="display:none;resize:none;"></textarea>
+                        <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+                          <i class="bi bi-send me-1"></i>Send
+                        </button>
+                      </form>
+                      <div class="sms-feedback mt-1" style="display:none;"></div>
+                    </div>
+                    {% endif %}
+
                     {% if c.detail and c.detail.follow_up_needed or c.detail and c.detail.needs_review %}
                     <div class="mt-3" id="followup-block-{{ c.event.pk }}">
                       <button class="btn btn-sm btn-warning w-100 resolve-followup-btn"
@@ -487,6 +518,58 @@ document.querySelectorAll('.resolve-followup-btn').forEach(btn => {
     } catch {
       btn.disabled = false;
       btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Marcar como resuelto';
+    }
+  });
+});
+
+// Send SMS form (portal manual send)
+document.querySelectorAll('.sms-send-form').forEach(form => {
+  const typeSelect = form.querySelector('.sms-type-select');
+  const customMsg  = form.querySelector('.sms-custom-msg');
+  const feedback   = form.nextElementSibling; // .sms-feedback
+
+  typeSelect.addEventListener('change', () => {
+    const isCustom = typeSelect.value === 'custom';
+    customMsg.style.display = isCustom ? '' : 'none';
+    customMsg.required = isCustom;
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const btn = form.querySelector('[type=submit]');
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sending…';
+    feedback.style.display = 'none';
+
+    const fd = new FormData(form);
+    fd.append('csrfmiddlewaretoken', csrfToken);
+
+    try {
+      const res  = await fetch(form.dataset.url, { method: 'POST', body: fd });
+      const data = await res.json();
+      feedback.style.display = '';
+      if (data.ok) {
+        feedback.innerHTML = `<div class="alert alert-success py-1 px-2 small mb-0"><i class="bi bi-check-circle me-1"></i>Sent: <em>${data.message}</em></div>`;
+        // Inject new entry into the SMS log section above
+        const smsSection = form.closest('.col-md-4').querySelector('.sms-entry:last-of-type, p.text-muted.small');
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + ' · ' + now.toLocaleDateString([], {month:'short', day:'numeric'});
+        const newEntry = document.createElement('div');
+        newEntry.className = 'sms-entry';
+        newEntry.innerHTML = `<div class="d-flex justify-content-between align-items-center mb-1"><span class="sms-time">${timeStr}</span><span class="sms-status-sent fw-semibold" style="font-size:.7rem;">SENT</span></div><div style="color:#374151;">${data.message}</div><div class="text-muted mt-1" style="font-size:.68rem;">→ ${data.to_number}</div>`;
+        const smsLog = form.closest('.col-md-4').querySelector('p.fw-semibold.text-muted');
+        if (smsLog) smsLog.after(newEntry);
+      } else {
+        feedback.innerHTML = `<div class="alert alert-danger py-1 px-2 small mb-0"><i class="bi bi-exclamation-circle me-1"></i>${data.error}</div>`;
+      }
+    } catch {
+      feedback.style.display = '';
+      feedback.innerHTML = `<div class="alert alert-danger py-1 px-2 small mb-0">Network error — please try again.</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
     }
   });
 });

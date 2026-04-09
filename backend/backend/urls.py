@@ -19,6 +19,11 @@ from django.urls import path, include
 
 from restaurants import views as restaurant_views
 
+handler400 = "restaurants.views.bad_request"
+handler403 = "restaurants.views.permission_denied"
+handler404 = "restaurants.views.page_not_found"
+handler500 = "restaurants.views.server_error"
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/retell/', include('restaurants.urls')),
