@@ -39,6 +39,10 @@ class Restaurant(models.Model):
     # user prefs
     primary_lang = models.CharField(max_length=16, default="es", choices=[("es", "Spanish"), ("en", "English"), ("other", "other"),])
     conversation_tone = models.CharField(max_length=16, default="friendly", choices=[("formal", "Formal"), ("friendly", "Friendly"), ("adaptive", "Adaptive")],)
+    agent_name = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="Name the agent uses to introduce itself (e.g. 'Gaby'). Leave blank for no name."
+    )
     welcome_phrase = models.TextField(blank=True, default="")
     phone_mode = models.CharField(
         max_length=16,

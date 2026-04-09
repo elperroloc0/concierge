@@ -336,6 +336,7 @@ def _build_dynamic_variables(restaurant):
             if kb and kb.contact_email_spoken and lang == "en"
             else _spoken_email(restaurant.contact_email or "", "en")
         ),
+        "agent_name":            restaurant.agent_name or restaurant.name,
         "welcome_phrase":        restaurant.welcome_phrase,
         "primary_lang":          restaurant.primary_lang,
         "conversation_tone":     restaurant.conversation_tone,

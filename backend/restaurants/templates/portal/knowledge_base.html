@@ -337,6 +337,11 @@
             <label class="kb-label">{{ basic_form.conversation_tone.label }}</label>
             {{ basic_form.conversation_tone }}
           </div>
+          <div class="col-md-4">
+            <label class="kb-label">{{ basic_form.agent_name.label }}</label>
+            {{ basic_form.agent_name }}
+            <p class="kb-hint">Name the agent uses (e.g. "Gaby"). Usable as <code>{{agent_name}}</code> in the prompt.</p>
+          </div>
           <div class="col-12">
             <label class="kb-label">
               {{ basic_form.welcome_phrase.label }}
@@ -1058,7 +1063,7 @@ const EXAMPLES = {
 
 // ── Tab → field IDs map (for completion counters) ────────────────────────────
 const TAB_FIELDS = {
-  "tab-basic":        ["id_name","id_website","id_social_media_url","id_address_full","id_location_reference","id_welcome_phrase","id_contact_phone","id_contact_email"],
+  "tab-basic":        ["id_name","id_website","id_social_media_url","id_address_full","id_location_reference","id_agent_name","id_welcome_phrase","id_contact_phone","id_contact_email"],
   "tab-hours":        ["id_hours_of_operation","id_kitchen_closing_time","id_holiday_closure_notes","id_private_event_closures"],
   "tab-menu":         ["id_food_menu_url","id_menu_cuisine_type","id_menu_best_sellers","id_menu_price_range","id_menu_categories","id_bar_menu_url","id_bar_concept","id_bar_signature_drinks","id_bar_wine_beer","id_bottle_service","id_happy_hour_details","id_dietary_options"],
   "tab-billing":      ["id_service_charge_pct","id_max_cards_to_split","id_cover_charge","id_no_show_fee","id_corkage_policy"],

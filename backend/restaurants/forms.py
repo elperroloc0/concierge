@@ -42,7 +42,7 @@ class RestaurantBasicForm(forms.ModelForm):
         model = Restaurant
         fields = [
             "name", "address_full", "location_reference", "website", "social_media_url",
-            "timezone", "primary_lang", "conversation_tone", "welcome_phrase",
+            "timezone", "primary_lang", "conversation_tone", "agent_name", "welcome_phrase",
             "contact_phone", "contact_email",
         ]
         widgets = {
@@ -52,6 +52,7 @@ class RestaurantBasicForm(forms.ModelForm):
             "timezone":           forms.TextInput(attrs=_TEXT),
             "primary_lang":       forms.Select(attrs=_SEL),
             "conversation_tone":  forms.Select(attrs=_SEL),
+            "agent_name":         forms.TextInput(attrs=_TEXT),
             "welcome_phrase":     forms.Textarea(attrs=_ta(2)),
             "contact_phone":      forms.TextInput(attrs=_TEXT),
             "contact_email":      forms.EmailInput(attrs=_TEXT),
