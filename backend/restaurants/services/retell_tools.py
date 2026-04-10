@@ -52,8 +52,8 @@ def _save_caller_info_tool_definition(base_url: str) -> dict:
         "type": "custom",
         "name": "save_caller_info",
         "description": (
-            "Save caller info. Call once silently — do NOT announce it. "
-            "Set follow_up_needed=true if caller asked for callback or requested a human and could not be transferred."
+            "Record the caller's name, message, and any relevant details at the end of a call. "
+            "Call once silently — never announce it."
         ),
         "url": f"{base_url}/api/retell/tools/save-caller-info/",
         "speak_during_execution": False,
@@ -65,10 +65,7 @@ def _save_caller_info_tool_definition(base_url: str) -> dict:
                 "note":             {"type": "string", "description": "Message or note from the caller for the team. Include reason, details, and any context."},
                 "follow_up_needed": {
                     "type": "boolean",
-                    "description": (
-                        "Set to true ONLY if the caller explicitly asked to be called back "
-                        "or requested a human and was not transferred. Default: false."
-                    ),
+                    "description": "Set to true ONLY if the caller explicitly asked to be called back. Default: false.",
                 },
             },
             "required": ["caller_name"],
@@ -156,14 +153,16 @@ def _escalation_tool_definition(transfer_number: str) -> dict:
             "type": "warm_transfer",
             "opt_out_initial_message": True,
             "opt_out_human_detection": False,
-            "agent_detection_timeout_ms": 4000,
+            "agent_detection_timeout_ms": 8000,
+            "enable_bridge_audio_cue": True,
             "on_hold_music": "ringtone",
             "transfer_ring_duration_ms": 18000,
             "private_handoff_option": {
                 "type": "prompt",
                 "prompt": (
                     "Greet the staff member and briefly summarize why the caller is calling. "
-                    "Include the caller's name and reason if available."
+                    "Include the caller's name and reason if available. "
+                    "End with: 'speak now'."
                 ),
             },
         },

@@ -18,6 +18,7 @@ Flags:
 import json
 import logging
 import os
+import re
 from collections import Counter
 
 import anthropic
@@ -32,12 +33,56 @@ from restaurants.models import CallDetail, Restaurant, WeeklyReport
 
 logger = logging.getLogger(__name__)
 
+
+# ─── PII anonymization ──────────────────────────────────────────────────────
+
+_PHONE_RE = re.compile(r"\+?\d[\d\s\-().]{7,}\d")
+_EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+
+
+def anonymize_summaries(summaries: list, restaurant: Restaurant,
+                        week_start: date, week_end: date) -> list:
+    """Strip caller names, phone numbers, and emails from call summaries."""
+    # Collect all known caller names from this period
+    names = set(
+        CallDetail.objects.filter(
+            call_event__restaurant=restaurant,
+            call_event__created_at__date__gte=week_start,
+            call_event__created_at__date__lt=week_end,
+        ).exclude(caller_name="").values_list("caller_name", flat=True)
+    )
+
+    # Build name → placeholder mapping, longest names first to avoid partial matches
+    name_map = {}
+    counter = 1
+    for name in sorted(names, key=len, reverse=True):
+        name_map[name] = f"Caller_{counter}"
+        counter += 1
+
+    result = []
+    for summary in summaries:
+        s = summary
+        # Replace known names
+        for name, placeholder in name_map.items():
+            s = s.replace(name, placeholder)
+        # Replace phone numbers and emails
+        s = _PHONE_RE.sub("[PHONE]", s)
+        s = _EMAIL_RE.sub("[EMAIL]", s)
+        result.append(s)
+    return result
+
 # ─── Claude prompts ───────────────────────────────────────────────────────────
 
 _SYSTEM_PROMPT = """Eres un analista especializado en agentes de voz para restaurantes.
 Recibes el análisis agregado de una semana de llamadas: señales de calidad estructuradas
-extraídas por Retell sobre cada llamada, resúmenes de las llamadas más relevantes, y el
-contenido actual del Knowledge Base del restaurante organizado por secciones del portal.
+extraídas por Retell sobre cada llamada, resúmenes de las llamadas más relevantes, el
+contenido actual del Knowledge Base del restaurante, y la configuración completa del agente
+(su system prompt, tools disponibles, y reglas de escalación).
+
+Usa la configuración del agente para diagnosticar con precisión: compara lo que el agente
+HIZO (call summaries) contra lo que DEBERÍA hacer (su prompt y reglas). Distingue entre
+fallos del agente (no siguió sus reglas), fallos de configuración (las reglas son incorrectas
+o insuficientes), y huecos del KB (el agente siguió las reglas pero no tenía datos).
 
 Debes producir DOS outputs separados por los delimitadores exactos indicados.
 
@@ -310,6 +355,44 @@ def _serialize_kb_for_report(kb) -> str:
     return "\n".join(lines)
 
 
+def _serialize_agent_context(restaurant, kb) -> str:
+    """Build a summary of the agent's prompt, tools, and escalation config for the report."""
+    from restaurants.admin import _build_agent_prompt
+    from restaurants.services.retell_tools import build_tool_list
+    from django.conf import settings
+
+    sections = []
+
+    # Agent system prompt
+    try:
+        prompt = _build_agent_prompt(restaurant)
+        sections.append(f"[Agent System Prompt]\n{prompt}")
+    except Exception:
+        sections.append("[Agent System Prompt]\nNo disponible")
+
+    # Tool list — names and descriptions only, no URLs
+    try:
+        tools = build_tool_list("https://[REDACTED]",
+                                escalation_number="+0000000000" if (kb and kb.escalation_enabled) else None,
+                                enable_sms=restaurant.enable_sms, lang=restaurant.primary_lang)
+        tool_lines = []
+        for t in tools:
+            tool_lines.append(f"  {t['name']} ({t['type']}): {t.get('description', '')}")
+        sections.append("[Agent Tools]\n" + "\n".join(tool_lines))
+    except Exception:
+        sections.append("[Agent Tools]\nNo disponible")
+
+    # Escalation config — no phone number
+    if kb:
+        sections.append(
+            f"[Escalation Config]\n"
+            f"  Enabled: {'Yes' if kb.escalation_enabled else 'No'}\n"
+            f"  Conditions: {kb.escalation_conditions or '[vacío]'}"
+        )
+
+    return "\n\n".join(sections)
+
+
 def generate_report(restaurant: Restaurant, metrics: dict, summaries: list,
                     week_start: date, week_end: date, kb=None,
                     prev_metrics: dict | None = None) -> tuple:
@@ -339,17 +422,22 @@ def generate_report(restaurant: Restaurant, metrics: dict, summaries: list,
             f"{json.dumps(prev_metrics, indent=2, ensure_ascii=False)}\n"
         )
 
+    agent_context = _serialize_agent_context(restaurant, kb)
+    safe_summaries = anonymize_summaries(summaries, restaurant, week_start, week_end)
+
     user_prompt = (
         f"Restaurant: {restaurant.name}\n"
         f"Week: {week_start} to {week_end}\n"
         f"weekly_report_language: {lang_label}\n\n"
+        f"--- AGENT CONFIGURATION (prompt, tools, escalation rules) ---\n"
+        f"{agent_context}\n\n"
         f"--- METRICS ---\n"
         f"{json.dumps(metrics, indent=2, ensure_ascii=False)}\n"
         f"{prev_section}\n"
         f"--- KNOWLEDGE BASE (actual content — [no configurado] = campo vacío) ---\n"
         f"{kb_section}\n\n"
-        f"--- RELEVANT CALL SUMMARIES ({len(summaries)} calls) ---\n"
-        + "\n".join(f"- {s}" for s in summaries)
+        f"--- RELEVANT CALL SUMMARIES ({len(safe_summaries)} calls, PII anonymized) ---\n"
+        + "\n".join(f"- {s}" for s in safe_summaries)
     )
 
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
