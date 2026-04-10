@@ -53,10 +53,10 @@ def _save_caller_info_tool_definition(base_url: str) -> dict:
         "name": "save_caller_info",
         "description": (
             "Record the caller's name, message, and any relevant details at the end of a call. "
-            "Call once silently — never announce it."
+            "Call once — never announce the tool itself, but continue speaking naturally."
         ),
         "url": f"{base_url}/api/retell/tools/save-caller-info/",
-        "speak_during_execution": False,
+        "speak_during_execution": True,
         "parameters": {
             "type": "object",
             "properties": {
