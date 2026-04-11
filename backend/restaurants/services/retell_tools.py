@@ -56,7 +56,7 @@ def _save_caller_info_tool_definition(base_url: str) -> dict:
             "Call once — never announce the tool itself, but continue speaking naturally."
         ),
         "url": f"{base_url}/api/retell/tools/save-caller-info/",
-        "speak_during_execution": True,
+        "speak_during_execution": False,
         "parameters": {
             "type": "object",
             "properties": {
