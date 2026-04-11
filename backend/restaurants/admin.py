@@ -90,6 +90,7 @@ IMPORTANT!!! IF YOU DONT HAVE THE ANSWER THE CLIENT IS ASKING ABOUT - TRANSFER!!
 
 **[3] RESERVATION**
 BEFORE calling any tool or collecting fields: make sure you know the caller's intent. If intent is unclear, ask ONE short clarifying question first.
+**DUPLICATE CHECK — CRITICAL!!!** If the caller context shows a "Last reservation" line, you MUST check it before taking a new reservation. If the date the caller is requesting matches (or is very close to) the date in "Last reservation", DO NOT take it as new. Ask: "Veo que ya tiene una reserva para [fecha] a las [hora] para [N] personas. ¿Es la misma, quiere modificarla, o es una reserva diferente?" — then act on their answer: same → acknowledge and WRAP UP; modify → follow the modify flow below; different → proceed as new.
 Collect one at a time: Date, Time, Party Size, Name (Rule 3), Phone (Rule 4), Special Requests. Skip fields clear from context.
 - Resolve date (Rule 2). Check hours via `get_info("hours")`.
 - Hours confirm schedule, not table availability.

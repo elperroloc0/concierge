@@ -271,6 +271,49 @@ def _build_non_customer_rules(kb) -> str:
     return header + "\n".join(rules)
 
 
+def _format_last_reservation(from_number: str, restaurant) -> str | None:
+    """
+    Return a single formatted line describing the caller's most recent reservation
+    (from CallDetail), or None if there is no prior reservation on record.
+
+    Used by both _get_caller_summary (call-start context) and retell_tool_get_caller_profile
+    (live tool call) so the agent can detect duplicate/repeat reservation requests.
+    """
+    if not from_number:
+        return None
+    last_res = (
+        CallDetail.objects
+        .filter(
+            caller_phone=from_number,
+            call_event__restaurant=restaurant,
+            reservation_date__isnull=False,
+        )
+        .order_by("-call_event__created_at")
+        .first()
+    )
+    if not last_res:
+        return None
+
+    today = timezone.localdate()
+    delta = (last_res.reservation_date - today).days
+    if delta == 0:
+        when = "today"
+    elif delta == 1:
+        when = "tomorrow"
+    elif delta == -1:
+        when = "yesterday"
+    elif delta > 1:
+        when = f"in {delta} days"
+    else:
+        when = f"{abs(delta)} days ago"
+    time_str = last_res.reservation_time.strftime("%H:%M") if last_res.reservation_time else "time unknown"
+    party_str = f"party of {last_res.party_size}" if last_res.party_size else "party size unknown"
+    return (
+        f"Last reservation: {last_res.reservation_date.isoformat()} at {time_str}, "
+        f"{party_str} ({when}, status: {last_res.reservation_status})"
+    )
+
+
 def _get_caller_summary(from_number: str, restaurant) -> str:
     """
     Return a lightweight RETURNING CALLER block to inject at call start,
@@ -292,6 +335,9 @@ def _get_caller_summary(from_number: str, restaurant) -> str:
     )
     if mem.last_call_summary:
         lines.append(f"Last call summary: {mem.last_call_summary}")
+    last_res_line = _format_last_reservation(from_number, restaurant)
+    if last_res_line:
+        lines.append(last_res_line)
     if mem.preferences:
         lines.append(f"Known preferences: {mem.preferences}")
     if mem.staff_notes:
@@ -1988,6 +2034,11 @@ def retell_tool_get_caller_profile(request):
         parts.append(f"Last call: {mem.last_call_at.strftime('%b %d, %Y')}")
     if mem.last_call_summary:
         parts.append(f"Last call summary: {mem.last_call_summary}")
+
+    last_res_line = _format_last_reservation(from_number, restaurant)
+    if last_res_line:
+        parts.append(last_res_line)
+
     if mem.preferences:
         parts.append(f"Preferences: {mem.preferences}")
     if mem.staff_notes:
