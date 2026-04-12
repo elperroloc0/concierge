@@ -515,7 +515,7 @@ def _resolve_relative_date(text: str, today: date):
     # Strip ordinal suffixes: "5th" → "5", "3rd" → "3", "1st" → "1"
     tl = re.sub(r'\b(\d+)(st|nd|rd|th)\b', r'\1', tl)
 
-    if tl in ("today", "hoy", "hoy mismo"):
+    if tl in ("today", "hoy", "hoy mismo", "ahora", "ahora mismo", "ahorita", "now", "right now"):
         return today, None
 
     if tl in ("tomorrow", "manana", "el dia de manana"):
