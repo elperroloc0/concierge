@@ -152,7 +152,7 @@ def _escalation_tool_definition(transfer_number: str) -> dict:
         "transfer_option": {
             "type": "warm_transfer",
             "opt_out_initial_message": True,
-            "opt_out_human_detection": False,
+            "opt_out_human_detection": True,
             "agent_detection_timeout_ms": 8000,
             "enable_bridge_audio_cue": True,
             "on_hold_music": "ringtone",
