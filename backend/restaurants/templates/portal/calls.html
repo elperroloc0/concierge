@@ -50,11 +50,22 @@
     max-height: 240px; overflow-y: auto; line-height: 1.5;
   }
   .sms-entry {
-    background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+    border-radius: var(--radius-sm);
     padding: .6rem .85rem; font-size: .78rem; margin-bottom: .5rem;
+    max-width: 88%;
+  }
+  .sms-entry.sms-outbound {
+    background: #fff; border: 1px solid var(--color-border);
+    margin-left: auto; /* align right */
+  }
+  .sms-entry.sms-inbound {
+    background: #f0f7ff; border: 1px solid #c5ddf5;
+    margin-right: auto; /* align left */
   }
   .sms-entry .sms-time           { color: var(--color-text-tertiary); font-size: .7rem; }
   .sms-entry .sms-status-sent    { color: var(--color-success); }
+  .sms-entry .sms-status-delivered { color: var(--color-success); }
+  .sms-entry .sms-status-received  { color: var(--color-primary-500); }
   .sms-entry .sms-status-failed  { color: var(--color-danger); }
   .sms-send-form select, .sms-send-form textarea { font-size: .8rem; }
   .sms-send-form .btn { font-size: .78rem; }
@@ -349,20 +360,28 @@
 
                   <!-- SMS log + extra detail -->
                   <div class="col-md-4">
-                    <p class="small fw-semibold text-muted mb-2"><i class="bi bi-chat-dots me-1"></i>SMS Log</p>
+                    <p class="small fw-semibold text-muted mb-2"><i class="bi bi-chat-dots me-1"></i>SMS</p>
                     {% if c.sms_logs %}
                       {% for sms in c.sms_logs %}
-                      <div class="sms-entry">
+                      <div class="sms-entry sms-{{ sms.direction }}">
                         <div class="d-flex justify-content-between align-items-center mb-1">
                           <span class="sms-time">{{ sms.created_at|time:"H:i" }} · {{ sms.created_at|date:"M d" }}</span>
-                          <span class="sms-status-{{ sms.status }} fw-semibold" style="font-size:.7rem;">{{ sms.status|upper }}</span>
+                          {% if sms.direction == "inbound" %}
+                            <span class="sms-status-received fw-semibold" style="font-size:.7rem;">REPLY</span>
+                          {% else %}
+                            <span class="sms-status-{{ sms.status }} fw-semibold" style="font-size:.7rem;">{{ sms.status|upper }}</span>
+                          {% endif %}
                         </div>
-                        <div style="color:#374151;">{{ sms.message|truncatechars:90 }}</div>
-                        {% if sms.to_number %}<div class="text-muted mt-1" style="font-size:.68rem;">→ {{ sms.to_number }}</div>{% endif %}
+                        <div style="color:#374151;">{{ sms.message }}</div>
+                        {% if sms.direction == "inbound" %}
+                          <div class="text-muted mt-1" style="font-size:.68rem;">← {{ sms.from_number }}</div>
+                        {% elif sms.to_number %}
+                          <div class="text-muted mt-1" style="font-size:.68rem;">→ {{ sms.to_number }}</div>
+                        {% endif %}
                       </div>
                       {% endfor %}
                     {% else %}
-                      <p class="text-muted small">No SMS sent for this call.</p>
+                      <p class="text-muted small">No SMS for this call.</p>
                     {% endif %}
 
                     {% if c.detail and c.detail.notes %}

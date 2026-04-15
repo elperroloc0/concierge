@@ -364,11 +364,20 @@ class SmsLog(models.Model):
     STATUS_SENT        = "sent"
     STATUS_DELIVERED   = "delivered"
     STATUS_FAILED      = "failed"
+    STATUS_RECEIVED    = "received"
     STATUS_CHOICES = [
         (STATUS_PENDING,   "Pending"),
         (STATUS_SENT,      "Sent (in transit)"),
         (STATUS_DELIVERED, "Delivered"),
         (STATUS_FAILED,    "Failed"),
+        (STATUS_RECEIVED,  "Received"),
+    ]
+
+    DIRECTION_OUTBOUND = "outbound"
+    DIRECTION_INBOUND  = "inbound"
+    DIRECTION_CHOICES = [
+        (DIRECTION_OUTBOUND, "Outbound"),
+        (DIRECTION_INBOUND,  "Inbound"),
     ]
 
     restaurant    = models.ForeignKey(
@@ -377,6 +386,8 @@ class SmsLog(models.Model):
     call_event    = models.ForeignKey(
         "restaurants.CallEvent", on_delete=models.SET_NULL, null=True, blank=True, related_name="sms_logs"
     )
+    direction     = models.CharField(max_length=8, default=DIRECTION_OUTBOUND, choices=DIRECTION_CHOICES)
+    from_number   = models.CharField(max_length=32, blank=True, default="")
     to_number     = models.CharField(max_length=32)
     message       = models.TextField()
     status        = models.CharField(max_length=16, default=STATUS_PENDING, choices=STATUS_CHOICES)
@@ -389,6 +400,8 @@ class SmsLog(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
+        if self.direction == self.DIRECTION_INBOUND:
+            return f"SMS←{self.from_number} [{self.status}]"
         return f"SMS→{self.to_number} [{self.status}]"
 
 

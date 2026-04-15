@@ -183,7 +183,7 @@ def _build_non_customer_rules(kb) -> str:
     }
 
     ACTION_DEF = {
-        "MSG":      "name + company + reason → save_caller_info(follow_up_needed=true)",
+        "MSG":      "collect name + company + reason, confirm a team member will call back",
         "TRANSFER": "transfer call",
         "DECLINE":  "decline, suggest email → end_call",
         "CONTACT":  "press contact via get_info(\"private_events\")",
@@ -248,7 +248,7 @@ def _build_non_customer_rules(kb) -> str:
 
     urgent_outcome = (
         "TRANSFER" if kb.urgent_call_action == "transfer"
-        else "take urgent message → save_caller_info(follow_up_needed=true)"
+        else "take urgent message, confirm a team member will call back"
     )
 
     urgency_block = (
@@ -755,8 +755,7 @@ def _parse_transcript_for_guest_info(transcript: str) -> dict:
     if special_hits:
         result["special_requests"] = ", ".join(special_hits)
 
-    # follow_up_needed is now set explicitly by the AI via save_caller_info tool.
-    # It will be merged in _build_call_detail_from_payload via 'mid'.
+    # follow_up_needed is extracted by Retell post-call analysis.
 
     return result
 
@@ -860,19 +859,6 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
     transcript = (call.get("transcript") or "").strip()
     fallback   = _parse_transcript_for_guest_info(transcript) if transcript else {}
 
-    # Third fallback: name saved real-time by save_caller_info tool during the call
-    call_id = call.get("call_id", "")
-    if call_id:
-        mid = (CallDetail.objects
-               .filter(call_event__payload__call__call_id=call_id)
-               .exclude(call_event=call_event)
-               .order_by("created_at").first())
-        if mid:
-            if mid.caller_name and not analysis.get("caller_name") and not fallback.get("caller_name"):
-                fallback["caller_name"] = mid.caller_name
-            if mid.follow_up_needed:
-                fallback["follow_up_needed"] = True
-
     def _get(key, default=""):
         val = analysis.get(key)
         if val is None or val == "" or val == 0:
@@ -956,7 +942,7 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
             "duration_seconds":  duration_seconds,
             "is_spam":           is_spam,
             "needs_review":      needs_review,
-            "notes":             "",
+            "notes":             str(_get("caller_message", "")),
         },
     )
 
@@ -2282,86 +2268,80 @@ def twilio_sms_status_webhook(request):
     return HttpResponse(status=204)
 
 
-
 @csrf_exempt
-def retell_tool_save_caller_info(request):
-    """Retell custom tool — saves caller name to CallDetail silently during the call."""
+def twilio_sms_inbound_webhook(request):
+    """
+    Twilio incoming SMS webhook — logs replies from callers.
+
+    Twilio sends: From, To, Body, MessageSid, etc. via POST (form-encoded).
+    We match the To number to a restaurant (own Twilio number or platform number),
+    and link the reply to the most recent outbound SMS conversation with this caller.
+    """
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
-    try:
-        data = json.loads(request.body)
-    except json.JSONDecodeError:
-        return JsonResponse({"result": "error: invalid json"}, status=400)
 
-    call          = data.get("call", {})
-    args          = data.get("args", {})
-    call_id       = call.get("call_id", "").strip()
-    from_number   = call.get("from_number", "").strip()
-    to_number     = call.get("to_number", "").strip()
-    caller_name   = args.get("caller_name", "").strip()[:255]
-    caller_email  = args.get("caller_email", "").strip()[:255]
-    note          = args.get("note", "").strip()[:1000]
-    # AI-driven follow-up flag — explicit signal from the agent
-    follow_up_raw = args.get("follow_up_needed")
-    follow_up     = bool(follow_up_raw) if follow_up_raw is not None else None
+    from_number = request.POST.get("From", "").strip()
+    to_number   = request.POST.get("To", "").strip()
+    body        = request.POST.get("Body", "").strip()
+    message_sid = request.POST.get("MessageSid", "").strip()
 
-    if not caller_name:
-        return JsonResponse({"result": "error: caller_name is required"}, status=400)
+    if not from_number or not body:
+        return HttpResponse(status=400)
 
-    restaurant = Restaurant.objects.filter(retell_phone_number=to_number, is_active=True).first()
-
-    call_event = None
-    if call_id:
-        call_event = CallEvent.objects.filter(
-            payload__call__call_id=call_id
-        ).order_by("created_at").first()
-
-    if call_event is None and restaurant:
-        call_event = CallEvent.objects.create(
-            restaurant=restaurant,
-            event_type="call_in_progress",
-            payload={"call": {"call_id": call_id, "from_number": from_number, "to_number": to_number}},
-        )
-
-    if call_event is None:
-        logger.warning("save_caller_info: no call_event for call_id=%r", call_id)
-        return JsonResponse({"result": "Info saved"})
-
-    detail, created = CallDetail.objects.get_or_create(
-        call_event=call_event,
-        defaults={
-            "caller_name": caller_name,
-            "caller_phone": from_number,
-            "caller_email": caller_email,
-            "notes": note,
-            "follow_up_needed": follow_up or False,
-        },
+    # Find restaurant by the Twilio number the caller texted
+    restaurant = (
+        Restaurant.objects.filter(twilio_from_number=to_number, is_active=True).first()
+        or Restaurant.objects.filter(is_active=True).first()  # fallback: platform number
     )
-    if not created:
-        update_fields = []
-        if detail.caller_name != caller_name:
-            detail.caller_name = caller_name
-            update_fields.append("caller_name")
-        if from_number and detail.caller_phone != from_number:
-            detail.caller_phone = from_number
-            update_fields.append("caller_phone")
-        if caller_email and detail.caller_email != caller_email:
-            detail.caller_email = caller_email
-            update_fields.append("caller_email")
-        if note and note not in detail.notes:
-            detail.notes = f"{detail.notes}\n{note}".strip() if detail.notes else note
-            update_fields.append("notes")
-        # Only set follow_up_needed to True — never clear it mid-call
-        if follow_up and not detail.follow_up_needed:
-            detail.follow_up_needed = True
-            update_fields.append("follow_up_needed")
-        if update_fields:
-            detail.save(update_fields=update_fields + ["updated_at"])
+    if not restaurant:
+        logger.warning("twilio_sms_inbound: no restaurant for to_number=%s", to_number)
+        return HttpResponse(status=200)
 
-    if follow_up:
-        logger.info("save_caller_info: follow_up_needed flagged for call_id=%r restaurant=%s", call_id, to_number)
+    # Validate Twilio signature
+    from twilio.request_validator import RequestValidator
+    auth_token = (
+        restaurant.twilio_auth_token
+        if restaurant.twilio_account_sid and restaurant.twilio_auth_token and restaurant.twilio_from_number
+        else settings.TWILIO_AUTH_TOKEN
+    )
+    validator = RequestValidator(auth_token)
+    signature = request.META.get("HTTP_X_TWILIO_SIGNATURE", "")
+    if not validator.validate(request.build_absolute_uri(), request.POST, signature):
+        logger.warning("twilio_sms_inbound: invalid signature from=%s", from_number)
+        return HttpResponse(status=403)
 
-    return JsonResponse({"result": "Info saved"})
+    # Link to the most recent outbound SMS to this caller for context
+    last_outbound = (
+        SmsLog.objects
+        .filter(restaurant=restaurant, to_number=from_number, direction=SmsLog.DIRECTION_OUTBOUND)
+        .order_by("-created_at")
+        .first()
+    )
+    call_event = last_outbound.call_event if last_outbound else None
+
+    SmsLog.objects.create(
+        restaurant=restaurant,
+        call_event=call_event,
+        direction=SmsLog.DIRECTION_INBOUND,
+        from_number=from_number,
+        to_number=to_number,
+        message=body,
+        status=SmsLog.STATUS_RECEIVED,
+        twilio_sid=message_sid,
+    )
+
+    logger.info(
+        "twilio_sms_inbound: restaurant=%s from=%s linked_call=%s len=%d",
+        restaurant.slug, from_number[-4:],
+        call_event.pk if call_event else "none",
+        len(body),
+    )
+
+    # Return empty TwiML — no auto-reply
+    return HttpResponse(
+        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+        content_type="text/xml",
+    )
 
 
 @csrf_exempt
@@ -3415,8 +3395,8 @@ def portal_calls(request, slug):
             "transcript":   call_data.get("transcript", ""),
             "detail":       detail,
             "sms_logs":     list(
-            SmsLog.objects.filter(call_event__payload__call__call_id=call_data["call_id"])
-            if call_data.get("call_id") else event.sms_logs.all()
+            SmsLog.objects.filter(call_event__payload__call__call_id=call_data["call_id"]).order_by("created_at")
+            if call_data.get("call_id") else event.sms_logs.order_by("created_at")
         ),
             "call_count":   repeat_phones.get(phone, 1) if phone else 1,
         })

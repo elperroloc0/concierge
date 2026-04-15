@@ -47,30 +47,6 @@ def _sms_tool_definition(base_url: str, lang: str = "en") -> dict:
     }
 
 
-def _save_caller_info_tool_definition(base_url: str) -> dict:
-    return {
-        "type": "custom",
-        "name": "save_caller_info",
-        "description": (
-            "Record the caller's name, message, and any relevant details at the end of a call. "
-            "Call once — never announce the tool itself, but continue speaking naturally."
-        ),
-        "url": f"{base_url}/api/retell/tools/save-caller-info/",
-        "speak_during_execution": False,
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "caller_name":      {"type": "string", "description": "Full name as introduced."},
-                "caller_email":     {"type": "string", "description": "Email if provided. Omit otherwise."},
-                "note":             {"type": "string", "description": "Message or note from the caller for the team. Include reason, details, and any context."},
-                "follow_up_needed": {
-                    "type": "boolean",
-                    "description": "Set to true ONLY if the caller explicitly asked to be called back. Default: false.",
-                },
-            },
-            "required": ["caller_name"],
-        },
-    }
 
 
 def _resolve_date_tool_definition(base_url: str) -> dict:
@@ -201,7 +177,6 @@ def build_tool_list(base_url: str, escalation_number: str | None = None, enable_
     send_sms is included only when enable_sms is True.
     """
     tools = [
-        _save_caller_info_tool_definition(base_url),
         _get_info_tool_definition(base_url),
         _get_caller_profile_tool_definition(base_url),
         _resolve_date_tool_definition(base_url),
