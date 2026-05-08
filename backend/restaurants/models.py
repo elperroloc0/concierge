@@ -81,6 +81,10 @@ class Restaurant(models.Model):
         default=True,
         help_text="Urgent email when the agent fails to complete a reservation (missing date, time, party size, or name)."
     )
+    notify_on_sms_reply = models.BooleanField(
+        default=True,
+        help_text="Email the owner when a caller replies to an outbound SMS."
+    )
     notify_daily_digest = models.BooleanField(
         default=True,
         help_text="Morning digest email with previous day's call summary."

@@ -1668,6 +1668,50 @@ def _send_post_call_sms(call_event: CallEvent, restaurant: Restaurant) -> None:
         logger.exception("post_call_sms: failed to send to %s", caller_phone)
 
 
+def _send_inbound_sms_alert(sms_log: "SmsLog", restaurant: Restaurant) -> None:
+    """Email the restaurant owner when a caller replies to an outbound SMS."""
+    from django.core.mail import EmailMultiAlternatives
+    from django.template.loader import render_to_string
+    from django.utils.timezone import localtime
+
+    if not restaurant.notify_via_email or not restaurant.notify_on_sms_reply:
+        return
+
+    notify_email = restaurant.notify_email or (restaurant.user.email if restaurant.user else "")
+    if not notify_email:
+        return
+
+    linked_call_date = ""
+    if sms_log.call_event:
+        linked_call_date = localtime(sms_log.call_event.created_at).strftime("%b %-d, %Y at %-I:%M %p")
+
+    ctx = {
+        "restaurant_name": restaurant.name,
+        "from_number":     sms_log.from_number,
+        "message":         sms_log.message,
+        "received_at":     localtime(sms_log.created_at).strftime("%b %-d, %Y at %-I:%M %p"),
+        "linked_call_date": linked_call_date,
+        "portal_url":      f"{settings.RETELL_WEBHOOK_BASE_URL}/portal/{restaurant.slug}/calls/",
+    }
+
+    html_body = render_to_string("emails/inbound_sms_alert.html", ctx)
+    subject   = f"SMS recibido de {sms_log.from_number} — {restaurant.name}"
+    text_body = (
+        f"Respuesta de SMS — {restaurant.name}\n\n"
+        f"De: {sms_log.from_number}\n"
+        f"Fecha: {ctx['received_at']}\n\n"
+        f"{sms_log.message}\n"
+    )
+
+    try:
+        msg = EmailMultiAlternatives(subject, text_body, settings.DEFAULT_FROM_EMAIL, [notify_email])
+        msg.attach_alternative(html_body, "text/html")
+        msg.send()
+        logger.info("inbound_sms_alert: sent to %s | restaurant=%s", notify_email, restaurant.slug)
+    except Exception:
+        logger.exception("inbound_sms_alert: failed | restaurant=%s", restaurant.slug)
+
+
 @csrf_exempt
 def retell_events_webhook(request):
     if request.method != "POST":
@@ -2319,7 +2363,7 @@ def twilio_sms_inbound_webhook(request):
     )
     call_event = last_outbound.call_event if last_outbound else None
 
-    SmsLog.objects.create(
+    sms_log = SmsLog.objects.create(
         restaurant=restaurant,
         call_event=call_event,
         direction=SmsLog.DIRECTION_INBOUND,
@@ -2336,6 +2380,8 @@ def twilio_sms_inbound_webhook(request):
         call_event.pk if call_event else "none",
         len(body),
     )
+
+    _send_inbound_sms_alert(sms_log, restaurant)
 
     # Return empty TwiML — no auto-reply
     return HttpResponse(
@@ -3313,37 +3359,25 @@ def portal_calls(request, slug):
     date_to            = request.GET.get("date_to", "")
     phone_filter       = request.GET.get("phone", "").strip()
 
-    # Deduplicate by call_id in Python (one row per actual call).
-    # Prefer call_analyzed > call_ended > others — handles legacy data where
-    # multiple event types each had a CallDetail for the same call_id.
-    # Two-query approach avoids O(n²) correlated JSON subqueries on large tables.
-    _TYPE_PRIORITY = {"call_analyzed": 0, "call_ended": 1}
-    _candidates = (
-        CallEvent.objects
-        .filter(restaurant=restaurant, detail__isnull=False)
-        .values("id", "event_type", "payload__call__call_id")
-    )
-    _best_pks: dict[str, tuple[int, int]] = {}  # call_id → (pk, priority)
-    for _row in _candidates:
-        _cid = _row["payload__call__call_id"] or f"__noid_{_row['id']}"
-        _p   = _TYPE_PRIORITY.get(_row["event_type"], 2)
-        if _cid not in _best_pks or _p < _best_pks[_cid][1]:
-            _best_pks[_cid] = (_row["id"], _p)
-
+    # Use CallDetail as the primary queryset — one row per call (post-migration 0049).
+    # Avoids loading all CallEvents into Python for deduplication.
+    from django.db.models import Prefetch as _Prefetch
     base_qs = (
-        CallEvent.objects
-        .filter(pk__in=[pk for pk, _ in _best_pks.values()])
-        .select_related("detail")
-        .prefetch_related("sms_logs")
+        CallDetail.objects
+        .filter(call_event__restaurant=restaurant)
+        .select_related("call_event")
+        .prefetch_related(
+            _Prefetch("call_event__sms_logs", queryset=SmsLog.objects.order_by("created_at"))
+        )
         .order_by("-created_at")
     )
 
     # ── Unfiltered stats (always reflect totals, not current filter) ───────────
     total_calls          = base_qs.count()
-    reservation_intents  = base_qs.filter(detail__wants_reservation=True).count()
-    reservations_pending = base_qs.filter(detail__wants_reservation=True, detail__reservation_status="pending").count()
+    reservation_intents  = base_qs.filter(wants_reservation=True).count()
+    reservations_pending = base_qs.filter(wants_reservation=True, reservation_status="pending").count()
     follow_ups_pending   = base_qs.filter(
-        Q(detail__follow_up_needed=True) | Q(detail__needs_review=True)
+        Q(follow_up_needed=True) | Q(needs_review=True)
     ).count()
     sms_sent            = SmsLog.objects.filter(
         call_event__restaurant=restaurant, status="sent"
@@ -3352,17 +3386,17 @@ def portal_calls(request, slug):
     # ── Apply filters to paginated queryset ───────────────────────────────────
     qs = base_qs
     if reason_filter:
-        qs = qs.filter(detail__call_reason=reason_filter)
+        qs = qs.filter(call_reason=reason_filter)
     if followup_filter == "1":
-        qs = qs.filter(Q(detail__follow_up_needed=True) | Q(detail__needs_review=True))
+        qs = qs.filter(Q(follow_up_needed=True) | Q(needs_review=True))
     if reservation_filter == "1":
-        qs = qs.filter(detail__wants_reservation=True)
+        qs = qs.filter(wants_reservation=True)
     if date_from:
         qs = qs.filter(created_at__date__gte=date_from)
     if date_to:
         qs = qs.filter(created_at__date__lte=date_to)
     if phone_filter:
-        qs = qs.filter(detail__caller_phone__icontains=phone_filter)
+        qs = qs.filter(caller_phone__icontains=phone_filter)
 
     # ── Repeat caller detection (phone numbers with >1 call) ──────────────────
     from django.db.models import Count as _Count
@@ -3379,25 +3413,22 @@ def portal_calls(request, slug):
     paginator = Paginator(qs, 20)
     page_qs   = paginator.get_page(request.GET.get("page"))
 
-    # ── Enrich only the current page (avoids loading all events) ──────────────
+    # ── Enrich only the current page ──────────────────────────────────────────
     enriched = []
-    for event in page_qs.object_list:
+    for detail in page_qs.object_list:
+        event     = detail.call_event
         call_data = event.payload.get("call", {})
-        _, outcome, duration = _classify_call(event.payload)
-        detail    = getattr(event, "detail", None)
-        phone = (detail.caller_phone if detail else "") or call_data.get("from_number", "")
+        _, outcome, _ = _classify_call(event.payload)
+        phone = detail.caller_phone or call_data.get("from_number", "")
         enriched.append({
             "event":        event,
-            "date":         event.created_at,
+            "date":         detail.created_at,
             "from_number":  call_data.get("from_number", ""),
-            "duration_sec": duration,
+            "duration_sec": detail.duration_seconds or 0,
             "outcome":      outcome,
             "transcript":   call_data.get("transcript", ""),
             "detail":       detail,
-            "sms_logs":     list(
-            SmsLog.objects.filter(call_event__payload__call__call_id=call_data["call_id"]).order_by("created_at")
-            if call_data.get("call_id") else event.sms_logs.order_by("created_at")
-        ),
+            "sms_logs":     list(event.sms_logs.all()),
             "call_count":   repeat_phones.get(phone, 1) if phone else 1,
         })
 

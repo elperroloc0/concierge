@@ -1021,6 +1021,7 @@ class RestaurantAdmin(admin.ModelAdmin):
             "phone_mode", "existing_ph_numb",
             "notify_via_email", "notify_email",
             "notify_via_ws", "notify_ws_numb",
+            "notify_on_sms_reply",
             "notify_weekly_report", "weekly_report_language",
             "created_at", "updated_at",
         )}),
