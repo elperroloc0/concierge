@@ -268,7 +268,16 @@ def _build_non_customer_rules(kb) -> str:
         f"Actions — {action_defs}\n"
         f"{urgency_block}"
     )
-    return header + "\n".join(rules)
+    body = header + "\n".join(rules)
+
+    if kb.escalation_enabled and kb.escalation_conditions:
+        body += (
+            "\nESCALATION OVERRIDE: If a non-customer explicitly requests to speak with "
+            "the manager or a staff member, evaluate escalation conditions first — "
+            "if met, use `transfer_to_human` instead of the category action above."
+        )
+
+    return body
 
 
 def _format_last_reservation(from_number: str, restaurant) -> str | None:
