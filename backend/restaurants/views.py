@@ -4237,8 +4237,22 @@ def stripe_webhook(request):
         logger.exception("Stripe webhook: failed to parse payload")
         return JsonResponse({"detail": "invalid payload"}, status=400)
 
-    data = event["data"]["object"]
+    try:
+        data = event["data"]["object"]
+    except Exception:
+        logger.exception("Stripe webhook: could not extract event data | type=%s", event.get("type"))
+        return JsonResponse({"detail": "bad event structure"}, status=400)
 
+    try:
+        _handle_stripe_event(event, data)
+    except Exception:
+        logger.exception("Stripe webhook: unhandled error | type=%s", event.get("type"))
+        return JsonResponse({"detail": "internal error"}, status=500)
+
+    return JsonResponse({"status": "ok"})
+
+
+def _handle_stripe_event(event, data):
     if event["type"] == "checkout.session.completed":
         customer_id = data.get("customer")
         subscription_id = data.get("subscription")
@@ -4275,7 +4289,7 @@ def stripe_webhook(request):
                 try:
                     stripe.api_key = settings.STRIPE_SECRET_KEY
                     stripe_sub = stripe.Subscription.retrieve(subscription_id)
-                    period_end = stripe_sub["items"]["data"][0].get("current_period_end")
+                    period_end = stripe_sub.get("current_period_end")
                     if period_end:
                         from datetime import datetime as dt
                         sub.current_period_end = dt.fromtimestamp(period_end, tz=timezone.utc)
@@ -4296,8 +4310,7 @@ def stripe_webhook(request):
         if sub:
             sub.stripe_subscription_id = data["id"]
             sub.status = data["status"]  # active / trialing / past_due / etc.
-            items = data.get("items", {}).get("data", [])
-            period_end = items[0].get("current_period_end") if items else None
+            period_end = data.get("current_period_end")  # field is on the Subscription, not on items
             if period_end:
                 from datetime import datetime as dt
                 sub.current_period_end = dt.fromtimestamp(
@@ -4329,7 +4342,8 @@ def stripe_webhook(request):
         sub = Subscription.objects.filter(stripe_customer_id=customer_id).first()
         if sub:
             sub.status = "active"
-            period_end = data.get("lines", {}).get("data", [{}])[0].get("period", {}).get("end")
+            lines = data.get("lines", {}).get("data") or []
+            period_end = lines[0].get("period", {}).get("end") if lines else None
             if period_end:
                 from datetime import datetime as dt
                 sub.current_period_end = dt.fromtimestamp(period_end, tz=timezone.utc)
@@ -4349,8 +4363,6 @@ def stripe_webhook(request):
                 _send_payment_failed_email(restaurant)
             except Exception:
                 logger.exception("Failed to send payment_failed email | customer=%s", customer_id)
-
-    return JsonResponse({"status": "ok"})
 
 
 def demo_call(request):
