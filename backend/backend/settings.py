@@ -49,7 +49,7 @@ TWILIO_AUTH_TOKEN   = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_FROM_NUMBER  = os.environ.get("TWILIO_FROM_NUMBER", "")
 
 # ── Email (Gmail SMTP) ────────────────────────────────────────────────────────
-# Set EMAIL_HOST_USER and EMAIL_HOST_PASSWORD (Gmail App Password) in .env
+
 # Google: myaccount.google.com → Security → App Passwords
 EMAIL_BACKEND       = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST          = 'smtp.gmail.com'
