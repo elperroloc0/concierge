@@ -83,6 +83,12 @@ def root_redirect(request):
     return render(request, "landing.html")
 
 
+def help_cancel_forwarding(request):
+    return render(request, "help_cancel_forwarding.html", {
+        "support_email": settings.DEFAULT_FROM_EMAIL,
+    })
+
+
 # ─── Retell Webhook Helpers ───────────────────────────────────────────────────
 
 def _friendly_url(url: str) -> str:

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How to Cancel Call Forwarding — Concierge AI</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: #f3f4f6;
+      color: #111827;
+      padding: 40px 16px;
+    }
+    .card {
+      max-width: 620px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+      overflow: hidden;
+    }
+    .header {
+      background: #1e3a5f;
+      padding: 20px 28px;
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .header-brand { color: #fff; font-size: 17px; font-weight: 700; letter-spacing: -.3px; }
+    .header-sub { color: #93c5fd; font-size: 13px; }
+    .body { padding: 28px; }
+    h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; line-height: 1.2; }
+    .lead { font-size: 14px; color: #374151; line-height: 1.6; margin-bottom: 28px; }
+    .tip {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 28px;
+    }
+    .tip p { font-size: 13px; color: #1e40af; line-height: 1.5; }
+    .tip code {
+      background: #dbeafe;
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    h2 { font-size: 15px; font-weight: 600; margin-bottom: 14px; color: #111827; }
+    .carrier-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+    .carrier {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .carrier-name { font-size: 14px; font-weight: 600; color: #111827; }
+    .carrier-steps { font-size: 13px; color: #6b7280; }
+    .carrier-code {
+      background: #f3f4f6;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 15px;
+      font-weight: 700;
+      color: #111827;
+      white-space: nowrap;
+    }
+    .footer-note {
+      background: #f9fafb;
+      border-top: 1px solid #e5e7eb;
+      padding: 16px 28px;
+      font-size: 12px;
+      color: #6b7280;
+      line-height: 1.6;
+    }
+    .footer-note a { color: #2563eb; text-decoration: none; }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <div class="header">
+    <span class="header-brand">Concierge AI</span>
+    <span class="header-sub">Cancel Call Forwarding</span>
+  </div>
+
+  <div class="body">
+    <h1>How to remove call forwarding from your phone</h1>
+    <p class="lead">
+      If your Concierge AI service is paused, you can stop forwarding calls so customers
+      aren't left on hold. Find your carrier below, dial the code from your business phone,
+      then press <strong>Call</strong>.
+    </p>
+
+    <div class="tip">
+      <p>
+        <strong>Quick fix for most phones:</strong> dial <code>##21#</code> and press Call.
+        This cancels unconditional call forwarding on most GSM carriers worldwide.
+      </p>
+    </div>
+
+    <h2>By carrier</h2>
+    <div class="carrier-list">
+
+      <div class="carrier">
+        <div>
+          <div class="carrier-name">AT&amp;T</div>
+          <div class="carrier-steps">Dial from your business phone, then press Call</div>
+        </div>
+        <div class="carrier-code">*73</div>
+      </div>
+
+      <div class="carrier">
+        <div>
+          <div class="carrier-name">T-Mobile</div>
+          <div class="carrier-steps">Dial from your business phone, then press Call</div>
+        </div>
+        <div class="carrier-code">##21#</div>
+      </div>
+
+      <div class="carrier">
+        <div>
+          <div class="carrier-name">Verizon</div>
+          <div class="carrier-steps">Dial from your business phone, then press Call</div>
+        </div>
+        <div class="carrier-code">*73</div>
+      </div>
+
+      <div class="carrier">
+        <div>
+          <div class="carrier-name">US Cellular</div>
+          <div class="carrier-steps">Dial from your business phone, then press Call</div>
+        </div>
+        <div class="carrier-code">*73</div>
+      </div>
+
+      <div class="carrier">
+        <div>
+          <div class="carrier-name">Other / Unknown</div>
+          <div class="carrier-steps">Try one, then the other if it doesn't work</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <div class="carrier-code">##21#</div>
+          <div class="carrier-code">*73</div>
+        </div>
+      </div>
+
+    </div>
+
+    <p class="lead" style="margin-bottom:0;">
+      None of these work? Contact your phone carrier directly and ask them to
+      <strong>cancel unconditional call forwarding</strong> on your line.
+    </p>
+  </div>
+
+  <div class="footer-note">
+    Need help from us? Email <a href="mailto:{{ support_email }}">{{ support_email }}</a> and we'll sort it out.
+  </div>
+
+</div>
+</body>
+</html>

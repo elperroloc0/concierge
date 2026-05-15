@@ -31,4 +31,5 @@ urlpatterns = [
     path('', restaurant_views.root_redirect),
     path('portal/', include('restaurants.portal_urls')),
     path('demo/', restaurant_views.demo_call, name='demo_call'),
+    path('help/cancel-forwarding/', restaurant_views.help_cancel_forwarding, name='help_cancel_forwarding'),
 ]
