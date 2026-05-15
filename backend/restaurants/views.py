@@ -1446,6 +1446,9 @@ def _send_call_blocked_balance_email(restaurant: Restaurant) -> None:
         if elapsed.total_seconds() < 86400:
             return
 
+    operator_email = _get_operator_email(restaurant)
+    recipients = [notify_email] + ([operator_email] if operator_email and operator_email != notify_email else [])
+
     base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
     ctx = {
         "restaurant_name": restaurant.name,
@@ -1466,14 +1469,14 @@ def _send_call_blocked_balance_email(restaurant: Restaurant) -> None:
         )
         msg = EmailMultiAlternatives(
             f"📞 Missed call — {restaurant.name} balance is empty",
-            text_body, settings.DEFAULT_FROM_EMAIL, [notify_email],
+            text_body, settings.DEFAULT_FROM_EMAIL, recipients,
         )
         msg.attach_alternative(html_body, "text/html")
         msg.send()
 
         sub.balance_alert_sent_at = timezone.now()
         sub.save(update_fields=["balance_alert_sent_at"])
-        logger.info("call_blocked_balance_email: sent to %s | restaurant=%s", notify_email, restaurant.slug)
+        logger.info("call_blocked_balance_email: sent to %s | restaurant=%s", recipients, restaurant.slug)
     except Exception:
         logger.exception("call_blocked_balance_email: failed | restaurant=%s", restaurant.slug)
 
