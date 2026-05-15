@@ -1080,6 +1080,7 @@ def retell_inbound_webhook(request, rest_id):
             logger.warning("Retell inbound webhook | Insufficient balance (%.2f) | restaurant=%s",
                            sub.communication_balance, restaurant.slug)
             is_valid_account = False
+            threading.Thread(target=_send_call_blocked_balance_email, args=(restaurant,), daemon=True).start()
 
     # If the account is invalid, we MUST return 200 OK so Retell doesn't fall back to defaults.
     # Inject account_status_directive so the LLM knows to hang up immediately.
@@ -1424,6 +1425,57 @@ def _send_low_balance_email(restaurant: Restaurant, balance, level: str) -> None
                     level, balance, notify_email, restaurant.slug)
     except Exception:
         logger.exception("low_balance_email: failed | restaurant=%s", restaurant.slug)
+
+
+def _send_call_blocked_balance_email(restaurant: Restaurant) -> None:
+    """Notify the owner that a call was blocked due to zero balance. Throttled to once per 24 h."""
+    from django.core.mail import EmailMultiAlternatives
+    from django.template.loader import render_to_string
+
+    notify_email = restaurant.notify_email or (restaurant.user.email if restaurant.user else "")
+    if not notify_email or not restaurant.notify_via_email:
+        return
+
+    sub = getattr(restaurant, "subscription", None)
+    if not sub:
+        return
+
+    # Throttle: send at most once every 24 hours per restaurant.
+    if sub.balance_alert_sent_at:
+        elapsed = timezone.now() - sub.balance_alert_sent_at
+        if elapsed.total_seconds() < 86400:
+            return
+
+    base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
+    ctx = {
+        "restaurant_name": restaurant.name,
+        "billing_url": f"{base_url}/portal/{restaurant.slug}/billing/",
+        "guide_url": f"{base_url}/help/cancel-forwarding/",
+        "support_email": settings.DEFAULT_FROM_EMAIL,
+    }
+    try:
+        html_body = render_to_string("emails/call_blocked_balance.html", ctx)
+        text_body = (
+            f"{restaurant.name} — Missed call: balance empty\n\n"
+            "Someone tried to reach your restaurant but Concierge AI couldn't answer "
+            "because your communication balance has run out.\n\n"
+            f"Add balance: {ctx['billing_url']}\n\n"
+            "Or remove call forwarding by dialing ##21# from your business phone.\n"
+            f"Carrier guide: {ctx['guide_url']}\n\n"
+            f"Need help? Contact us at {settings.DEFAULT_FROM_EMAIL}\n"
+        )
+        msg = EmailMultiAlternatives(
+            f"📞 Missed call — {restaurant.name} balance is empty",
+            text_body, settings.DEFAULT_FROM_EMAIL, [notify_email],
+        )
+        msg.attach_alternative(html_body, "text/html")
+        msg.send()
+
+        sub.balance_alert_sent_at = timezone.now()
+        sub.save(update_fields=["balance_alert_sent_at"])
+        logger.info("call_blocked_balance_email: sent to %s | restaurant=%s", notify_email, restaurant.slug)
+    except Exception:
+        logger.exception("call_blocked_balance_email: failed | restaurant=%s", restaurant.slug)
 
 
 def _send_payment_failed_email(restaurant: Restaurant) -> None:
