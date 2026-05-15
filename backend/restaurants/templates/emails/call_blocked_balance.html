@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Missed Call — {{ restaurant_name }}</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;">
+  <tr><td align="center">
+  <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+
+    <!-- Header -->
+    <tr>
+      <td style="background:#92400e;padding:20px 28px;">
+        <span style="color:#ffffff;font-size:17px;font-weight:700;letter-spacing:-.3px;">&#128222; Missed Call</span>
+        <span style="color:#fcd34d;font-size:13px;margin-left:10px;">{{ restaurant_name }}</span>
+      </td>
+    </tr>
+
+    <!-- Content -->
+    <tr>
+      <td style="padding:28px;">
+        <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;line-height:1.2;">
+          Your AI agent is paused — calls are going unanswered
+        </p>
+        <p style="margin:0 0 24px;font-size:14px;color:#374151;line-height:1.6;">
+          Someone just tried to reach <strong>{{ restaurant_name }}</strong>, but Concierge AI
+          couldn't answer — your communication balance has run out. While your balance is empty,
+          all incoming calls will go unanswered.
+        </p>
+
+        <!-- Option 1 -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;margin-bottom:16px;">
+          <tr>
+            <td style="padding:18px 20px;">
+              <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#1e40af;">Option 1 — Top up your balance</p>
+              <p style="margin:0 0 14px;font-size:13px;color:#374151;line-height:1.5;">
+                Add credits from the portal and your agent will resume answering calls immediately.
+              </p>
+              <a href="{{ billing_url }}" style="display:inline-block;background:#1e40af;color:#ffffff;font-size:13px;font-weight:600;padding:10px 22px;border-radius:7px;text-decoration:none;letter-spacing:-.1px;">
+                Add Balance &#8594;
+              </a>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Option 2 -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:24px;">
+          <tr>
+            <td style="padding:18px 20px;">
+              <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#374151;">Option 2 — Remove call forwarding from your phone</p>
+              <p style="margin:0 0 12px;font-size:13px;color:#374151;line-height:1.5;">
+                If you'd rather not top up right now, remove the call forwarding so your customers
+                aren't left waiting on a dead line.
+              </p>
+              <p style="margin:0 0 6px;font-size:13px;color:#374151;">
+                From your business phone, dial <span style="background:#e5e7eb;border-radius:4px;padding:2px 8px;font-family:'SFMono-Regular',Consolas,monospace;font-size:14px;font-weight:700;">##21#</span> then press <strong>Call</strong>.
+              </p>
+              <p style="margin:0 0 12px;font-size:13px;color:#6b7280;line-height:1.5;">
+                This cancels unconditional call forwarding on most carriers. If it doesn't work:
+              </p>
+              <a href="{{ guide_url }}" style="display:inline-block;color:#2563eb;font-size:13px;font-weight:600;text-decoration:none;">
+                Step-by-step guide for your carrier &#8594;
+              </a>
+            </td>
+          </tr>
+        </table>
+
+      </td>
+    </tr>
+
+    <!-- Footer -->
+    <tr>
+      <td style="background:#f9fafb;padding:14px 28px;border-top:1px solid #e5e7eb;">
+        <p style="margin:0;font-size:11px;color:#9ca3af;line-height:1.6;">
+          Sent by Concierge AI for {{ restaurant_name }}.
+          Need help? Reply to this email or contact us at
+          <a href="mailto:{{ support_email }}" style="color:#6b7280;">{{ support_email }}</a>.
+        </p>
+      </td>
+    </tr>
+
+  </table>
+  </td></tr>
+</table>
+</body>
+</html>
