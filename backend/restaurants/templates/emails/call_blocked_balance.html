@@ -13,7 +13,7 @@
     <!-- Header -->
     <tr>
       <td style="background:#92400e;padding:20px 28px;">
-        <span style="color:#ffffff;font-size:17px;font-weight:700;letter-spacing:-.3px;">&#128222; Missed Call</span>
+        <span style="color:#ffffff;font-size:17px;font-weight:700;letter-spacing:-.3px;">&#128222; Missed Call{% if missed_count > 1 %}s{% endif %}</span>
         <span style="color:#fcd34d;font-size:13px;margin-left:10px;">{{ restaurant_name }}</span>
       </td>
     </tr>
@@ -24,10 +24,20 @@
         <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;line-height:1.2;">
           Your AI agent is paused — calls are going unanswered
         </p>
+
+        <!-- Missed call counter -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;margin-bottom:20px;">
+          <tr>
+            <td style="padding:14px 20px;text-align:center;">
+              <p style="margin:0 0 2px;font-size:32px;font-weight:800;color:#92400e;line-height:1;">{{ missed_count }}</p>
+              <p style="margin:0;font-size:12px;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:.5px;">missed call{{ missed_count|pluralize }} since last alert</p>
+            </td>
+          </tr>
+        </table>
+
         <p style="margin:0 0 24px;font-size:14px;color:#374151;line-height:1.6;">
-          Someone just tried to reach <strong>{{ restaurant_name }}</strong>, but Concierge AI
-          couldn't answer — your communication balance has run out. While your balance is empty,
-          all incoming calls will go unanswered.
+          Concierge AI couldn't answer because your communication balance has run out.
+          While your balance is empty, all incoming calls to <strong>{{ restaurant_name }}</strong> will go unanswered.
         </p>
 
         <!-- Option 1 -->

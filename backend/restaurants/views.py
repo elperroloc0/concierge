@@ -1428,9 +1428,11 @@ def _send_low_balance_email(restaurant: Restaurant, balance, level: str) -> None
 
 
 def _send_call_blocked_balance_email(restaurant: Restaurant) -> None:
-    """Notify the owner that a call was blocked due to zero balance. Throttled to once per 24 h."""
+    """Notify owner+operator when a call is blocked due to zero balance. Throttled to once per 24 h.
+    Counts every blocked attempt and includes the total in the email."""
     from django.core.mail import EmailMultiAlternatives
     from django.template.loader import render_to_string
+    from django.db.models import F
 
     notify_email = restaurant.notify_email or (restaurant.user.email if restaurant.user else "")
     if not notify_email or not restaurant.notify_via_email:
@@ -1440,27 +1442,34 @@ def _send_call_blocked_balance_email(restaurant: Restaurant) -> None:
     if not sub:
         return
 
+    # Always increment the missed-call counter (atomic to avoid race conditions).
+    Subscription.objects.filter(pk=sub.pk).update(balance_blocked_call_count=F("balance_blocked_call_count") + 1)
+    sub.refresh_from_db(fields=["balance_blocked_call_count", "balance_alert_sent_at"])
+
     # Throttle: send at most once every 24 hours per restaurant.
     if sub.balance_alert_sent_at:
         elapsed = timezone.now() - sub.balance_alert_sent_at
         if elapsed.total_seconds() < 86400:
             return
 
+    missed_count = sub.balance_blocked_call_count
     operator_email = _get_operator_email(restaurant)
     recipients = [notify_email] + ([operator_email] if operator_email and operator_email != notify_email else [])
 
     base_url = settings.RETELL_WEBHOOK_BASE_URL or "http://localhost:8000"
     ctx = {
         "restaurant_name": restaurant.name,
+        "missed_count": missed_count,
         "billing_url": f"{base_url}/portal/{restaurant.slug}/billing/",
         "guide_url": f"{base_url}/help/cancel-forwarding/",
         "support_email": settings.DEFAULT_FROM_EMAIL,
     }
     try:
         html_body = render_to_string("emails/call_blocked_balance.html", ctx)
+        missed_label = f"{missed_count} call{'s' if missed_count != 1 else ''}"
         text_body = (
-            f"{restaurant.name} — Missed call: balance empty\n\n"
-            "Someone tried to reach your restaurant but Concierge AI couldn't answer "
+            f"{restaurant.name} — {missed_label} missed: balance empty\n\n"
+            f"{missed_label} tried to reach your restaurant but Concierge AI couldn't answer "
             "because your communication balance has run out.\n\n"
             f"Add balance: {ctx['billing_url']}\n\n"
             "Or remove call forwarding by dialing ##21# from your business phone.\n"
@@ -1468,15 +1477,19 @@ def _send_call_blocked_balance_email(restaurant: Restaurant) -> None:
             f"Need help? Contact us at {settings.DEFAULT_FROM_EMAIL}\n"
         )
         msg = EmailMultiAlternatives(
-            f"📞 Missed call — {restaurant.name} balance is empty",
+            f"📞 {missed_label} missed — {restaurant.name} balance is empty",
             text_body, settings.DEFAULT_FROM_EMAIL, recipients,
         )
         msg.attach_alternative(html_body, "text/html")
         msg.send()
 
-        sub.balance_alert_sent_at = timezone.now()
-        sub.save(update_fields=["balance_alert_sent_at"])
-        logger.info("call_blocked_balance_email: sent to %s | restaurant=%s", recipients, restaurant.slug)
+        # Reset counter and record send time after a successful send.
+        Subscription.objects.filter(pk=sub.pk).update(
+            balance_alert_sent_at=timezone.now(),
+            balance_blocked_call_count=0,
+        )
+        logger.info("call_blocked_balance_email: %d missed, sent to %s | restaurant=%s",
+                    missed_count, recipients, restaurant.slug)
     except Exception:
         logger.exception("call_blocked_balance_email: failed | restaurant=%s", restaurant.slug)
 
