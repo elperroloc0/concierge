@@ -4416,13 +4416,21 @@ def _handle_stripe_event(event, data):
         sub = Subscription.objects.filter(stripe_customer_id=customer_id).first()
         if sub:
             sub.status = "active"
-            lines = data.get("lines", {}).get("data") or []
-            period_end = lines[0].get("period", {}).get("end") if lines else None
-            if period_end:
-                from datetime import datetime as dt
-                sub.current_period_end = dt.fromtimestamp(period_end, tz=timezone.utc)
+            # Fetch current_period_end from the Stripe subscription directly — more reliable
+            # than reading lines[0].period.end which may be a non-subscription line item.
+            stripe_sub_id = data.get("subscription") or sub.stripe_subscription_id
+            if stripe_sub_id:
+                try:
+                    from datetime import datetime as dt
+                    stripe.api_key = settings.STRIPE_SECRET_KEY
+                    stripe_sub = stripe.Subscription.retrieve(stripe_sub_id)
+                    period_end = stripe_sub.get("current_period_end")
+                    if period_end:
+                        sub.current_period_end = dt.fromtimestamp(period_end, tz=timezone.utc)
+                except Exception:
+                    logger.exception("Stripe webhook | invoice.paid | failed to fetch period_end | customer=%s", customer_id)
             sub.save(update_fields=["status", "current_period_end"])
-            logger.info("Stripe webhook | invoice.paid | customer=%s | status=active", customer_id)
+            logger.info("Stripe webhook | invoice.paid | customer=%s | period_end=%s", customer_id, sub.current_period_end)
 
     elif event["type"] == "invoice.payment_failed":
         customer_id = data.get("customer")
