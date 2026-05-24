@@ -48,6 +48,12 @@ TWILIO_ACCOUNT_SID  = os.environ.get("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN   = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_FROM_NUMBER  = os.environ.get("TWILIO_FROM_NUMBER", "")
 
+# ── Web Push (VAPID) ──────────────────────────────────────────────────────────
+# Generate keys with: python scripts/generate_vapid.py
+VAPID_PUBLIC_KEY  = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
+VAPID_ADMIN_EMAIL = os.environ.get("VAPID_ADMIN_EMAIL", "admin@conciergeai.com")
+
 # ── Email (Gmail SMTP) ────────────────────────────────────────────────────────
 
 # Google: myaccount.google.com → Security → App Passwords
@@ -185,6 +191,17 @@ STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
 # Enable WhiteNoise compression and caching
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+# ── Cache ─────────────────────────────────────────────────────────────────────
+# DatabaseCache works across multiple gunicorn workers (WEB_CONCURRENCY=4).
+# Used for push throttle, quiet hours guards, rate-limiting.
+# Run `python manage.py createcachetable` once after deploy.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "django_cache_table",
+    }
+}
 
 # Logging Configuration
 LOGS_DIR = BASE_DIR / "logs"
