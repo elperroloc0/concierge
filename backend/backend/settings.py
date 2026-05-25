@@ -132,6 +132,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'restaurants.context_processors.balance_status',
                 'restaurants.context_processors.membership',
+                'restaurants.context_processors.web_push',
             ],
         },
     },

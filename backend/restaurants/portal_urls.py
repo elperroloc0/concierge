@@ -32,6 +32,17 @@ urlpatterns = [
     path("<slug:slug>/billing/topup/",      views.portal_billing_topup,          name="portal_billing_topup"),
     path("<slug:slug>/billing/cancel/",     views.portal_cancel_subscription,    name="portal_cancel_subscription"),
     path("<slug:slug>/notifications/",      views.portal_notifications,          name="portal_notifications"),
+    path("<slug:slug>/push/subscribe/",     views.portal_push_subscribe,         name="portal_push_subscribe"),
+    path("<slug:slug>/push/unsubscribe/",   views.portal_push_unsubscribe,       name="portal_push_unsubscribe"),
+    path("<slug:slug>/push/test/",          views.portal_push_test,              name="portal_push_test"),
+
+    # ── One-tap response page (no login — secured by single-use token) ─────
+    path("<slug:slug>/r/<str:token>/",         views.call_action_page,    name="call_action_page"),
+    path("<slug:slug>/r/<str:token>/respond/", views.call_action_respond, name="call_action_respond"),
+    path("<slug:slug>/r/<str:token>/resolve/", views.call_action_resolve, name="call_action_resolve"),
+
+    # ── Pending queue polling (for dashboard live updates) ─────────────────
+    path("<slug:slug>/pending-actions/count/", views.portal_pending_actions_count, name="portal_pending_actions_count"),
     path("<slug:slug>/account/",            views.portal_account,                name="portal_account"),
     path("<slug:slug>/account/add-operator/",    views.portal_add_operator,    name="portal_add_operator"),
     path("<slug:slug>/account/remove-operator/", views.portal_remove_operator, name="portal_remove_operator"),

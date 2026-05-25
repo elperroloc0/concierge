@@ -2,8 +2,12 @@
 """
 Generate VAPID key pair for web push notifications.
 
-Run once per environment. Output goes to stdout — copy values into .env / Render env vars.
-Never check VAPID_PRIVATE_KEY into git.
+Output format matches py-vapid >= 1.9.x:
+    - public key  → base64url of uncompressed point (65 bytes)
+    - private key → base64url of raw 32-byte EC private value
+
+Run once per environment. Copy output into .env / Render env vars.
+Never commit VAPID_PRIVATE_KEY into git.
 
 Usage:
     python scripts/generate_vapid.py
@@ -23,25 +27,19 @@ def main() -> None:
     priv = ec.generate_private_key(ec.SECP256R1(), default_backend())
     pub  = priv.public_key()
 
-    # Public key — uncompressed (0x04 || X || Y), 65 bytes — base64url for browser
+    # Public key — uncompressed (0x04 || X || Y), 65 bytes — base64url
     pub_bytes = pub.public_bytes(
         encoding=serialization.Encoding.X962,
         format=serialization.PublicFormat.UncompressedPoint,
     )
 
-    # Private key — PEM, used server-side by pywebpush
-    priv_pem = priv.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    ).decode("ascii")
+    # Private key — raw 32-byte EC private value — base64url
+    priv_raw = priv.private_numbers().private_value.to_bytes(32, "big")
 
     print("# Copy these into your .env (and Render env vars for production):")
     print()
     print(f"VAPID_PUBLIC_KEY={_b64url(pub_bytes)}")
-    print()
-    print("VAPID_PRIVATE_KEY=\"" + priv_pem.replace("\n", "\\n") + "\"")
-    print()
+    print(f"VAPID_PRIVATE_KEY={_b64url(priv_raw)}")
     print("VAPID_ADMIN_EMAIL=admin@your-domain.com")
 
 
