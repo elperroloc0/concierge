@@ -76,7 +76,10 @@ except ImportError:
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "False").lower() == "true"
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",")
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get(
+    "ALLOWED_HOSTS",
+    "localhost,127.0.0.1,testserver,.trycloudflare.com,.ngrok.io,.ngrok-free.app"
+).split(",") if h.strip()]
 
 # Render dynamically assigns hostnames. Add it to allowed hosts if it exists.
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
