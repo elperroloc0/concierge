@@ -1,634 +1,450 @@
-{% extends "portal/base.html" %}
-{% block title %}Call Log{% endblock %}
-{% block page_title %}Call Log{% endblock %}
+{% extends "portal/base_v2.html" %}
+{% load static %}
+
+{% block title %}Calls{% endblock %}
 {% block nav_calls %}active{% endblock %}
-
-{% block extra_head %}
-<style>
-  /* ── Reason badges ── */
-  .reason-badge {
-    font-size: .72rem; font-weight: 600;
-    padding: .22em .6em; border-radius: var(--radius-pill);
-    white-space: nowrap; display: inline-block;
-  }
-  .reason-reservation   { background: var(--color-info-light);    color: var(--color-info-text); }
-  .reason-hours         { background: var(--color-success-light);  color: var(--color-success-text); }
-  .reason-menu          { background: #ffedd5; color: #c2410c; }
-  .reason-billing       { background: #fce7f3; color: #9d174d; }
-  .reason-parking       { background: #f3e8ff; color: #6b21a8; }
-  .reason-private_event { background: var(--color-primary-100);   color: var(--color-primary-800); }
-  .reason-complaint     { background: var(--color-danger-light);   color: var(--color-danger-text); }
-  .reason-other         { background: var(--color-neutral-100);    color: var(--color-neutral-700); }
-
-  /* ── Outcome ── */
-  .outcome-resolved   { color: var(--color-success); font-weight: 600; }
-  .outcome-escalated  { color: var(--color-danger);  font-weight: 600; }
-  .outcome-incomplete { color: var(--color-warning); font-weight: 600; }
-
-  /* ── Follow-up badge (color varies by severity) ── */
-  .followup-badge {
-    font-size: .7rem; font-weight: 600;
-    padding: .2em .5em; border-radius: var(--radius-pill);
-    background: var(--color-warning-light); color: var(--color-warning-text);
-    white-space: nowrap; display: inline-block;
-  }
-  .followup-badge.urgent {
-    background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa;
-  }
-  tr.call-row.needs-review td:first-child { border-left: 3px solid #f97316; }
-
-  /* ── Table row ── */
-  tr.call-row { cursor: pointer; }
-  tr.call-row:hover td { background: var(--color-primary-50); }
-  tr.call-row td { vertical-align: middle; }
-
-  /* ── Expand panel ── */
-  .expand-panel { background: var(--color-neutral-50); }
-  .transcript-box {
-    background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius-sm);
-    padding: .85rem 1rem; font-size: .8rem; white-space: pre-wrap;
-    max-height: 240px; overflow-y: auto; line-height: 1.5;
-  }
-  .sms-entry {
-    border-radius: var(--radius-sm);
-    padding: .6rem .85rem; font-size: .78rem; margin-bottom: .5rem;
-    max-width: 88%;
-  }
-  .sms-entry.sms-outbound {
-    background: #fff; border: 1px solid var(--color-border);
-    margin-left: auto; /* align right */
-  }
-  .sms-entry.sms-inbound {
-    background: #f0f7ff; border: 1px solid #c5ddf5;
-    margin-right: auto; /* align left */
-  }
-  .sms-entry .sms-time           { color: var(--color-text-tertiary); font-size: .7rem; }
-  .sms-entry .sms-status-sent    { color: var(--color-success); }
-  .sms-entry .sms-status-delivered { color: var(--color-success); }
-  .sms-entry .sms-status-received  { color: var(--color-primary-500); }
-  .sms-entry .sms-status-failed  { color: var(--color-danger); }
-  .sms-send-form select, .sms-send-form textarea { font-size: .8rem; }
-  .sms-send-form .btn { font-size: .78rem; }
-
-  /* ── Stat card accent lines ── */
-  .stat-accent-blue   { border-left: 3px solid var(--color-primary-500); }
-  .stat-accent-indigo { border-left: 3px solid var(--color-primary-400); }
-  .stat-accent-amber  { border-left: 3px solid var(--color-warning); }
-  .stat-accent-green  { border-left: 3px solid var(--color-success); }
-  .stat-num { font-size: 1.55rem; font-weight: 700; line-height: 1.1; }
-</style>
-{% endblock %}
 
 {% block content %}
 
-<!-- ── Header ── -->
-<div class="d-flex align-items-start justify-content-between mb-4">
-  <div>
-    <h4 class="fw-bold mb-0">Call Log</h4>
-    <p class="text-muted small mb-0">All calls handled by your agent — caller details, reservation info, and transcripts</p>
+{# ── Page head ─────────────────────────────────────────────────── #}
+<div class="v2-page-head">
+  <div class="v2-page-head-title">
+    <div class="label-tiny v2-page-head-eyebrow">{% now "l · M j" %}</div>
+    <h1>Inbox</h1>
+  </div>
+
+  {% if follow_ups_pending %}
+    <span class="v2-chip v2-chip-accent">
+      <span class="v2-chip-dot"></span>
+      {{ follow_ups_pending }} urgent
+    </span>
+  {% endif %}
+  <span class="v2-chip">{{ calls_today }} call{{ calls_today|pluralize }} today</span>
+
+  <div class="v2-page-head-actions">
+    <form method="get" style="display:inline-flex; align-items:center;">
+      {% if tab %}<input type="hidden" name="tab" value="{{ tab }}">{% endif %}
+      <input type="search" name="phone" class="input" value="{{ phone_filter }}"
+             placeholder="Search calls, guests…"
+             style="padding: 8px 16px; font-size:13px; width: 240px;">
+    </form>
+    <span class="v2-agent-chip {% if agent_status == 'active' %}{% elif agent_status == 'no_credits' %}danger{% elif agent_status == 'past_due' %}warn{% else %}idle{% endif %}">
+      <span class="dot"></span>
+      {% if agent_status == 'active' %}Agent live
+      {% elif agent_status == 'no_credits' %}No credits
+      {% elif agent_status == 'past_due' %}Payment due
+      {% else %}Agent inactive{% endif %}
+    </span>
   </div>
 </div>
 
-<!-- ── Stats bar ── -->
-<div class="row g-3 mb-4">
-  <div class="col-6 col-md-3">
-    <div class="card p-3 h-100 stat-accent-blue">
-      <div class="text-muted small mb-1"><i class="bi bi-telephone-fill me-1"></i>Total Calls</div>
-      <div class="stat-num">{{ total_calls }}</div>
+{# ── Layout: list + detail ─────────────────────────────────────── #}
+<div class="v2-calls-layout">
+
+  {# ── Left: scrollable list ─────────────────────────────────── #}
+  <aside class="v2-calls-list glass">
+    <div class="v2-calls-filters">
+      {# Status pills (always visible) #}
+      <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}tab=all"
+         class="v2-filter-pill {% if not reason_filter and tab|default:'all' == 'all' %}active{% endif %}">
+        All <span class="count">{{ total_calls }}</span>
+      </a>
+      <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}tab=needs_action"
+         class="v2-filter-pill {% if not reason_filter and tab == 'needs_action' %}active{% elif follow_ups_pending and tab != 'needs_action' %}urgent{% endif %}">
+        Needs action <span class="count">{{ follow_ups_pending }}</span>
+      </a>
+      <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}tab=resolved"
+         class="v2-filter-pill {% if not reason_filter and tab == 'resolved' %}active{% endif %}">
+        Resolved <span class="count">{{ resolved_count }}</span>
+      </a>
+
+      {# Reason pills hidden inside a dropdown #}
+      {% if reason_counts %}
+        <details class="v2-filter-more">
+          <summary class="v2-filter-pill {% if reason_filter %}active{% endif %}">
+            {% if reason_filter %}
+              {% for r in reason_counts %}{% if r.value == reason_filter %}{{ r.label }} <span class="count">{{ r.count }}</span>{% endif %}{% endfor %}
+            {% else %}
+              By reason
+            {% endif %}
+            <i class="bi bi-chevron-down v2-filter-more-chevron"></i>
+          </summary>
+          <div class="v2-filter-more-menu">
+            {% if reason_filter %}
+              <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}tab=all"
+                 class="v2-filter-pill">
+                Clear reason
+              </a>
+            {% endif %}
+            {% for r in reason_counts %}
+              <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}reason={{ r.value }}"
+                 class="v2-filter-pill {% if reason_filter == r.value %}active{% endif %}">
+                {{ r.label }} <span class="count">{{ r.count }}</span>
+              </a>
+            {% endfor %}
+          </div>
+        </details>
+      {% endif %}
     </div>
-  </div>
-  <div class="col-6 col-md-3">
-    <a href="?reservation=1" class="text-decoration-none">
-      <div class="card hover-lift card-clickable p-3 h-100 stat-accent-indigo {% if reservation_filter == '1' %}border-primary{% endif %}" style="cursor:pointer;">
-        <div class="d-flex justify-content-between align-items-start">
-          <div class="text-muted small"><i class="bi bi-calendar-check me-1"></i>Reservation Intents</div>
-          {% if reservations_pending > 0 %}
-            <span class="badge rounded-pill" style="background:#fef9c3;color:#92400e;font-size:.65rem;">
-              {{ reservations_pending }} pending
-            </span>
+
+    {% if date_from or date_to or reason_filter %}
+      <form method="get" class="v2-calls-subfilters">
+        {% if phone_filter %}<input type="hidden" name="phone" value="{{ phone_filter }}">{% endif %}
+        {% if reason_filter %}<input type="hidden" name="reason" value="{{ reason_filter }}">{% endif %}
+        {% if tab and tab != 'all' and not reason_filter %}<input type="hidden" name="tab" value="{{ tab }}">{% endif %}
+        <input type="date" name="date_from" value="{{ date_from }}" title="From" onchange="this.form.submit()">
+        <input type="date" name="date_to"   value="{{ date_to }}"   title="To"   onchange="this.form.submit()">
+        <a href="?{% if phone_filter %}phone={{ phone_filter }}{% endif %}" class="clear-link">Clear all</a>
+      </form>
+    {% else %}
+      <form method="get" class="v2-calls-subfilters">
+        {% if phone_filter %}<input type="hidden" name="phone" value="{{ phone_filter }}">{% endif %}
+        {% if tab and tab != 'all' %}<input type="hidden" name="tab" value="{{ tab }}">{% endif %}
+        <input type="date" name="date_from" value="" title="From" onchange="this.form.submit()">
+        <input type="date" name="date_to"   value="" title="To"   onchange="this.form.submit()">
+      </form>
+    {% endif %}
+
+    <div class="v2-calls-scroll">
+      {% for c in enriched %}
+        {% with is_selected=selected_call.event.pk %}
+        <a href="?{% if card_keep_qs %}{{ card_keep_qs }}&{% endif %}selected={{ c.event.pk }}#call-detail"
+           class="v2-call-card {% if c.event.pk == is_selected %}active{% endif %}">
+
+          {% if c.detail.needs_review or c.detail.follow_up_needed %}
+            <span class="urgent-dot"></span>
           {% endif %}
-        </div>
-        <div class="stat-num text-primary">{{ reservation_intents }}</div>
-      </div>
-    </a>
-  </div>
-  <div class="col-6 col-md-3">
-    <div class="card p-3 h-100 stat-accent-amber">
-      <div class="text-muted small mb-1"><i class="bi bi-bell-fill me-1"></i>Follow-ups Pending</div>
-      <div class="stat-num" style="color:#b45309;">{{ follow_ups_pending }}</div>
-    </div>
-  </div>
-  <div class="col-6 col-md-3">
-    <div class="card p-3 h-100 stat-accent-green">
-      <div class="text-muted small mb-1"><i class="bi bi-chat-dots-fill me-1"></i>SMS Sent</div>
-      <div class="stat-num text-success">{{ sms_sent }}</div>
-    </div>
-  </div>
-</div>
 
-<!-- ── Filter bar ── -->
-<div class="card mb-3 p-3">
-  <form method="get" class="row g-2 align-items-end">
-    <div class="col-auto">
-      <label class="form-label small text-muted mb-1">Reason</label>
-      <select name="reason" class="form-select form-select-sm" style="min-width:150px;">
-        <option value="">All reasons</option>
-        {% for value, label in reason_choices %}
-          <option value="{{ value }}" {% if reason_filter == value %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-auto">
-      <label class="form-label small text-muted mb-1">From</label>
-      <input type="date" name="date_from" class="form-control form-control-sm" value="{{ date_from }}">
-    </div>
-    <div class="col-auto">
-      <label class="form-label small text-muted mb-1">To</label>
-      <input type="date" name="date_to" class="form-control form-control-sm" value="{{ date_to }}">
-    </div>
-    <div class="col-auto">
-      <div class="form-check mt-4">
-        <input class="form-check-input" type="checkbox" name="follow_up" value="1"
-          id="chkFollowUp" {% if followup_filter == "1" %}checked{% endif %}>
-        <label class="form-check-label small" for="chkFollowUp">Needs attention</label>
-      </div>
-    </div>
-    <div class="col-auto">
-      <div class="form-check mt-4">
-        <input class="form-check-input" type="checkbox" name="reservation" value="1"
-          id="chkReserv" {% if reservation_filter == "1" %}checked{% endif %}>
-        <label class="form-check-label small" for="chkReserv">Reservation intent</label>
-      </div>
-    </div>
-    <div class="col-auto">
-      <label class="form-label small text-muted mb-1">Phone / Name</label>
-      <input type="text" name="phone" class="form-control form-control-sm" placeholder="Search…" value="{{ phone_filter }}" style="min-width:130px;">
-    </div>
-    <div class="col-auto mt-1">
-      <button type="submit" class="btn btn-sm btn-primary">Filter</button>
-      <a href="{% url 'portal_calls' restaurant.slug %}" class="btn btn-sm btn-outline-secondary ms-1">Reset</a>
-    </div>
-  </form>
-</div>
+          <div class="v2-avatar
+                      {% if not c.has_name and not c.detail.caller_phone %}avatar-accent
+                      {% elif c.call_count > 1 %}avatar-ink{% endif %}">
+            {{ c.display_initial }}
+          </div>
 
-{% if enriched %}
-<!-- ── Call table ── -->
-<div class="card">
-  <div class="table-responsive">
-    <table class="table table-hover align-middle mb-0" style="font-size:.85rem;">
-      <thead class="table-light">
-        <tr>
-          <th style="width:100px;">Date</th>
-          <th>Caller</th>
-          <th style="width:60px;">Dur.</th>
-          <th style="width:120px;">Reason</th>
-          <th>Reservation</th>
-          <th>Special Requests</th>
-          <th style="width:80px;" class="text-center">Follow-up</th>
-          <th style="width:55px;" class="text-center">SMS</th>
-          <th style="width:80px;">Outcome</th>
-          <th style="width:40px;"></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for c in enriched %}
-        <!-- Main row -->
-        <tr class="call-row {% if c.detail and c.detail.needs_review %}needs-review{% endif %}"
-            id="call-{{ c.event.pk }}"
-            data-bs-toggle="collapse"
-            data-bs-target="#panel-{{ c.event.pk }}"
-            aria-expanded="false">
-
-          <!-- Date -->
-          <td>
-            <div class="fw-semibold small">{{ c.date|date:"M d" }}</div>
-            <div class="text-muted" style="font-size:.72rem;">{{ c.date|time:"H:i" }}</div>
-          </td>
-
-          <!-- Caller -->
-          <td>
-            <div class="d-flex align-items-start gap-2">
-              <div>
-                {% if c.detail and c.detail.caller_name %}
-                  <div class="fw-semibold">{{ c.detail.caller_name }}</div>
-                  <div class="text-muted small">{{ c.detail.caller_phone|default:c.from_number }}</div>
-                {% else %}
-                  <div class="text-muted small">{{ c.detail.caller_phone|default:c.from_number|default:"—" }}</div>
-                {% endif %}
-                {% if c.detail and c.detail.caller_email %}
-                  <div class="text-muted" style="font-size:.72rem;">{{ c.detail.caller_email }}</div>
-                {% endif %}
-              </div>
-              {% if c.call_count > 1 %}
-                <span class="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle ms-auto flex-shrink-0" style="font-size:.65rem;">
-                  {{ c.call_count }}x
+          <div class="v2-call-card-body">
+            <div class="v2-call-card-row1">
+              <span class="v2-call-card-name">{{ c.display_name }}</span>
+              <span class="v2-call-card-time">{{ c.time_ago }}</span>
+            </div>
+            <div class="v2-call-card-summary">
+              {{ c.detail.call_summary|default:"No summary available."|truncatechars:140 }}
+            </div>
+            <div class="v2-call-card-tags">
+              {% if c.detail.call_reason %}
+                <span class="v2-chip {% if c.detail.call_reason == 'complaint' %}v2-chip-danger{% elif c.detail.call_reason == 'reservation' %}v2-chip-mint{% elif c.detail.call_reason == 'billing' %}v2-chip-warn{% else %}v2-chip-soft{% endif %}"
+                      style="font-size:11px; padding:2px 9px;">
+                  {{ c.detail.get_call_reason_display }}
+                </span>
+              {% endif %}
+              {% if c.duration_sec %}
+                <span class="dur">
+                  {% if c.duration_sec < 60 %}{{ c.duration_sec }}s
+                  {% else %}{% widthratio c.duration_sec 60 1 %}m{% endif %}
                 </span>
               {% endif %}
             </div>
-          </td>
+          </div>
+        </a>
+        {% endwith %}
+      {% empty %}
+        <div class="v2-empty">
+          <i class="bi bi-telephone-x"></i>
+          <p>No calls match your filters.</p>
+          <p style="font-size:12px;">Try <a href="?" style="color:var(--accent);">resetting filters</a>.</p>
+        </div>
+      {% endfor %}
 
-          <!-- Duration -->
-          <td class="text-muted small">
-            {% if c.duration_sec %}
-              {% if c.duration_sec >= 60 %}
-                {{ c.duration_sec|floatformat:0|divisibleby:60|yesno:"," }}{% widthratio c.duration_sec 60 1 %}m
-              {% else %}
-                {{ c.duration_sec }}s
-              {% endif %}
-            {% else %}—{% endif %}
-          </td>
+      {% if page_obj.has_other_pages %}
+        <div style="display:flex; justify-content:center; gap:6px; padding:14px 4px; flex-wrap:wrap;">
+          {% if page_obj.has_previous %}
+            <a href="?{% if page_keep_qs %}{{ page_keep_qs }}&{% endif %}page={{ page_obj.previous_page_number }}" class="btn btn-sm">‹ Prev</a>
+          {% endif %}
+          <span class="v2-chip v2-chip-soft" style="align-self:center;">
+            {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+          </span>
+          {% if page_obj.has_next %}
+            <a href="?{% if page_keep_qs %}{{ page_keep_qs }}&{% endif %}page={{ page_obj.next_page_number }}" class="btn btn-sm">Next ›</a>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  </aside>
 
-          <!-- Reason badge -->
-          <td>
-            {% if c.detail %}
-              <span class="reason-badge reason-{{ c.detail.call_reason }}">
-                {{ c.detail.get_call_reason_display }}
-              </span>
-            {% else %}
-              <span class="text-muted small">—</span>
-            {% endif %}
-          </td>
+  {# ── Right: selected call detail ───────────────────────────── #}
+  <section class="v2-calls-detail glass-deep" id="call-detail">
 
-          <!-- Reservation summary + confirmation buttons -->
-          <td style="font-size:.8rem;">
-            {% if c.detail and c.detail.wants_reservation %}
-              <div class="mb-1">
-                {% if c.detail.party_size %}<span class="text-muted"><i class="bi bi-people me-1"></i>{{ c.detail.party_size }}</span>{% endif %}
-                {% if c.detail.reservation_date %}<span class="ms-1">{{ c.detail.reservation_date|date:"D, M j" }}</span>{% endif %}
-                {% if c.detail.reservation_time %}<span class="text-muted ms-1">{{ c.detail.reservation_time|time:"g:i A" }}</span>{% endif %}
-                {% if not c.detail.party_size and not c.detail.reservation_date and not c.detail.reservation_time %}
-                  <span class="text-primary" style="font-size:.72rem;"><i class="bi bi-check-circle-fill me-1"></i>Intent</span>
-                {% endif %}
-              </div>
-              <div class="res-status-widget" data-event-pk="{{ c.event.pk }}" data-url="{% url 'portal_reservation_status' restaurant.slug c.event.pk %}" data-status="{{ c.detail.reservation_status }}" onclick="event.stopPropagation()">
-                {% if c.detail.reservation_status == "confirmed" %}
-                  <span class="badge res-badge-confirmed" style="background:#dcfce7;color:#15803d;cursor:pointer;" title="Click to undo">
-                    <i class="bi bi-check-circle-fill me-1"></i>Confirmed
-                  </span>
-                {% elif c.detail.reservation_status == "lost" %}
-                  <span class="badge res-badge-lost" style="background:#fee2e2;color:#b91c1c;cursor:pointer;" title="Click to undo">
-                    <i class="bi bi-x-circle-fill me-1"></i>Lost
-                  </span>
-                {% else %}
-                  <button class="btn btn-xs res-btn-confirm py-0 px-2 me-1" style="font-size:.7rem;background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;">
-                    <i class="bi bi-check-lg"></i> Confirm
-                  </button>
-                  <button class="btn btn-xs res-btn-lost py-0 px-2" style="font-size:.7rem;background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;">
-                    <i class="bi bi-x-lg"></i> Lost
-                  </button>
-                {% endif %}
-              </div>
-            {% else %}
-              <span class="text-muted">—</span>
-            {% endif %}
-          </td>
+    {% if selected_call %}
+      {% with c=selected_call d=selected_call.detail %}
 
-          <!-- Special requests -->
-          <td style="font-size:.78rem; max-width:160px;">
-            {% if c.detail and c.detail.special_requests %}
-              <span title="{{ c.detail.special_requests }}" style="cursor:default;">
-                {{ c.detail.special_requests|truncatechars:55 }}
-              </span>
-            {% else %}
-              <span class="text-muted">—</span>
-            {% endif %}
-          </td>
+      {# Header #}
+      <div class="v2-call-detail-head">
+        {% if c.memory %}
+          <a href="{% url 'portal_guest_detail' restaurant.slug c.memory.pk %}"
+             class="v2-call-detail-head-link"
+             title="Open guest profile">
+        {% else %}
+          <div class="v2-call-detail-head-static">
+        {% endif %}
 
-          <!-- Follow-up -->
-          <td class="text-center">
-            {% if c.detail and c.detail.needs_review %}
-              <span class="followup-badge urgent"><i class="bi bi-exclamation-triangle-fill me-1"></i>Follow-up</span>
-            {% elif c.detail and c.detail.follow_up_needed %}
-              <span class="followup-badge"><i class="bi bi-bell-fill me-1"></i>Follow-up</span>
-            {% else %}
-              <span class="text-muted small">—</span>
-            {% endif %}
-          </td>
-
-          <!-- SMS count -->
-          <td class="text-center">
-            {% if c.sms_logs %}
-              <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size:.7rem;">
-                <i class="bi bi-chat-dots me-1"></i>{{ c.sms_logs|length }}
-              </span>
-            {% else %}
-              <span class="text-muted small">—</span>
-            {% endif %}
-          </td>
-
-          <!-- Outcome -->
-          <td>
-            <span class="outcome-{{ c.outcome|lower }}" style="font-size:.78rem;">
-              {% if c.outcome == "Resolved" %}<i class="bi bi-check-circle-fill"></i>
-              {% elif c.outcome == "Escalated" %}<i class="bi bi-exclamation-circle-fill"></i>
-              {% else %}<i class="bi bi-dash-circle-fill"></i>{% endif %}
-              {{ c.outcome }}
-            </span>
-          </td>
-
-          <!-- Toggle -->
-          <td class="text-center">
-            <i class="bi bi-chevron-down text-muted" style="font-size:.8rem; transition:.2s;"></i>
-          </td>
-        </tr>
-
-        <!-- Expand panel -->
-        <tr class="expand-panel">
-          <td colspan="10" class="p-0">
-            <div class="collapse" id="panel-{{ c.event.pk }}">
-              <div class="px-4 py-3">
-                <div class="row g-3">
-
-                  <!-- Transcript -->
-                  <div class="col-md-8">
-                    {% if c.detail and c.detail.recording_url %}
-                      <div class="mb-3">
-                        <p class="small fw-semibold text-muted mb-2"><i class="bi bi-play-circle me-1"></i>Recording</p>
-                        <audio controls class="w-100" style="height: 38px;">
-                          <source src="{{ c.detail.recording_url }}" type="audio/wav">
-                          Your browser does not support the audio element.
-                        </audio>
-                      </div>
-                    {% endif %}
-                    <p class="small fw-semibold text-muted mb-2"><i class="bi bi-chat-text me-1"></i>Transcript</p>
-                    {% if c.transcript %}
-                      <div class="transcript-box">{{ c.transcript }}</div>
-                    {% else %}
-                      <p class="text-muted small">No transcript available.</p>
-                    {% endif %}
-                  </div>
-
-                  <!-- SMS log + extra detail -->
-                  <div class="col-md-4">
-                    <p class="small fw-semibold text-muted mb-2"><i class="bi bi-chat-dots me-1"></i>SMS</p>
-                    {% if c.sms_logs %}
-                      {% for sms in c.sms_logs %}
-                      <div class="sms-entry sms-{{ sms.direction }}">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                          <span class="sms-time">{{ sms.created_at|time:"H:i" }} · {{ sms.created_at|date:"M d" }}</span>
-                          {% if sms.direction == "inbound" %}
-                            <span class="sms-status-received fw-semibold" style="font-size:.7rem;">REPLY</span>
-                          {% else %}
-                            <span class="sms-status-{{ sms.status }} fw-semibold" style="font-size:.7rem;">{{ sms.status|upper }}</span>
-                          {% endif %}
-                        </div>
-                        <div style="color:#374151;">{{ sms.message }}</div>
-                        {% if sms.direction == "inbound" %}
-                          <div class="text-muted mt-1" style="font-size:.68rem;">← {{ sms.from_number }}</div>
-                        {% elif sms.to_number %}
-                          <div class="text-muted mt-1" style="font-size:.68rem;">→ {{ sms.to_number }}</div>
-                        {% endif %}
-                      </div>
-                      {% endfor %}
-                    {% else %}
-                      <p class="text-muted small">No SMS for this call.</p>
-                    {% endif %}
-
-                    {% if c.detail and c.detail.notes %}
-                    <p class="small fw-semibold text-muted mt-3 mb-1"><i class="bi bi-sticky me-1"></i>Notes</p>
-                    <div class="sms-entry" style="color:#374151;">{{ c.detail.notes }}</div>
-                    {% endif %}
-
-                    {% if restaurant.enable_sms %}
-                    <div class="mt-3">
-                      <p class="small fw-semibold text-muted mb-2"><i class="bi bi-send me-1"></i>Send SMS</p>
-                      <form class="sms-send-form"
-                            data-url="{% url 'portal_send_sms' restaurant.slug c.event.pk %}"
-                            onclick="event.stopPropagation()">
-                        <select name="sms_type" class="form-select form-select-sm mb-2 sms-type-select">
-                          <option value="menu_link">Menu link</option>
-                          <option value="bar_menu_link">Bar menu link</option>
-                          <option value="hours">Hours</option>
-                          <option value="music">Live music info</option>
-                          <option value="valet">Valet &amp; parking</option>
-                          <option value="social_media">Social media</option>
-                          <option value="address">Address</option>
-                          <option value="event_inquiry">Events contact</option>
-                          <option value="website">Website</option>
-                          <option value="custom">Custom message…</option>
-                        </select>
-                        <textarea name="message" class="form-control form-control-sm mb-2 sms-custom-msg"
-                                  rows="2" maxlength="320" placeholder="Write your message…"
-                                  style="display:none;resize:none;"></textarea>
-                        <button type="submit" class="btn btn-sm btn-outline-primary w-100">
-                          <i class="bi bi-send me-1"></i>Send
-                        </button>
-                      </form>
-                      <div class="sms-feedback mt-1" style="display:none;"></div>
-                    </div>
-                    {% endif %}
-
-                    {% if c.detail and c.detail.follow_up_needed or c.detail and c.detail.needs_review %}
-                    <div class="mt-3" id="followup-block-{{ c.event.pk }}">
-                      <button class="btn btn-sm btn-warning w-100 resolve-followup-btn"
-                              data-url="{% url 'portal_resolve_followup' restaurant.slug c.event.pk %}"
-                              data-event="{{ c.event.pk }}">
-                        <i class="bi bi-check2-circle me-1"></i>Marcar como resuelto
-                      </button>
-                    </div>
-                    {% endif %}
-
-                    {% if c.call_count > 1 %}
-                    <div class="mt-3">
-                      <p class="small fw-semibold text-muted mb-1"><i class="bi bi-arrow-repeat me-1"></i>Repeat Caller</p>
-                      <div class="sms-entry" style="color:#374151;">
-                        This number has called <strong>{{ c.call_count }} times</strong> total.
-                        <a href="?phone={{ c.detail.caller_phone|default:c.from_number }}" class="d-block mt-1 small">View all calls from this number →</a>
-                      </div>
-                    </div>
-                    {% endif %}
-                  </div>
-                </div>
-              </div>
+          <div class="v2-avatar avatar-lg
+                      {% if not c.has_name and not d.caller_phone %}avatar-accent
+                      {% elif c.call_count > 1 %}avatar-ink{% endif %}">
+            {{ c.display_initial }}
+          </div>
+          <div class="v2-call-detail-meta">
+            <div class="label-tiny">
+              {% if c.call_count > 1 %}Returning guest
+              {% elif c.has_name %}Guest
+              {% else %}Unknown caller{% endif %}
             </div>
-          </td>
-        </tr>
+            {% if c.has_name %}
+              <h2>
+                {{ c.display_name }}
+                {% if c.memory %}<span class="v2-call-detail-name-arrow"><i class="bi bi-arrow-right"></i></span>{% endif %}
+              </h2>
+              {% if d.caller_phone or c.from_number %}
+                <div class="v2-call-detail-phone-sub">{{ d.caller_phone|default:c.from_number }}</div>
+              {% endif %}
+            {% else %}
+              <h2 class="is-phone">
+                {{ d.caller_phone|default:c.from_number|default:"Anonymous" }}
+                {% if c.memory %}<span class="v2-call-detail-name-arrow"><i class="bi bi-arrow-right"></i></span>{% endif %}
+              </h2>
+            {% endif %}
+            <div class="v2-call-detail-id">
+              {{ c.time_ago }} ago ·
+              {% if c.duration_sec %}{% if c.duration_sec < 60 %}{{ c.duration_sec }}s{% else %}{% widthratio c.duration_sec 60 1 %}m{% endif %}{% else %}—{% endif %} ·
+              <span class="mono">#C-{{ c.event.pk }}</span>
+            </div>
+          </div>
 
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
+        {% if c.memory %}</a>{% else %}</div>{% endif %}
 
-<!-- Pagination -->
-{% if page_obj.has_other_pages %}
-<nav class="mt-3 d-flex justify-content-center">
-  <ul class="pagination pagination-sm mb-0">
-    {% if page_obj.has_previous %}
-      <li class="page-item">
-        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&reason={{ reason_filter }}&date_from={{ date_from }}&date_to={{ date_to }}&follow_up={{ followup_filter }}&reservation={{ reservation_filter }}">‹ Prev</a>
-      </li>
+        <div class="v2-call-detail-actions-top">
+          {% if d.call_reason %}
+            <span class="v2-chip {% if d.call_reason == 'complaint' %}v2-chip-danger{% elif d.call_reason == 'reservation' %}v2-chip-mint{% else %}v2-chip-soft{% endif %}">
+              <span class="v2-chip-dot"></span>
+              {{ d.get_call_reason_display }}
+            </span>
+          {% endif %}
+          {% if c.call_count > 1 and d.caller_phone %}
+            <a href="?tab=all&phone={{ d.caller_phone }}" class="v2-link-action" title="Filter list by this phone">
+              {{ c.call_count }} calls <i class="bi bi-arrow-right"></i>
+            </a>
+          {% endif %}
+        </div>
+      </div>
+
+      {# Body #}
+      <div class="v2-call-detail-body">
+
+        {% if d.call_summary %}
+        <div class="v2-ai-summary">
+          <span class="label-tiny">✦ AI summary</span>
+          <p>{{ d.call_summary }}</p>
+        </div>
+        {% endif %}
+
+        {% if d.recording_url %}
+        <div class="paper v2-call-section">
+          <span class="label-tiny">Recording</span>
+          <audio controls src="{{ d.recording_url }}"></audio>
+        </div>
+        {% endif %}
+
+        {% if d.wants_reservation %}
+        <div class="paper v2-call-section">
+          <span class="label-tiny">Reservation</span>
+          <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center; font-size:14px; margin-bottom:10px;">
+            {% if d.party_size %}<span><i class="bi bi-people"></i> {{ d.party_size }} people</span>{% endif %}
+            {% if d.reservation_date %}<span><i class="bi bi-calendar"></i> {{ d.reservation_date|date:"D, M j" }}</span>{% endif %}
+            {% if d.reservation_time %}<span><i class="bi bi-clock"></i> {{ d.reservation_time|time:"g:i A" }}</span>{% endif %}
+            {% if d.special_requests %}
+              <span style="color:var(--muted-strong); font-size:13px;">· {{ d.special_requests }}</span>
+            {% endif %}
+          </div>
+          <div class="res-status-widget"
+               data-event-pk="{{ c.event.pk }}"
+               data-url="{% url 'portal_reservation_status' restaurant.slug c.event.pk %}"
+               data-status="{{ d.reservation_status }}">
+            {% if d.reservation_status == "confirmed" %}
+              <span class="v2-chip v2-chip-mint" style="cursor:pointer;" title="Click to undo">
+                <i class="bi bi-check-circle-fill"></i> Confirmed
+              </span>
+            {% elif d.reservation_status == "lost" %}
+              <span class="v2-chip v2-chip-danger" style="cursor:pointer;" title="Click to undo">
+                <i class="bi bi-x-circle-fill"></i> Lost
+              </span>
+            {% else %}
+              <button class="btn btn-sm res-btn-confirm" style="background:#e4f5e6;color:#2e6f3e;border-color:rgba(46,111,62,0.18);">
+                <i class="bi bi-check-lg"></i> Mark confirmed
+              </button>
+              <button class="btn btn-sm res-btn-lost" style="background:#fee2e2;color:#991b1b;border-color:rgba(153,27,27,0.18);">
+                <i class="bi bi-x-lg"></i> Lost
+              </button>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+
+        {% if c.transcript %}
+        <div class="paper v2-call-section">
+          <span class="label-tiny">Transcript</span>
+          <div class="v2-transcript">{{ c.transcript }}</div>
+        </div>
+        {% endif %}
+
+        {% if c.sms_logs or restaurant.enable_sms %}
+        <div class="paper v2-call-section">
+          <span class="label-tiny">SMS thread</span>
+          {% if c.sms_logs %}
+            <div class="v2-sms-thread" style="margin-bottom:10px;">
+              {% for sms in c.sms_logs %}
+                <div class="v2-sms-bubble {{ sms.direction }}">
+                  <div class="v2-sms-meta">
+                    <span>{{ sms.created_at|time:"H:i" }} · {{ sms.created_at|date:"M d" }}</span>
+                    <span>{% if sms.direction == 'inbound' %}REPLY{% else %}{{ sms.status|upper }}{% endif %}</span>
+                  </div>
+                  <div>{{ sms.message }}</div>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% if restaurant.enable_sms %}
+            <form class="sms-send-form"
+                  data-url="{% url 'portal_send_sms' restaurant.slug c.event.pk %}"
+                  style="display:flex; flex-direction:column; gap:8px;">
+              <select name="sms_type" class="input sms-type-select" style="padding:10px 14px;">
+                <option value="menu_link">Menu link</option>
+                <option value="bar_menu_link">Bar menu link</option>
+                <option value="hours">Hours</option>
+                <option value="music">Live music info</option>
+                <option value="valet">Valet &amp; parking</option>
+                <option value="social_media">Social media</option>
+                <option value="address">Address</option>
+                <option value="event_inquiry">Events contact</option>
+                <option value="website">Website</option>
+                <option value="custom">Custom message…</option>
+              </select>
+              <textarea name="message" class="input sms-custom-msg" rows="2" maxlength="320"
+                        placeholder="Write your message…"
+                        style="display:none; border-radius:14px; padding:10px 14px; resize:vertical;"></textarea>
+              <button type="submit" class="btn">
+                <i class="bi bi-send"></i> Send SMS
+              </button>
+              <div class="sms-feedback" style="display:none;"></div>
+            </form>
+          {% endif %}
+        </div>
+        {% endif %}
+
+      </div>
+
+      {# Persistent action bar #}
+      <div class="v2-call-actions">
+        {% if d.follow_up_needed or d.needs_review %}
+          <button class="btn btn-accent resolve-followup-btn"
+                  data-url="{% url 'portal_resolve_followup' restaurant.slug c.event.pk %}">
+            <i class="bi bi-check-lg"></i> Mark resolved
+          </button>
+        {% endif %}
+        {% if d.caller_phone or c.from_number %}
+          <a href="tel:{{ d.caller_phone|default:c.from_number }}" class="btn">
+            <i class="bi bi-telephone"></i> Call back
+          </a>
+        {% endif %}
+        <div class="right">
+          {% if c.memory %}
+            <a href="{% url 'portal_guest_detail' restaurant.slug c.memory.pk %}" class="btn btn-ink btn-sm">
+              View profile <i class="bi bi-arrow-right"></i>
+            </a>
+          {% endif %}
+        </div>
+      </div>
+
+      {% endwith %}
+    {% else %}
+      <div class="v2-empty" style="padding:120px 20px;">
+        <i class="bi bi-telephone"></i>
+        <p>No calls yet.</p>
+        <p style="font-size:12px;">Once your agent receives calls, they'll appear here.</p>
+      </div>
     {% endif %}
-    <li class="page-item disabled">
-      <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
-    </li>
-    {% if page_obj.has_next %}
-      <li class="page-item">
-        <a class="page-link" href="?page={{ page_obj.next_page_number }}&reason={{ reason_filter }}&date_from={{ date_from }}&date_to={{ date_to }}&follow_up={{ followup_filter }}&reservation={{ reservation_filter }}">Next ›</a>
-      </li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
-
-{% else %}
-<div class="text-center py-5 text-muted">
-  <i class="bi bi-telephone-x fs-1 d-block mb-3 opacity-25"></i>
-  <p class="mb-1">No calls recorded yet.</p>
-  {% if reason_filter or followup_filter or reservation_filter or date_from or date_to %}
-    <p class="small">Try resetting the filters — <a href="{% url 'portal_calls' restaurant.slug %}">show all calls</a>.</p>
-  {% else %}
-    <p class="small">Once your agent receives calls, they'll appear here.</p>
-  {% endif %}
+  </section>
 </div>
-{% endif %}
-
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-// Auto-expand and scroll to call row when arriving via anchor link (#call-NNN)
-(function () {
-  const hash = window.location.hash; // e.g. "#call-42"
-  if (!hash.startsWith('#call-')) return;
-  const row = document.querySelector(hash);
-  if (!row) return;
-  const panelId = row.getAttribute('data-bs-target');
-  const panel = panelId && document.querySelector(panelId);
-  if (panel) {
-    new bootstrap.Collapse(panel, { toggle: false }).show();
-  }
-  setTimeout(() => row.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
-})();
+  const csrfToken = document.cookie.split('; ').find(r => r.startsWith('csrftoken='))?.split('=')[1] || '';
 
-// Rotate chevron on expand/collapse
-document.querySelectorAll('.call-row').forEach(row => {
-  const targetId = row.getAttribute('data-bs-target');
-  const panel = document.querySelector(targetId);
-  const icon = row.querySelector('.bi-chevron-down');
-  if (!panel || !icon) return;
-  panel.addEventListener('show.bs.collapse', () => icon.style.transform = 'rotate(180deg)');
-  panel.addEventListener('hide.bs.collapse', () => icon.style.transform = 'rotate(0deg)');
-});
-
-// Mark follow-up as resolved (AJAX)
-const csrfToken = document.cookie.split('; ').find(r => r.startsWith('csrftoken='))?.split('=')[1] || '';
-document.querySelectorAll('.resolve-followup-btn').forEach(btn => {
-  btn.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    const eventPk = btn.dataset.event;
+  // ── Mark resolved ───────────────────────────────────────────────
+  document.querySelector('.resolve-followup-btn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving…';
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-hourglass"></i> Saving…';
     try {
       const res = await fetch(btn.dataset.url, {
         method: 'POST',
         headers: { 'X-CSRFToken': csrfToken },
       });
-      if (res.ok) {
-        document.getElementById('followup-block-' + eventPk)?.remove();
-        const row = document.querySelector(`[data-bs-target="#panel-${eventPk}"]`);
-        row?.querySelector('.followup-badge')?.remove();
-        row?.classList.remove('needs-review');
-      } else {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Marcar como resuelto';
-        alert('Could not save — please try again.');
-      }
-    } catch {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Marcar como resuelto';
-    }
-  });
-});
-
-// Send SMS form (portal manual send)
-document.querySelectorAll('.sms-send-form').forEach(form => {
-  const typeSelect = form.querySelector('.sms-type-select');
-  const customMsg  = form.querySelector('.sms-custom-msg');
-  const feedback   = form.nextElementSibling; // .sms-feedback
-
-  typeSelect.addEventListener('change', () => {
-    const isCustom = typeSelect.value === 'custom';
-    customMsg.style.display = isCustom ? '' : 'none';
-    customMsg.required = isCustom;
+      if (res.ok) { location.reload(); }
+      else { btn.disabled = false; btn.innerHTML = orig; alert('Could not save.'); }
+    } catch { btn.disabled = false; btn.innerHTML = orig; }
   });
 
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const btn = form.querySelector('[type=submit]');
-    const originalHTML = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sending…';
-    feedback.style.display = 'none';
-
-    const fd = new FormData(form);
-    fd.append('csrfmiddlewaretoken', csrfToken);
-
-    try {
-      const res  = await fetch(form.dataset.url, { method: 'POST', body: fd });
-      const data = await res.json();
-      feedback.style.display = '';
-      if (data.ok) {
-        feedback.innerHTML = `<div class="alert alert-success py-1 px-2 small mb-0"><i class="bi bi-check-circle me-1"></i>Sent: <em>${data.message}</em></div>`;
-        // Inject new entry into the SMS log section above
-        const smsSection = form.closest('.col-md-4').querySelector('.sms-entry:last-of-type, p.text-muted.small');
-        const now = new Date();
-        const timeStr = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + ' · ' + now.toLocaleDateString([], {month:'short', day:'numeric'});
-        const newEntry = document.createElement('div');
-        newEntry.className = 'sms-entry';
-        newEntry.innerHTML = `<div class="d-flex justify-content-between align-items-center mb-1"><span class="sms-time">${timeStr}</span><span class="sms-status-sent fw-semibold" style="font-size:.7rem;">SENT</span></div><div style="color:#374151;">${data.message}</div><div class="text-muted mt-1" style="font-size:.68rem;">→ ${data.to_number}</div>`;
-        const smsLog = form.closest('.col-md-4').querySelector('p.fw-semibold.text-muted');
-        if (smsLog) smsLog.after(newEntry);
-      } else {
-        feedback.innerHTML = `<div class="alert alert-danger py-1 px-2 small mb-0"><i class="bi bi-exclamation-circle me-1"></i>${data.error}</div>`;
-      }
-    } catch {
-      feedback.style.display = '';
-      feedback.innerHTML = `<div class="alert alert-danger py-1 px-2 small mb-0">Network error — please try again.</div>`;
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = originalHTML;
-    }
-  });
-});
-
-// Reservation status confirmation (AJAX)
-async function setReservationStatus(widget, status) {
-  const url = widget.dataset.url;
-  const body = new URLSearchParams({ status });
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-  if (!res.ok) { alert('Could not save — please try again.'); return; }
-  widget.dataset.status = status;
-  if (status === 'confirmed') {
-    widget.innerHTML = `<span class="badge res-badge-confirmed" style="background:#dcfce7;color:#15803d;cursor:pointer;" title="Click to undo"><i class="bi bi-check-circle-fill me-1"></i>Confirmed</span>`;
-    widget.querySelector('.res-badge-confirmed').addEventListener('click', () => setReservationStatus(widget, 'pending'));
-  } else if (status === 'lost') {
-    widget.innerHTML = `<span class="badge res-badge-lost" style="background:#fee2e2;color:#b91c1c;cursor:pointer;" title="Click to undo"><i class="bi bi-x-circle-fill me-1"></i>Lost</span>`;
-    widget.querySelector('.res-badge-lost').addEventListener('click', () => setReservationStatus(widget, 'pending'));
-  } else {
-    widget.innerHTML = `
-      <button class="btn btn-xs res-btn-confirm py-0 px-2 me-1" style="font-size:.7rem;background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;"><i class="bi bi-check-lg"></i> Confirm</button>
-      <button class="btn btn-xs res-btn-lost py-0 px-2" style="font-size:.7rem;background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;"><i class="bi bi-x-lg"></i> Lost</button>`;
-    widget.querySelector('.res-btn-confirm').addEventListener('click', () => setReservationStatus(widget, 'confirmed'));
-    widget.querySelector('.res-btn-lost').addEventListener('click', () => setReservationStatus(widget, 'lost'));
+  // ── Reservation status (confirm / lost) ─────────────────────────
+  async function setReservationStatus(widget, status) {
+    const body = new URLSearchParams({ status });
+    const res = await fetch(widget.dataset.url, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+    if (res.ok) { location.reload(); }
+    else { alert('Could not save.'); }
   }
-}
-
-document.querySelectorAll('.res-status-widget').forEach(widget => {
-  const status = widget.dataset.status;
-  if (status === 'confirmed') {
-    widget.querySelector('.res-badge-confirmed')?.addEventListener('click', () => setReservationStatus(widget, 'pending'));
-  } else if (status === 'lost') {
-    widget.querySelector('.res-badge-lost')?.addEventListener('click', () => setReservationStatus(widget, 'pending'));
-  } else {
+  document.querySelectorAll('.res-status-widget').forEach(widget => {
     widget.querySelector('.res-btn-confirm')?.addEventListener('click', () => setReservationStatus(widget, 'confirmed'));
     widget.querySelector('.res-btn-lost')?.addEventListener('click', () => setReservationStatus(widget, 'lost'));
-  }
-});
+    widget.querySelector('.v2-chip-mint, .v2-chip-danger')?.addEventListener('click', () => setReservationStatus(widget, 'pending'));
+  });
+
+  // ── SMS send form ────────────────────────────────────────────────
+  document.querySelectorAll('.sms-send-form').forEach(form => {
+    const typeSelect = form.querySelector('.sms-type-select');
+    const customMsg  = form.querySelector('.sms-custom-msg');
+    const feedback   = form.querySelector('.sms-feedback');
+    typeSelect.addEventListener('change', () => {
+      const isCustom = typeSelect.value === 'custom';
+      customMsg.style.display = isCustom ? '' : 'none';
+      customMsg.required = isCustom;
+    });
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = form.querySelector('button[type=submit]');
+      const orig = btn.innerHTML;
+      btn.disabled = true; btn.innerHTML = 'Sending…';
+      const fd = new FormData(form);
+      fd.append('csrfmiddlewaretoken', csrfToken);
+      try {
+        const res  = await fetch(form.dataset.url, { method: 'POST', body: fd });
+        const data = await res.json();
+        feedback.style.display = '';
+        if (data.ok) {
+          feedback.innerHTML = '<div class="v2-alert" style="background:rgba(46,111,62,0.10);color:#2e6f3e;border-color:rgba(46,111,62,0.18);">Sent.</div>';
+          setTimeout(() => location.reload(), 700);
+        } else {
+          feedback.innerHTML = `<div class="v2-alert">${data.error || 'Failed'}</div>`;
+          btn.disabled = false; btn.innerHTML = orig;
+        }
+      } catch {
+        feedback.style.display = '';
+        feedback.innerHTML = '<div class="v2-alert">Network error.</div>';
+        btn.disabled = false; btn.innerHTML = orig;
+      }
+    });
+  });
 </script>
 {% endblock %}

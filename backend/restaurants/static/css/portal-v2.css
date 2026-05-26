@@ -67,12 +67,13 @@ body {
   width: 380px; height: 380px;
   background: radial-gradient(circle at 35% 35%,
               #c7d2ff 0%, #1f3fc3 35%, #173098 75%, rgba(23, 48, 152, 0) 100%);
-  filter: blur(0.5px);
+  filter: blur(40px);
 }
 .orb-cream {
   width: 320px; height: 320px;
   background: radial-gradient(circle at 40% 40%,
               #fafaee 0%, #d2d2c4 50%, rgba(210, 210, 196, 0) 100%);
+  filter: blur(40px);
 }
 /* Subtle film grain (applied to a wrapper) */
 .grain { position: relative; }
@@ -229,6 +230,594 @@ p  { margin: 0; }
   letter-spacing: -0.005em;
 }
 .link-muted:hover { color: var(--accent-deep); }
+
+/* ────────────────────────────────────────────────────────────
+   PORTAL SHELL (base_v2.html)
+   ──────────────────────────────────────────────────────────── */
+
+.v2-shell {
+  display: flex;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────── */
+.v2-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: rgba(248, 248, 232, 0.65);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border-right: 1px solid var(--warm-line);
+  padding: 22px 14px 18px;
+  display: flex; flex-direction: column;
+  position: sticky; top: 0;
+  height: 100vh;
+  z-index: 10;
+}
+.v2-sidebar-brand {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 10px 22px;
+  font: 900 19px 'Geist', sans-serif; letter-spacing: -.03em;
+  color: var(--ink);
+}
+.v2-sidebar-brand .sparkle { color: var(--accent); font-size: 19px; line-height: 1; }
+
+.v2-sidebar-nav {
+  display: flex; flex-direction: column; gap: 2px;
+  list-style: none; padding: 0; margin: 0;
+}
+.v2-sidebar-item {
+  display: flex; align-items: center; gap: 11px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font: 600 13.5px 'Geist', sans-serif; letter-spacing: -.01em;
+  color: var(--muted-strong);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.v2-sidebar-item:hover { background: rgba(255, 255, 255, 0.55); color: var(--ink); }
+.v2-sidebar-item .v2-sidebar-icon {
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  opacity: 0.72;
+  flex-shrink: 0;
+}
+.v2-sidebar-item.active {
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink);
+  box-shadow: 0 2px 8px -2px rgba(56, 36, 12, 0.10);
+}
+.v2-sidebar-item.active .v2-sidebar-icon { opacity: 1; color: var(--accent); }
+.v2-sidebar-item .v2-sidebar-dot {
+  margin-left: auto;
+  width: 8px; height: 8px;
+  border-radius: 99px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(31, 63, 195, 0.18);
+}
+.v2-sidebar-item .v2-sidebar-dot.dot-warn   { background: #d97706; box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.18); }
+.v2-sidebar-item .v2-sidebar-dot.dot-danger { background: #dc2626; box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.18); }
+
+/* ── Sidebar foot (restaurant + logout) ───────────────────── */
+.v2-sidebar-foot {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--warm-line);
+}
+.v2-sidebar-foot-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 4px;
+}
+.v2-sidebar-foot-meta { min-width: 0; flex: 1; }
+.v2-sidebar-foot-name {
+  font: 600 13px 'Geist', sans-serif; letter-spacing: -.02em;
+  color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.v2-sidebar-foot-sub {
+  font: 300 11px 'Geist', sans-serif;
+  color: var(--muted);
+  margin-top: 1px;
+}
+.v2-sidebar-foot-links {
+  display: flex; gap: 14px; padding: 10px 8px 0;
+}
+.v2-sidebar-foot-links a {
+  font: 600 11.5px 'Geist', sans-serif; letter-spacing: .02em;
+  color: var(--muted-strong);
+  text-decoration: none;
+  display: inline-flex; align-items: center; gap: 5px;
+  transition: color .15s;
+}
+.v2-sidebar-foot-links a:hover { color: var(--accent); }
+
+/* ── Avatar primitive (used in sidebar foot, call list, etc) ── */
+.v2-avatar {
+  width: 32px; height: 32px;
+  border-radius: 99px;
+  display: flex; align-items: center; justify-content: center;
+  font: 700 13px 'Geist', sans-serif; letter-spacing: -.02em;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, var(--cream-50), var(--cream-200));
+  color: var(--ink);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 2px 6px rgba(56, 36, 12, 0.08);
+}
+.v2-avatar.avatar-accent {
+  background: radial-gradient(circle at 30% 30%, #c7d2ff, var(--accent) 70%);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.v2-avatar.avatar-ink {
+  background: linear-gradient(135deg, var(--ink-soft), var(--ink));
+  color: white;
+}
+.v2-avatar.avatar-lg { width: 56px; height: 56px; font-size: 21px; }
+.v2-avatar.avatar-xl { width: 84px; height: 84px; font-size: 32px; }
+
+/* ── Main content area ────────────────────────────────────── */
+.v2-main {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  padding: 26px clamp(20px, 3vw, 32px);
+  overflow-x: hidden;
+}
+.v2-main-bg {
+  position: absolute; inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.v2-main > * { position: relative; z-index: 1; }
+
+/* Mobile hamburger + overlay */
+.v2-sidebar-toggle {
+  display: none;
+  width: 40px; height: 40px;
+  border-radius: 99px;
+  background: var(--ink);
+  color: white;
+  border: none;
+  align-items: center; justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  margin-right: 12px;
+}
+.v2-sidebar-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(12, 10, 8, 0.45);
+  z-index: 20;
+}
+
+@media (max-width: 900px) {
+  .v2-sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    z-index: 30;
+  }
+  .v2-sidebar.show { transform: translateX(0); }
+  .v2-sidebar-overlay.show { display: block; }
+  .v2-sidebar-toggle { display: inline-flex; }
+}
+
+/* ── Page header (used inside main, per page) ─────────────── */
+.v2-page-head {
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 22px; flex-wrap: wrap;
+}
+.v2-page-head-title h1 { font-size: 32px; }
+.v2-page-head-eyebrow { margin-bottom: 4px; }
+.v2-page-head-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* Agent status chip (right side of page head) */
+.v2-agent-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px;
+  border-radius: 99px;
+  font: 600 12px 'Geist', sans-serif;
+  background: #e4f5e6; color: #2e6f3e;
+  border: 1px solid rgba(46, 111, 62, 0.12);
+}
+.v2-agent-chip .dot {
+  width: 6px; height: 6px; border-radius: 99px; background: #2e6f3e;
+}
+.v2-agent-chip.warn   { background: #fef3c7; color: #92400e; border-color: rgba(146, 64, 14, 0.15); }
+.v2-agent-chip.warn .dot   { background: #b45309; }
+.v2-agent-chip.danger { background: #fee2e2; color: #991b1b; border-color: rgba(153, 27, 27, 0.15); }
+.v2-agent-chip.danger .dot { background: #b91c1c; }
+.v2-agent-chip.idle   { background: rgba(0,0,0,0.05); color: var(--muted-strong); border-color: transparent; }
+.v2-agent-chip.idle .dot   { background: var(--muted); }
+
+/* ── Chip primitive (used in call cards, lists, filters) ──── */
+.v2-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 11px;
+  border-radius: 99px;
+  font: 600 12px 'Geist', sans-serif; letter-spacing: -.005em;
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--warm-line);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.v2-chip-accent { background: rgba(31, 63, 195, 0.10); color: var(--accent-deep); border-color: rgba(31, 63, 195, 0.18); }
+.v2-chip-ink    { background: var(--ink); color: white; border-color: var(--ink); }
+.v2-chip-mint   { background: #e4f5e6; color: #2e6f3e; border-color: rgba(46, 111, 62, 0.12); }
+.v2-chip-warn   { background: #fef3c7; color: #92400e; border-color: rgba(146, 64, 14, 0.15); }
+.v2-chip-danger { background: #fee2e2; color: #991b1b; border-color: rgba(153, 27, 27, 0.15); }
+.v2-chip-soft   { background: rgba(0,0,0,0.04); border-color: transparent; color: var(--muted-strong); }
+.v2-chip-dot {
+  width: 6px; height: 6px; border-radius: 99px; background: currentColor;
+  display: inline-block;
+}
+
+/* ────────────────────────────────────────────────────────────
+   CALL HISTORY (calls.html)
+   ──────────────────────────────────────────────────────────── */
+
+.v2-calls-layout {
+  display: flex; gap: 18px;
+  align-items: flex-start;
+  min-height: calc(100vh - 180px);
+}
+
+/* ── Left: scrollable call list ───────────────────────────── */
+.v2-calls-list {
+  width: 380px;
+  flex-shrink: 0;
+  display: flex; flex-direction: column;
+  max-height: calc(100vh - 80px);
+  overflow: hidden;
+  padding: 14px;
+}
+.v2-calls-filters {
+  display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;
+}
+.v2-filter-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 11px;
+  border-radius: 99px;
+  font: 600 12px 'Geist', sans-serif; letter-spacing: -.01em;
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--ink-soft);
+  border: 1px solid var(--warm-line);
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.v2-filter-pill:hover { background: rgba(255, 255, 255, 0.85); }
+.v2-filter-pill.active {
+  background: var(--ink); color: white; border-color: var(--ink);
+}
+.v2-filter-pill.urgent {
+  background: rgba(31, 63, 195, 0.10);
+  color: var(--accent-deep);
+  border-color: rgba(31, 63, 195, 0.18);
+}
+.v2-filter-pill .count {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px; opacity: .65; font-weight: 500;
+}
+.v2-filter-pill.active .count { opacity: .85; }
+
+/* "More reasons" dropdown — pill that opens a menu of reason filters */
+.v2-filter-more {
+  position: relative;
+  display: inline-block;
+}
+.v2-filter-more summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+.v2-filter-more summary::-webkit-details-marker { display: none; }
+.v2-filter-more summary::marker { content: ""; }
+.v2-filter-more[open] summary { background: rgba(255, 255, 255, 0.95); }
+.v2-filter-more-menu {
+  position: absolute; top: calc(100% + 6px); left: 0;
+  z-index: 50;
+  min-width: 240px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 8px;
+  border-radius: 18px;
+  background: var(--cream-50);
+  border: 1px solid var(--warm-line);
+  box-shadow: var(--shadow-card);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.v2-filter-more-menu .v2-filter-pill {
+  width: 100%;
+  justify-content: space-between;
+  background: transparent;
+  border-color: transparent;
+}
+.v2-filter-more-menu .v2-filter-pill:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+.v2-filter-more-menu .v2-filter-pill.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.v2-filter-more-chevron {
+  font-size: 11px;
+  transition: transform .15s;
+  opacity: .6;
+  margin-left: 2px;
+}
+.v2-filter-more[open] .v2-filter-more-chevron { transform: rotate(180deg); }
+
+/* Secondary filters (reason + date range), below the tab pills */
+.v2-calls-subfilters {
+  display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+  margin-bottom: 12px;
+}
+.v2-calls-subfilters select,
+.v2-calls-subfilters input[type=date] {
+  padding: 5px 10px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid var(--warm-line);
+  font: 500 12px 'Geist', sans-serif;
+  letter-spacing: -.005em;
+  color: var(--ink-soft);
+  outline: none;
+  cursor: pointer;
+}
+.v2-calls-subfilters input[type=date] {
+  min-width: 122px;
+  font-family: 'Geist Mono', monospace;
+}
+.v2-calls-subfilters select:focus,
+.v2-calls-subfilters input[type=date]:focus {
+  border-color: rgba(31, 63, 195, 0.45);
+  box-shadow: 0 0 0 3px rgba(31, 63, 195, 0.10);
+}
+.v2-calls-subfilters .clear-link {
+  font: 600 11.5px 'Geist', sans-serif;
+  color: var(--accent); text-decoration: none;
+  margin-left: 4px;
+}
+.v2-calls-subfilters .clear-link:hover { color: var(--accent-deep); }
+
+/* Small tertiary action link (e.g. "354 calls →") */
+.v2-link-action {
+  font: 600 12px 'Geist', sans-serif; letter-spacing: -.005em;
+  color: var(--accent);
+  text-decoration: none;
+  display: inline-flex; align-items: center; gap: 4px;
+  white-space: nowrap;
+}
+.v2-link-action:hover { color: var(--accent-deep); text-decoration: underline; }
+
+.v2-calls-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 8px;
+  padding-right: 4px;
+  margin: 0 -4px;
+}
+
+.v2-call-card {
+  position: relative;
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 13px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--warm-line);
+  cursor: pointer;
+  text-decoration: none;
+  color: var(--ink);
+  transition: background .15s, border-color .15s, box-shadow .15s;
+}
+.v2-call-card:hover { background: rgba(255, 255, 255, 0.78); }
+.v2-call-card.active {
+  background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(245, 248, 255, 0.92));
+  border-color: rgba(31, 63, 195, 0.25);
+  box-shadow: 0 6px 22px -8px rgba(31, 63, 195, 0.22);
+}
+.v2-call-card .urgent-dot {
+  position: absolute; top: 13px; right: 13px;
+  width: 8px; height: 8px; border-radius: 99px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(31, 63, 195, 0.20);
+}
+.v2-call-card-body { flex: 1; min-width: 0; }
+.v2-call-card-row1 {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 3px;
+}
+.v2-call-card-name {
+  font: 600 14px 'Geist', sans-serif; letter-spacing: -.02em;
+}
+.v2-call-card-time {
+  font: 500 11px 'Geist Mono', monospace;
+  color: var(--muted);
+  margin-left: auto;
+}
+.v2-call-card-summary {
+  font: 300 12.5px 'Geist', sans-serif; letter-spacing: -.005em;
+  color: var(--muted-strong);
+  line-height: 1.5;
+  margin-bottom: 9px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.v2-call-card-tags {
+  display: flex; gap: 6px; align-items: center;
+}
+.v2-call-card-tags .v2-chip { font-size: 11px; padding: 2px 9px; }
+.v2-call-card-tags .dur {
+  font: 500 10.5px 'Geist Mono', monospace;
+  color: var(--muted);
+}
+
+/* ── Right: call detail ───────────────────────────────────── */
+.v2-calls-detail {
+  flex: 1;
+  min-width: 0;
+  display: flex; flex-direction: column;
+  max-height: calc(100vh - 80px);
+  overflow: hidden;
+  position: relative;
+}
+.v2-call-detail-head {
+  padding: 18px 22px;
+  display: flex; align-items: center; gap: 14px;
+  border-bottom: 1px solid var(--warm-line);
+  position: relative;
+}
+.v2-call-detail-head-link {
+  display: flex; align-items: center; gap: 16px;
+  flex: 1; min-width: 0;
+  padding: 6px 10px;
+  margin: -6px -10px;
+  border-radius: 16px;
+  color: var(--ink); text-decoration: none;
+  transition: background .15s, transform .15s;
+}
+.v2-call-detail-head-link:hover { background: rgba(0, 0, 0, 0.035); }
+.v2-call-detail-head-link:hover .v2-call-detail-name-arrow { opacity: 1; transform: translateX(2px); }
+.v2-call-detail-head-static {
+  display: flex; align-items: center; gap: 16px;
+  flex: 1; min-width: 0;
+}
+.v2-call-detail-meta { min-width: 0; flex: 1; }
+.v2-call-detail-head h2 {
+  font: 900 26px 'Geist', sans-serif; letter-spacing: -.030em;
+  color: var(--ink);
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+}
+.v2-call-detail-head h2.is-phone {
+  font: 600 24px 'Geist Mono', monospace; letter-spacing: -.02em;
+}
+.v2-call-detail-phone-sub {
+  font: 500 13px 'Geist Mono', monospace; letter-spacing: -.01em;
+  color: var(--muted-strong);
+  margin-top: 3px;
+}
+.v2-call-detail-id { font-size: 12px; color: var(--muted-strong); margin-top: 4px; }
+.v2-call-detail-name-arrow {
+  font-size: 13px; color: var(--accent);
+  opacity: 0; transition: opacity .15s, transform .15s;
+  display: inline-flex; align-items: center;
+}
+.v2-call-detail-actions-top {
+  margin-left: auto; display: flex; gap: 8px;
+  flex-direction: column; align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.v2-call-detail-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 24px 24px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+
+.v2-ai-summary {
+  padding: 18px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(31, 63, 195, 0.08), rgba(199, 210, 255, 0.40));
+  border: 1px solid rgba(31, 63, 195, 0.18);
+}
+.v2-ai-summary .label-tiny { color: var(--accent-deep); margin-bottom: 8px; display: block; }
+.v2-ai-summary p {
+  font: 400 15px 'Geist', sans-serif; letter-spacing: -.012em;
+  color: var(--ink); line-height: 1.55;
+}
+
+.v2-call-section { padding: 16px 18px; }
+.v2-call-section .label-tiny { margin-bottom: 10px; display: block; }
+.v2-call-section audio {
+  width: 100%;
+  height: 38px;
+  display: block;
+}
+
+.v2-transcript {
+  white-space: pre-wrap;
+  font: 300 13px 'Geist', sans-serif; letter-spacing: -.005em;
+  color: var(--ink-soft); line-height: 1.55;
+  max-height: 280px; overflow-y: auto;
+  padding: 12px 14px;
+  background: rgba(0, 0, 0, 0.025);
+  border-radius: 14px;
+}
+
+.v2-notes-form textarea {
+  width: 100%;
+  min-height: 70px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--warm-line);
+  font: 300 13px 'Geist', sans-serif; letter-spacing: -.005em;
+  color: var(--ink);
+  outline: none;
+  resize: vertical;
+}
+.v2-notes-form textarea:focus {
+  border-color: rgba(31, 63, 195, 0.45);
+  box-shadow: 0 0 0 4px rgba(31, 63, 195, 0.10);
+}
+
+/* ── SMS thread ───────────────────────────────────────────── */
+.v2-sms-thread { display: flex; flex-direction: column; gap: 8px; }
+.v2-sms-bubble {
+  padding: 9px 13px;
+  border-radius: 14px;
+  font: 300 13px 'Geist', sans-serif; line-height: 1.5;
+  max-width: 86%;
+}
+.v2-sms-bubble.outbound {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--warm-line);
+  margin-left: auto;
+  color: var(--ink-soft);
+}
+.v2-sms-bubble.inbound {
+  background: rgba(31, 63, 195, 0.08);
+  border: 1px solid rgba(31, 63, 195, 0.15);
+  color: var(--ink);
+}
+.v2-sms-meta {
+  display: flex; justify-content: space-between; align-items: center;
+  font: 500 10.5px 'Geist Mono', monospace; color: var(--muted);
+  margin-bottom: 3px;
+}
+
+/* ── Persistent action bar (bottom of detail) ─────────────── */
+.v2-call-actions {
+  padding: 14px 22px;
+  border-top: 1px solid var(--warm-line);
+  background: rgba(255, 252, 248, 0.7);
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+.v2-call-actions .right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+
+/* ── Empty state ──────────────────────────────────────────── */
+.v2-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--muted);
+}
+.v2-empty i { font-size: 36px; opacity: .35; display: block; margin-bottom: 12px; }
+
+@media (max-width: 1100px) {
+  .v2-calls-layout { flex-direction: column; }
+  .v2-calls-list { width: 100%; max-height: 540px; }
+  .v2-calls-detail { width: 100%; max-height: none; }
+}
 
 /* ── Login screen layout ──────────────────────────────────── */
 .login-shell {

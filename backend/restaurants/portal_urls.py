@@ -21,6 +21,7 @@ urlpatterns = [
     path("<slug:slug>/calls/<int:event_pk>/resolve-followup/", views.portal_resolve_followup, name="portal_resolve_followup"),
     path("<slug:slug>/calls/<int:event_pk>/send-sms/",         views.portal_send_sms,         name="portal_send_sms"),
     path("<slug:slug>/calls/<int:event_pk>/reservation-status/", views.portal_reservation_status, name="portal_reservation_status"),
+    path("<slug:slug>/calls/<int:event_pk>/note/",               views.portal_call_note,        name="portal_call_note"),
     path("<slug:slug>/calls/<int:event_pk>/mark-reviewed/", views.portal_mark_reviewed, name="portal_mark_reviewed"),
     path("<slug:slug>/guests/",                          views.portal_guests,        name="portal_guests"),
     path("<slug:slug>/guests/add/",                      views.portal_guest_create,  name="portal_guest_create"),

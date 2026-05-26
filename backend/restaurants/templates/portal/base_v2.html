@@ -1,0 +1,133 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Concierge Portal{% endblock %} — {{ restaurant.name }}</title>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link href="{% static 'css/portal-v2.css' %}" rel="stylesheet">
+
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#1f3fc3">
+  <link rel="apple-touch-icon" href="{% static 'portal/icon-192.png' %}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Concierge">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<div class="v2-shell">
+
+  {# ── Sidebar ────────────────────────────────────────────── #}
+  <aside class="v2-sidebar" id="v2Sidebar">
+    <a href="{% url 'portal_dashboard' restaurant.slug %}" class="v2-sidebar-brand" style="text-decoration:none;">
+      <span class="sparkle">✦</span>
+      <span>Concierge</span>
+    </a>
+
+    <nav class="v2-sidebar-nav">
+      <a class="v2-sidebar-item {% block nav_dashboard %}{% endblock %}" href="{% url 'portal_dashboard' restaurant.slug %}">
+        <span class="v2-sidebar-icon"><i class="bi bi-grid-1x2-fill"></i></span>
+        <span>Dashboard</span>
+      </a>
+      <a class="v2-sidebar-item {% block nav_calls %}{% endblock %}" href="{% url 'portal_calls' restaurant.slug %}">
+        <span class="v2-sidebar-icon"><i class="bi bi-telephone-inbound-fill"></i></span>
+        <span>Call History</span>
+        {% if follow_ups_pending and follow_ups_pending > 0 %}<span class="v2-sidebar-dot"></span>{% endif %}
+      </a>
+      <a class="v2-sidebar-item {% block nav_guests %}{% endblock %}" href="{% url 'portal_guests' restaurant.slug %}">
+        <span class="v2-sidebar-icon"><i class="bi bi-people-fill"></i></span>
+        <span>Guests</span>
+      </a>
+      <a class="v2-sidebar-item {% block nav_kb %}{% endblock %}" href="{% url 'portal_kb' restaurant.slug %}">
+        <span class="v2-sidebar-icon"><i class="bi bi-database-fill"></i></span>
+        <span>Knowledge</span>
+      </a>
+      <a class="v2-sidebar-item {% block nav_reports %}{% endblock %}" href="{% url 'portal_reports_list' restaurant.slug %}">
+        <span class="v2-sidebar-icon"><i class="bi bi-bar-chart-fill"></i></span>
+        <span>Reports</span>
+      </a>
+      {% if is_owner %}
+      <a class="v2-sidebar-item {% block nav_billing %}{% endblock %}" href="{% url 'portal_billing' restaurant.slug %}">
+        <span class="v2-sidebar-icon"><i class="bi bi-credit-card-fill"></i></span>
+        <span>Billing</span>
+        {% if balance_status == "critical" %}<span class="v2-sidebar-dot dot-danger"></span>
+        {% elif balance_status == "warning" %}<span class="v2-sidebar-dot dot-warn"></span>
+        {% endif %}
+      </a>
+      {% endif %}
+      <a class="v2-sidebar-item {% block nav_account %}{% endblock %}" href="{% url 'portal_account' restaurant.slug %}">
+        <span class="v2-sidebar-icon"><i class="bi bi-person-fill"></i></span>
+        <span>Account</span>
+      </a>
+    </nav>
+
+    <div class="v2-sidebar-foot">
+      <div class="v2-sidebar-foot-row">
+        <div class="v2-avatar avatar-accent">{{ restaurant.name|slice:":2"|upper }}</div>
+        <div class="v2-sidebar-foot-meta">
+          <div class="v2-sidebar-foot-name">{{ restaurant.name }}</div>
+          <div class="v2-sidebar-foot-sub">
+            {% if agent_status == "active" %}Agent active
+            {% elif agent_status == "no_credits" %}No credits
+            {% elif agent_status == "past_due" %}Payment due
+            {% else %}Agent inactive{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="v2-sidebar-foot-links">
+        {% if has_multiple_restaurants %}
+        <a href="{% url 'portal_select_restaurant' %}">
+          <i class="bi bi-arrow-left-right"></i> Switch
+        </a>
+        {% endif %}
+        <a href="{% url 'portal_logout' %}">
+          <i class="bi bi-box-arrow-left"></i> Logout
+        </a>
+      </div>
+    </div>
+  </aside>
+
+  <div class="v2-sidebar-overlay" id="v2SidebarOverlay"></div>
+
+  {# ── Main ──────────────────────────────────────────────── #}
+  <main class="v2-main">
+    <div class="v2-main-bg">
+      <div class="v2-backdrop" style="position:absolute;"></div>
+      <div class="orb-accent" style="top: -180px; right: -150px; opacity: 0.32; width: 480px; height: 480px;"></div>
+      <div class="orb-cream"  style="bottom: -150px; left: 200px; opacity: 0.55; width: 320px; height: 320px;"></div>
+    </div>
+
+    <button class="v2-sidebar-toggle" id="v2SidebarToggle" aria-label="Open menu">
+      <i class="bi bi-list"></i>
+    </button>
+
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="v2-alert" style="margin-bottom: 14px;">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+{% block extra_scripts %}{% endblock %}
+<script>
+  (function () {
+    const sb = document.getElementById('v2Sidebar');
+    const ov = document.getElementById('v2SidebarOverlay');
+    const btn = document.getElementById('v2SidebarToggle');
+    if (!sb || !ov || !btn) return;
+    const open  = () => { sb.classList.add('show'); ov.classList.add('show'); };
+    const close = () => { sb.classList.remove('show'); ov.classList.remove('show'); };
+    btn.addEventListener('click', open);
+    ov.addEventListener('click', close);
+  })();
+</script>
+</body>
+</html>

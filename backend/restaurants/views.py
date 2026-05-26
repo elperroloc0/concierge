@@ -3430,6 +3430,21 @@ def portal_knowledge_base(request, slug):
     })
 
 
+def _short_time_ago(dt):
+    """Compact relative-time label: '23s', '5m', '7h', '2d'."""
+    if not dt:
+        return ""
+    delta = timezone.now() - dt
+    s = int(delta.total_seconds())
+    if s < 60:
+        return f"{s}s"
+    if s < 3600:
+        return f"{s // 60}m"
+    if s < 86400:
+        return f"{s // 3600}h"
+    return f"{s // 86400}d"
+
+
 @portal_view()
 def portal_calls(request, slug):
     restaurant = request.restaurant
@@ -3441,6 +3456,8 @@ def portal_calls(request, slug):
     date_from          = request.GET.get("date_from", "")
     date_to            = request.GET.get("date_to", "")
     phone_filter       = request.GET.get("phone", "").strip()
+    tab                = request.GET.get("tab", "all")  # v2 tabs: all / needs_action / reservations / resolved
+    selected_pk        = request.GET.get("selected", "")
 
     # Use CallDetail as the primary queryset — one row per call (post-migration 0049).
     # Avoids loading all CallEvents into Python for deduplication.
@@ -3462,9 +3479,14 @@ def portal_calls(request, slug):
     follow_ups_pending   = base_qs.filter(
         Q(follow_up_needed=True) | Q(needs_review=True)
     ).count()
+    resolved_count       = base_qs.filter(follow_up_needed=False, needs_review=False).count()
     sms_sent            = SmsLog.objects.filter(
         call_event__restaurant=restaurant, status="sent"
     ).count()
+
+    # Calls received today (in restaurant timezone, falls back to server time)
+    today = timezone.localdate()
+    calls_today = base_qs.filter(created_at__date=today).count()
 
     # ── Apply filters to paginated queryset ───────────────────────────────────
     qs = base_qs
@@ -3479,7 +3501,17 @@ def portal_calls(request, slug):
     if date_to:
         qs = qs.filter(created_at__date__lte=date_to)
     if phone_filter:
-        qs = qs.filter(caller_phone__icontains=phone_filter)
+        qs = qs.filter(
+            Q(caller_phone__icontains=phone_filter) | Q(caller_name__icontains=phone_filter)
+        )
+
+    # v2 tabs (overlay on existing filters)
+    if tab == "needs_action":
+        qs = qs.filter(Q(follow_up_needed=True) | Q(needs_review=True))
+    elif tab == "reservations":
+        qs = qs.filter(wants_reservation=True)
+    elif tab == "resolved":
+        qs = qs.filter(follow_up_needed=False, needs_review=False)
 
     # ── Repeat caller detection (phone numbers with >1 call) ──────────────────
     from django.db.models import Count as _Count
@@ -3496,6 +3528,47 @@ def portal_calls(request, slug):
     paginator = Paginator(qs, 20)
     page_qs   = paginator.get_page(request.GET.get("page"))
 
+    # ── Reason counts for v2 pill row (only reasons that have any calls) ──────
+    from django.db.models import Count as _Count2
+    _reason_labels = dict(CallDetail.CALL_REASON_CHOICES)
+    _reason_rows = (
+        base_qs.values("call_reason")
+               .annotate(n=_Count2("id"))
+               .order_by("-n")
+    )
+    reason_counts = [
+        {"value": row["call_reason"], "count": row["n"],
+         "label": _reason_labels.get(row["call_reason"], row["call_reason"])}
+        for row in _reason_rows if row["n"] > 0 and row["call_reason"]
+    ]
+
+    # Build a "keep" querystring that preserves orthogonal filters
+    # (phone + dates) when switching between status/reason pills.
+    _keep = request.GET.copy()
+    for _k in ("tab", "reason", "page"):
+        _keep.pop(_k, None)
+    keep_qs = _keep.urlencode()
+
+    # Same idea for pagination — preserve everything *except* page.
+    _page_keep = request.GET.copy()
+    _page_keep.pop("page", None)
+    page_keep_qs = _page_keep.urlencode()
+
+    # For clicking a call card — preserve all filters, but override selected.
+    _card_keep = request.GET.copy()
+    _card_keep.pop("page", None)
+    _card_keep.pop("selected", None)
+    card_keep_qs = _card_keep.urlencode()
+
+    # ── Phones with an existing CallerMemory profile (for v2 "View profile" link) ──
+    page_phones = [
+        d.caller_phone for d in page_qs.object_list if d.caller_phone
+    ]
+    memory_by_phone = {
+        m.phone: m
+        for m in CallerMemory.objects.filter(restaurant=restaurant, phone__in=page_phones)
+    }
+
     # ── Enrich only the current page ──────────────────────────────────────────
     enriched = []
     for detail in page_qs.object_list:
@@ -3503,22 +3576,52 @@ def portal_calls(request, slug):
         call_data = event.payload.get("call", {})
         _, outcome, _ = _classify_call(event.payload)
         phone = detail.caller_phone or call_data.get("from_number", "")
+        memory = memory_by_phone.get(detail.caller_phone) if detail.caller_phone else None
+        # Canonical display name: prefer the stored profile, fall back to AI-extracted
+        canonical_name = (memory.name if memory and memory.name else "") or detail.caller_name or ""
+        display_name = (
+            canonical_name
+            or detail.caller_phone
+            or call_data.get("from_number", "")
+            or "Unknown caller"
+        )
+        display_initial = canonical_name[:1].upper() if canonical_name else ("#" if detail.caller_phone else "?")
         enriched.append({
-            "event":        event,
-            "date":         detail.created_at,
-            "from_number":  call_data.get("from_number", ""),
-            "duration_sec": detail.duration_seconds or 0,
-            "outcome":      outcome,
-            "transcript":   call_data.get("transcript", ""),
-            "detail":       detail,
-            "sms_logs":     list(event.sms_logs.all()),
-            "call_count":   repeat_phones.get(phone, 1) if phone else 1,
+            "event":           event,
+            "date":            detail.created_at,
+            "time_ago":        _short_time_ago(detail.created_at),
+            "from_number":     call_data.get("from_number", ""),
+            "duration_sec":    detail.duration_seconds or 0,
+            "outcome":         outcome,
+            "transcript":      call_data.get("transcript", ""),
+            "detail":          detail,
+            "sms_logs":        list(event.sms_logs.all()),
+            "call_count":      repeat_phones.get(phone, 1) if phone else 1,
+            "memory":          memory,
+            "display_name":    display_name,
+            "display_initial": display_initial,
+            "has_name":        bool(canonical_name),
         })
+
+    # Resolve the currently-selected call for v2 split-pane UI
+    selected_call = None
+    if enriched:
+        if selected_pk:
+            try:
+                selected_pk_int = int(selected_pk)
+                selected_call = next(
+                    (c for c in enriched if c["event"].pk == selected_pk_int), None
+                )
+            except (TypeError, ValueError):
+                selected_call = None
+        if selected_call is None:
+            selected_call = enriched[0]
 
     return render(request, "portal/calls.html", {
         "restaurant":          restaurant,
         "page_obj":            page_qs,
         "enriched":            enriched,
+        "selected_call":       selected_call,
         "reason_choices":      CallDetail.CALL_REASON_CHOICES,
         # filters (to repopulate form)
         "reason_filter":       reason_filter,
@@ -3527,11 +3630,18 @@ def portal_calls(request, slug):
         "date_from":           date_from,
         "date_to":             date_to,
         "phone_filter":        phone_filter,
+        "tab":                 tab,
+        "reason_counts":       reason_counts,
+        "keep_qs":             keep_qs,
+        "page_keep_qs":        page_keep_qs,
+        "card_keep_qs":        card_keep_qs,
         # stats
         "total_calls":         total_calls,
         "reservation_intents":  reservation_intents,
         "reservations_pending": reservations_pending,
         "follow_ups_pending":  follow_ups_pending,
+        "resolved_count":      resolved_count,
+        "calls_today":         calls_today,
         "sms_sent":            sms_sent,
     })
 
@@ -3617,6 +3727,23 @@ def portal_reservation_status(request, slug, event_pk):
         return JsonResponse({"ok": True, "status": status})
     except CallDetail.DoesNotExist:
         return JsonResponse({"ok": False, "error": "No detail"}, status=404)
+
+
+@portal_view()
+def portal_call_note(request, slug, event_pk):
+    """AJAX: save a free-form staff note to a CallDetail (used by v2 calls UI)."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    restaurant = request.restaurant
+    event = get_object_or_404(CallEvent, pk=event_pk, restaurant=restaurant)
+    note = request.POST.get("note", "").strip()
+    try:
+        detail = event.detail
+    except CallDetail.DoesNotExist:
+        return JsonResponse({"ok": False, "error": "No detail"}, status=404)
+    detail.notes = note
+    detail.save(update_fields=["notes", "updated_at"])
+    return JsonResponse({"ok": True, "note": note})
 
 
 @portal_view()
