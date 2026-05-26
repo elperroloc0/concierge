@@ -1,0 +1,108 @@
+{# Pending action queue card — included at the top of dashboard.html #}
+{# Hidden when there are no pending tokens. Polls /pending-actions/count/ every 30s. #}
+
+{% if pending_actions %}
+<div class="card mb-4 pending-queue-card border-warning-subtle">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h6 class="fw-bold mb-0">
+        <i class="bi bi-lightning-fill text-warning"></i>
+        {{ pending_actions|length }}
+        request{{ pending_actions|length|pluralize }} need{{ pending_actions|length|pluralize:"s," }} your response
+      </h6>
+      <small class="text-muted">Oldest first</small>
+    </div>
+
+    <ul class="list-group list-group-flush">
+      {% for t in pending_actions %}
+      {% with mins=t.age_minutes|floatformat:0 %}
+      <li class="list-group-item d-flex align-items-center justify-content-between px-2 py-3 pending-row"
+          data-action-type="{{ t.action_type }}"
+          data-age-min="{{ mins }}">
+        <div class="d-flex align-items-center gap-2" style="min-width:0;">
+          <span class="pending-icon fs-5" style="width:32px;">
+            {% if t.action_type == "reservation" %}📅
+            {% elif t.action_type == "complaint" %}🚨
+            {% elif t.action_type == "followup" %}📞
+            {% else %}💼{% endif %}
+          </span>
+          <div style="min-width:0;">
+            <div class="fw-semibold text-truncate">
+              {{ t.call_detail.caller_name|default:t.call_detail.caller_phone|default:"Unknown caller" }}
+            </div>
+            <div class="small text-muted text-truncate" style="max-width:340px;">
+              {{ t.call_detail.call_summary|default:t.get_action_type_display|truncatechars:80 }}
+            </div>
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+          <span class="badge text-bg-light pending-age">{{ t.created_at|timesince }}</span>
+          <a href="{% url 'call_action_page' restaurant.slug t.token %}"
+             class="btn btn-sm btn-primary" target="_blank" rel="noopener">
+            Open <i class="bi bi-arrow-up-right"></i>
+          </a>
+        </div>
+      </li>
+      {% endwith %}
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
+<style>
+  .pending-row[data-action-type="complaint"] { background: #fef2f2; }
+  .pending-row.warn   { background: #fff7ed; }
+  .pending-row.danger { background: #fee2e2; }
+  .pending-row.pulse  { animation: pendingPulse 1.5s infinite; }
+  @keyframes pendingPulse {
+    0%, 100% { background: #fee2e2; }
+    50%      { background: #fecaca; }
+  }
+</style>
+
+<script>
+(function () {
+  // Color rows by age (complaint already red)
+  document.querySelectorAll(".pending-row").forEach(row => {
+    if (row.dataset.actionType === "complaint") {
+      if (+row.dataset.ageMin > 30) row.classList.add("pulse");
+      return;
+    }
+    const age = +row.dataset.ageMin;
+    if (age > 60)      row.classList.add("danger", "pulse");
+    else if (age > 30) row.classList.add("danger");
+    else if (age > 15) row.classList.add("warn");
+  });
+
+  // Poll for count changes every 30s — reload page if it changed
+  const currentCount = {{ pending_actions|length }};
+  const pollUrl      = "{% url 'portal_pending_actions_count' restaurant.slug %}";
+  let pollTimer = setInterval(async () => {
+    if (document.hidden) return;   // skip when tab not visible
+    try {
+      const r = await fetch(pollUrl, { credentials: "same-origin" });
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.count !== currentCount) location.reload();
+    } catch (e) { /* network blip — try next tick */ }
+  }, 30000);
+  window.addEventListener("beforeunload", () => clearInterval(pollTimer));
+})();
+</script>
+{% else %}
+{# When zero pending, also poll quietly so a NEW one triggers reload #}
+<script>
+(function () {
+  const pollUrl = "{% url 'portal_pending_actions_count' restaurant.slug %}";
+  setInterval(async () => {
+    if (document.hidden) return;
+    try {
+      const r = await fetch(pollUrl, { credentials: "same-origin" });
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.count > 0) location.reload();
+    } catch (e) { /* ignore */ }
+  }, 30000);
+})();
+</script>
+{% endif %}

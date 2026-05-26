@@ -1,0 +1,31 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#4361ee">
+  <title>{{ t.restaurant.name }} — Enlace expirado</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+        crossorigin="anonymous">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+        rel="stylesheet"
+        integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+"
+        crossorigin="anonymous">
+</head>
+<body class="bg-body-tertiary">
+<div class="container py-5 text-center" style="max-width:440px;">
+  <div class="display-1 text-warning mb-3"><i class="bi bi-clock-history"></i></div>
+  <h3 class="fw-bold mb-2">Enlace expirado</h3>
+  <p class="text-muted">
+    Este enlace de respuesta venció {{ t.expires_at|timesince }} atrás.
+    Abre el portal para ver el detalle de la llamada.
+  </p>
+  <a href="/portal/{{ t.restaurant.slug }}/calls/" class="btn btn-primary mt-3">
+    Ir a Call History
+  </a>
+</div>
+</body></html>

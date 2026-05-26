@@ -48,6 +48,12 @@ TWILIO_ACCOUNT_SID  = os.environ.get("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN   = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_FROM_NUMBER  = os.environ.get("TWILIO_FROM_NUMBER", "")
 
+# ── Web Push (VAPID) ──────────────────────────────────────────────────────────
+# Generate keys with: python scripts/generate_vapid.py
+VAPID_PUBLIC_KEY  = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
+VAPID_ADMIN_EMAIL = os.environ.get("VAPID_ADMIN_EMAIL", "admin@conciergeai.com")
+
 # ── Email (Gmail SMTP) ────────────────────────────────────────────────────────
 
 # Google: myaccount.google.com → Security → App Passwords
@@ -70,7 +76,10 @@ except ImportError:
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "False").lower() == "true"
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",")
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get(
+    "ALLOWED_HOSTS",
+    "localhost,127.0.0.1,testserver,.trycloudflare.com,.ngrok.io,.ngrok-free.app"
+).split(",") if h.strip()]
 
 # Render dynamically assigns hostnames. Add it to allowed hosts if it exists.
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
@@ -123,6 +132,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'restaurants.context_processors.balance_status',
                 'restaurants.context_processors.membership',
+                'restaurants.context_processors.web_push',
             ],
         },
     },
@@ -185,6 +195,17 @@ STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
 # Enable WhiteNoise compression and caching
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+# ── Cache ─────────────────────────────────────────────────────────────────────
+# DatabaseCache works across multiple gunicorn workers (WEB_CONCURRENCY=4).
+# Used for push throttle, quiet hours guards, rate-limiting.
+# Run `python manage.py createcachetable` once after deploy.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "django_cache_table",
+    }
+}
 
 # Logging Configuration
 LOGS_DIR = BASE_DIR / "logs"

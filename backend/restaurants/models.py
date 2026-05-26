@@ -104,6 +104,12 @@ class Restaurant(models.Model):
     notify_via_ws = models.BooleanField(default=False)
     notify_ws_numb = models.CharField(max_length=32, blank=True, default="")
 
+    # web push notifications
+    notify_via_push = models.BooleanField(default=False, help_text="Master switch for browser push notifications.")
+    quiet_hours_start = models.TimeField(null=True, blank=True, help_text="Mute non-urgent push starting at this local time.")
+    quiet_hours_end   = models.TimeField(null=True, blank=True, help_text="Resume push at this local time.")
+    quiet_hours_skip_urgent = models.BooleanField(default=True, help_text="Always ring for complaints, even during quiet hours.")
+
     notify_other = models.CharField(max_length=64, blank=True, default="")
 
     # status
@@ -212,6 +218,7 @@ class RestaurantMembership(models.Model):
 
     # Operator notification preferences (controlled by owner)
     notify_email = models.EmailField(blank=True, default="", help_text="Override email for notifications. Falls back to user account email if blank.")
+    notify_via_push = models.BooleanField(default=False, help_text="Receive browser push notifications for this restaurant.")
     notify_on_reservation = models.BooleanField(default=False)
     notify_on_complaint = models.BooleanField(default=False)
     notify_on_followup = models.BooleanField(default=False)
@@ -767,3 +774,114 @@ class WeeklyReport(models.Model):
 
     def __str__(self):
         return f"WeeklyReport[{self.restaurant.slug} | {self.week_start}]"
+
+
+# ─── Web Push Subscriptions ───────────────────────────────────────────────────
+
+class PushSubscription(models.Model):
+    """One row per browser/device subscribed to push for a restaurant."""
+
+    user        = models.ForeignKey(User, on_delete=models.CASCADE, related_name="push_subscriptions")
+    restaurant  = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="push_subscriptions")
+    endpoint    = models.URLField(max_length=2048)
+    key_p256dh  = models.CharField(max_length=200)
+    key_auth    = models.CharField(max_length=100)
+    user_agent  = models.CharField(max_length=300, blank=True, default="")
+    label       = models.CharField(max_length=80, blank=True, default="", help_text="Friendly device label shown in settings.")
+    last_seen_at= models.DateTimeField(auto_now=True)
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("user", "restaurant", "endpoint")]
+        indexes = [models.Index(fields=["restaurant", "user"])]
+
+    def __str__(self):
+        return f"PushSub[{self.user.pk} @ {self.restaurant.slug} | {self.label or 'device'}]"
+
+
+# ─── Call Action Tokens (one-tap response page) ───────────────────────────────
+
+def _generate_call_action_token() -> str:
+    import secrets
+    return secrets.token_urlsafe(32)
+
+
+class CallActionToken(models.Model):
+    """
+    Single-use token granting access to the mobile one-tap response page (/r/<token>/).
+    Created at the same time as a call alert for actionable call types.
+    """
+
+    ACTION_RESERVATION  = "reservation"
+    ACTION_COMPLAINT    = "complaint"
+    ACTION_FOLLOWUP     = "followup"
+    ACTION_NON_CUSTOMER = "non_customer"
+    ACTION_TYPES = [
+        (ACTION_RESERVATION,  "Reservation request"),
+        (ACTION_COMPLAINT,    "Complaint"),
+        (ACTION_FOLLOWUP,     "Follow-up needed"),
+        (ACTION_NON_CUSTOMER, "Business call"),
+    ]
+
+    RESP_PENDING   = ""
+    RESP_CONFIRMED = "confirmed"
+    RESP_DECLINED  = "declined"
+    RESP_CALLBACK  = "callback"
+    RESP_RESOLVED  = "resolved"  # owner handled it outside the system
+    RESPONSES = [
+        (RESP_PENDING,   "Pending"),
+        (RESP_CONFIRMED, "Confirmed"),
+        (RESP_DECLINED,  "No availability"),
+        (RESP_CALLBACK,  "Will call back"),
+        (RESP_RESOLVED,  "Manually resolved"),
+    ]
+
+    token        = models.CharField(max_length=64, unique=True, default=_generate_call_action_token, db_index=True)
+    call_detail  = models.ForeignKey("CallDetail", on_delete=models.CASCADE, related_name="action_tokens")
+    restaurant   = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="action_tokens")
+    action_type  = models.CharField(max_length=16, choices=ACTION_TYPES)
+
+    # response state
+    response      = models.CharField(max_length=16, choices=RESPONSES, blank=True, default=RESP_PENDING)
+    response_note = models.CharField(max_length=500, blank=True, default="", help_text="Optional custom message from owner included in SMS.")
+    used_at       = models.DateTimeField(null=True, blank=True)
+    used_by       = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    used_from_ip  = models.GenericIPAddressField(null=True, blank=True)
+
+    # owner-edited overrides (AI extraction may be wrong)
+    edited_date   = models.DateField(null=True, blank=True)
+    edited_time   = models.TimeField(null=True, blank=True)
+    edited_party  = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    # escalation state machine — last fired level (0 = initial sent, 1 = 15min reminder, 2 = 30min auto-SMS, 3 = 60min final)
+    escalation_level = models.PositiveSmallIntegerField(default=0)
+
+    expires_at    = models.DateTimeField(help_text="Default created_at + 24h.")
+    created_at    = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["restaurant", "used_at", "expires_at"]),
+            models.Index(fields=["used_at", "expires_at"]),
+        ]
+        ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timezone.timedelta(hours=24)
+        super().save(*args, **kwargs)
+
+    @property
+    def is_expired(self) -> bool:
+        return timezone.now() > self.expires_at
+
+    @property
+    def is_used(self) -> bool:
+        return self.used_at is not None
+
+    @property
+    def age_minutes(self) -> float:
+        return (timezone.now() - self.created_at).total_seconds() / 60
+
+    def __str__(self):
+        return f"CallActionToken[{self.action_type} @ {self.restaurant.slug} | {self.response or 'pending'}]"

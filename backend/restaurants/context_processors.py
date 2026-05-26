@@ -1,5 +1,12 @@
 from decimal import Decimal
 
+from django.conf import settings
+
+
+def web_push(request):
+    """Expose VAPID public key to all templates for service-worker subscribe."""
+    return {"vapid_public_key": settings.VAPID_PUBLIC_KEY}
+
 
 def balance_status(request):
     """Add balance_status and agent_status to all portal template contexts."""
