@@ -1,0 +1,254 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#4361ee">
+  <title>{{ restaurant.name }} — Acción requerida</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+        crossorigin="anonymous">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+        rel="stylesheet"
+        integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+"
+        crossorigin="anonymous">
+  <style>
+    body { background:#f8fafc; padding-bottom:140px; }
+    .ca-action-bar {
+      position:fixed; bottom:0; left:0; right:0;
+      background:#fff; border-top:1px solid #e2e8f0;
+      padding:12px; padding-bottom: calc(12px + env(safe-area-inset-bottom));
+      display:flex; gap:8px;
+    }
+    .ca-btn { flex:1; min-height:56px; border:0; border-radius:12px;
+              color:#fff; font-size:15px; font-weight:600; }
+    .ca-btn:disabled { opacity:.6; }
+    .ca-btn.confirm { background:#16a34a; }
+    .ca-btn.decline { background:#dc2626; }
+    .ca-btn.callback { background:#ea580c; }
+  </style>
+</head>
+<body>
+
+<div class="container py-4" style="max-width:560px;">
+
+  <!-- Header -->
+  <header class="d-flex justify-content-between align-items-center mb-3">
+    <div class="fw-bold"><i class="bi bi-building text-primary"></i> {{ restaurant.name }}</div>
+    <small class="text-muted">Token expira <span id="expiresAt">{{ t.expires_at|date:"d M, H:i" }}</span></small>
+  </header>
+
+  <!-- Caller contact -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <h5 class="fw-bold mb-1">
+        {% if t.action_type == "reservation" %}📅 Reserva
+        {% elif t.action_type == "complaint" %}🚨 Reclamación
+        {% elif t.action_type == "followup" %}📞 Devolver llamada
+        {% else %}💼 Llamada{% endif %}
+      </h5>
+      <div class="text-muted">
+        <strong>{{ call.caller_name|default:"Desconocido" }}</strong>
+        {% if call.caller_phone %}
+          · <a href="tel:{{ call.caller_phone }}">{{ call.caller_phone }}</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- AI summary -->
+  {% if call.call_summary %}
+  <div class="card mb-3">
+    <div class="card-body">
+      <h6 class="fw-bold"><i class="bi bi-stars text-warning"></i> Resumen</h6>
+      <p class="mb-0 small">{{ call.call_summary }}</p>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Reservation details (editable) -->
+  {% if t.action_type == "reservation" %}
+  <div class="card mb-3">
+    <div class="card-body">
+      <h6 class="fw-bold mb-3"><i class="bi bi-pencil-square text-primary"></i> Detalles (editable)</h6>
+      <div class="row g-2">
+        <div class="col-5">
+          <label class="form-label small text-muted mb-1">Fecha</label>
+          <input type="date" id="rDate" class="form-control"
+                 value="{{ call.reservation_date|date:'Y-m-d' }}">
+        </div>
+        <div class="col-4">
+          <label class="form-label small text-muted mb-1">Hora</label>
+          <input type="time" id="rTime" class="form-control"
+                 value="{{ call.reservation_time|time:'H:i' }}">
+        </div>
+        <div class="col-3">
+          <label class="form-label small text-muted mb-1">Pax</label>
+          <input type="number" id="rParty" class="form-control" min="1"
+                 value="{{ call.party_size|default:'' }}">
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Custom note -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <label class="form-label fw-semibold" for="noteField">
+        <i class="bi bi-chat-left-text text-secondary"></i> Mensaje adicional (opcional)
+      </label>
+      <textarea id="noteField" rows="2" maxlength="500" class="form-control"
+                placeholder="Ej. Cumpleaños — mesa cerca de la ventana"></textarea>
+    </div>
+  </div>
+
+  <!-- Recording -->
+  {% if call.recording_url %}
+  <div class="card mb-3">
+    <div class="card-body">
+      <h6 class="fw-bold"><i class="bi bi-soundwave text-primary"></i> Grabación</h6>
+      <audio controls src="{{ call.recording_url }}" style="width:100%;"></audio>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Transcript (collapsed) -->
+  {% if transcript %}
+  <details class="card mb-3">
+    <summary class="card-body fw-bold" style="cursor:pointer;">
+      <i class="bi bi-chat-quote text-secondary"></i> Transcripción
+    </summary>
+    <div class="card-body pt-0">
+      <pre class="small text-muted" style="white-space:pre-wrap;">{{ transcript }}</pre>
+    </div>
+  </details>
+  {% endif %}
+
+  <!-- Mark resolved (manual close) -->
+  <div class="text-center mt-3">
+    <button type="button" id="resolveBtn" class="btn btn-sm btn-link text-muted">
+      Ya lo resolví fuera del sistema
+    </button>
+  </div>
+</div>
+
+<!-- Sticky action bar -->
+<div class="ca-action-bar">
+  <button class="ca-btn confirm"  data-action="confirmed">✅ Confirmar</button>
+  <button class="ca-btn decline"  data-action="declined">❌ Sin cupo</button>
+  <button class="ca-btn callback" data-action="callback">📞 Te llamamos</button>
+</div>
+
+<!-- Callback time chooser modal -->
+<dialog id="cbDlg" class="border-0 rounded-3 p-0" style="max-width:340px;">
+  <div class="p-4">
+    <h5 class="fw-bold mb-3">¿Cuándo lo llamamos?</h5>
+    <div class="d-grid gap-2">
+      <button class="btn btn-outline-primary" data-when="15min">En 15 minutos</button>
+      <button class="btn btn-outline-primary" data-when="1h">Dentro de una hora</button>
+      <button class="btn btn-outline-primary" data-when="tomorrow_am">Mañana por la mañana</button>
+    </div>
+    <div class="text-end mt-3">
+      <button class="btn btn-light" id="cbCancel">Cancelar</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Confirm modal -->
+<dialog id="confirmDlg" class="border-0 rounded-3 p-0" style="max-width:340px;">
+  <div class="p-4">
+    <p id="confirmText" class="mb-3"></p>
+    <div class="d-flex gap-2 justify-content-end">
+      <button id="confirmCancel" class="btn btn-light">Cancelar</button>
+      <button id="confirmOk"     class="btn btn-primary">Enviar SMS</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  const csrf = "{{ csrf_token }}";
+  const respondUrl = "{% url 'call_action_respond' restaurant.slug t.token %}";
+  const resolveUrl = "{% url 'call_action_resolve' restaurant.slug t.token %}";
+
+  const cbDlg       = document.getElementById("cbDlg");
+  const confirmDlg  = document.getElementById("confirmDlg");
+  const confirmText = document.getElementById("confirmText");
+  const actionBtns  = document.querySelectorAll(".ca-btn");
+
+  const labels = {
+    confirmed: "¿Enviar confirmación por SMS al cliente?",
+    declined:  "¿Enviar SMS de «sin disponibilidad»?",
+    callback:  "¿Enviar SMS de «te llamamos pronto»?",
+  };
+
+  let pendingAction = null;
+  let pendingWhen   = "";
+
+  actionBtns.forEach(b => {
+    b.addEventListener("click", () => {
+      pendingAction = b.dataset.action;
+      pendingWhen   = "";
+      if (pendingAction === "callback") {
+        cbDlg.showModal();
+        return;
+      }
+      askConfirm();
+    });
+  });
+
+  cbDlg.addEventListener("click", (e) => {
+    const w = e.target.dataset.when;
+    if (w) { pendingWhen = w; cbDlg.close(); askConfirm(); }
+  });
+  document.getElementById("cbCancel").onclick = () => cbDlg.close();
+
+  function askConfirm() {
+    confirmText.textContent = labels[pendingAction] || "Confirmar acción";
+    confirmDlg.showModal();
+  }
+  document.getElementById("confirmCancel").onclick = () => confirmDlg.close();
+  document.getElementById("confirmOk").onclick = async () => {
+    confirmDlg.close();
+    actionBtns.forEach(b => b.disabled = true);
+
+    const fd = new FormData();
+    fd.append("action", pendingAction);
+    fd.append("note", document.getElementById("noteField").value);
+    if (pendingWhen) fd.append("callback_when", pendingWhen);
+    const dateEl  = document.getElementById("rDate");
+    const timeEl  = document.getElementById("rTime");
+    const partyEl = document.getElementById("rParty");
+    if (dateEl && dateEl.value)  fd.append("date",  dateEl.value);
+    if (timeEl && timeEl.value)  fd.append("time",  timeEl.value);
+    if (partyEl && partyEl.value) fd.append("party", partyEl.value);
+
+    try {
+      const r = await fetch(respondUrl, {
+        method: "POST", body: fd,
+        headers: { "X-CSRFToken": csrf },
+      });
+      if (r.ok) location.reload();
+      else {
+        alert("Error al enviar. Intenta de nuevo.");
+        actionBtns.forEach(b => b.disabled = false);
+      }
+    } catch (e) {
+      alert("Error de red: " + e.message);
+      actionBtns.forEach(b => b.disabled = false);
+    }
+  };
+
+  document.getElementById("resolveBtn").addEventListener("click", async () => {
+    if (!confirm("¿Marcar como resuelto sin enviar SMS al cliente?")) return;
+    const r = await fetch(resolveUrl, { method: "POST", headers: { "X-CSRFToken": csrf } });
+    if (r.ok) location.reload();
+  });
+})();
+</script>
+
+</body></html>

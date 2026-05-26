@@ -4,6 +4,10 @@
 {% block nav_dashboard %}active{% endblock %}
 
 {% block content %}
+
+{# Pending action queue — at the very top, only visible when items pending #}
+{% include "portal/_pending_queue.html" %}
+
 <h4 class="fw-bold mb-1">Welcome back</h4>
 <p class="text-muted mb-4">Last 30 days — {{ restaurant.name }}</p>
 

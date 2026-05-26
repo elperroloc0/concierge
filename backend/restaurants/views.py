@@ -51,7 +51,7 @@ from retell import Retell
 
 from .decorators import portal_view
 from .forms import KnowledgeBaseForm, RestaurantBasicForm, AccountEmailForm, PasswordUpdateForm
-from .models import CallDetail, CallEvent, CallerMemory, Restaurant, RestaurantKnowledgeBase, RestaurantMembership, SmsLog, Subscription, PendingEmailChange, WeeklyReport
+from .models import CallDetail, CallEvent, CallerMemory, PushSubscription, Restaurant, RestaurantKnowledgeBase, RestaurantMembership, SmsLog, Subscription, PendingEmailChange, WeeklyReport
 from .services.retell_client import RetellClient
 from .services.retell_tools import build_tool_list
 
@@ -866,6 +866,7 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
     """
     payload    = call_event.payload
     call       = payload.get("call", {})
+    call_id    = (call.get("call_id") or "").strip()
 
     # Retell API change: custom fields are now nested under `custom_analysis_data`
     full_analysis = call.get("call_analysis") or {}
@@ -1244,8 +1245,10 @@ def _send_followup_alert_email(call_event: CallEvent, restaurant: Restaurant) ->
     if not restaurant.notify_on_followup:
         return
     note = ""
+    detail = None
     try:
-        note = call_event.detail.notes or ""
+        detail = call_event.detail
+        note = detail.notes or ""
     except CallDetail.DoesNotExist:
         pass
     extra = "The caller asked to be called back or requested a human agent.\n"
@@ -1261,6 +1264,21 @@ def _send_followup_alert_email(call_event: CallEvent, restaurant: Restaurant) ->
         reason_bg="#fee2e2", reason_color="#b91c1c", reason_border="#fca5a5",
         text_body_extra=extra,
         extra_recipients=[op.notify_email or op.user.email] if op else None,
+    )
+
+    # ── Web push (parallel to email) ──────────────────────────────────────
+    token = _get_or_create_action_token(detail, restaurant, CallActionToken.ACTION_FOLLOWUP)
+    _send_push(
+        restaurant=restaurant,
+        title="📞 Devolver llamada",
+        body=_format_caller_label(detail, call_event),
+        url=_push_url_for_action(restaurant, token),
+        urgency="normal",
+        tag=f"followup-{token.pk if token else 'na'}",
+        actions=[
+            {"action": "callback", "title": "Ver detalles"},
+        ],
+        event_flag="notify_on_followup",
     )
 
 
@@ -1280,6 +1298,35 @@ def _send_reservation_alert_email(call_event: CallEvent, restaurant: Restaurant)
         extra_recipients=[op.notify_email or op.user.email] if op else None,
     )
 
+    # ── Web push (parallel to email) ──────────────────────────────────────
+    detail = getattr(call_event, "detail", None)
+    if isinstance(detail, type(None)):
+        try: detail = call_event.detail
+        except CallDetail.DoesNotExist: detail = None
+
+    token = _get_or_create_action_token(detail, restaurant, CallActionToken.ACTION_RESERVATION)
+
+    # Build body: caller + reservation details when available
+    body_parts = [_format_caller_label(detail, call_event)]
+    if detail and detail.reservation_date and detail.reservation_time:
+        body_parts.append(f"{detail.reservation_date.strftime('%a %b %-d')} · {detail.reservation_time.strftime('%-I:%M %p')}")
+    if detail and detail.party_size:
+        body_parts.append(f"{detail.party_size} pax")
+
+    _send_push(
+        restaurant=restaurant,
+        title="📅 Nueva reserva",
+        body=" · ".join(body_parts),
+        url=_push_url_for_action(restaurant, token),
+        urgency="normal",
+        tag=f"reservation-{token.pk if token else 'na'}",
+        actions=[
+            {"action": "confirm", "title": "✅ Confirmar"},
+            {"action": "decline", "title": "❌ Sin cupo"},
+        ],
+        event_flag="notify_on_reservation",
+    )
+
 
 def _send_complaint_alert_email(call_event: CallEvent, restaurant: Restaurant) -> None:
     """Send complaint alert if the preference flag is on."""
@@ -1295,6 +1342,25 @@ def _send_complaint_alert_email(call_event: CallEvent, restaurant: Restaurant) -
         reason_bg="#fee2e2", reason_color="#991b1b", reason_border="#fca5a5",
         text_body_extra="A caller raised a complaint. Immediate attention may be required.\n",
         extra_recipients=[op.notify_email or op.user.email] if op else None,
+    )
+
+    # ── Web push (urgency=high → bypasses throttle + quiet hours) ─────────
+    detail = None
+    try: detail = call_event.detail
+    except CallDetail.DoesNotExist: pass
+
+    token = _get_or_create_action_token(detail, restaurant, CallActionToken.ACTION_COMPLAINT)
+    _send_push(
+        restaurant=restaurant,
+        title="🚨 Reclamación recibida",
+        body=_format_caller_label(detail, call_event),
+        url=_push_url_for_action(restaurant, token),
+        urgency="high",
+        tag=f"complaint-{token.pk if token else 'na'}",
+        actions=[
+            {"action": "callback", "title": "Ver detalles"},
+        ],
+        event_flag="notify_on_complaint",
     )
 
 
@@ -1336,6 +1402,14 @@ def _send_defective_call_alert_email(call_event: CallEvent, restaurant: Restaura
             text_body_extra=extra,
             extra_recipients=None,
         )
+        _send_push(
+            restaurant=restaurant,
+            title="⚠️ Reservación incompleta",
+            body=f"{_format_caller_label(detail, call_event)} — falta {missing_str}",
+            url=f"/portal/{restaurant.slug}/calls/",
+            urgency="normal",
+            tag=f"defective-{call_event.pk}",
+        )
         return
 
     # ── Level 2: quality failure (no reservation involved) ────────────────────
@@ -1367,6 +1441,16 @@ def _send_defective_call_alert_email(call_event: CallEvent, restaurant: Restaura
         extra_recipients=None,
     )
 
+    # ── Web push for level 2 (quality problems) ──────────────────────────
+    _send_push(
+        restaurant=restaurant,
+        title="⚠️ Llamada con problemas",
+        body=f"{_format_caller_label(detail, call_event)} — {reasons[0]}",
+        url=f"/portal/{restaurant.slug}/calls/",
+        urgency="normal",
+        tag=f"defective-{call_event.pk}",
+    )
+
 
 def _send_non_customer_alert_email(call_event: CallEvent, restaurant: Restaurant) -> None:
     """Send a business-call alert when a non-customer call is identified."""
@@ -1382,6 +1466,20 @@ def _send_non_customer_alert_email(call_event: CallEvent, restaurant: Restaurant
         reason_bg="#f3f4f6", reason_color="#374151", reason_border="#d1d5db",
         text_body_extra="The AI identified this call as a non-customer business call (vendor, press, sales, service, etc.).\n",
         extra_recipients=[op.notify_email or op.user.email] if op else None,
+    )
+
+    detail = None
+    try: detail = call_event.detail
+    except CallDetail.DoesNotExist: pass
+
+    _send_push(
+        restaurant=restaurant,
+        title="💼 Llamada profesional",
+        body=_format_caller_label(detail, call_event),
+        url=f"/portal/{restaurant.slug}/calls/",
+        urgency="low",
+        tag=f"non-customer-{call_event.pk}",
+        event_flag="notify_on_non_customer",
     )
 
 
@@ -1425,6 +1523,15 @@ def _send_low_balance_email(restaurant: Restaurant, balance, level: str) -> None
                     level, balance, notify_email, restaurant.slug)
     except Exception:
         logger.exception("low_balance_email: failed | restaurant=%s", restaurant.slug)
+
+    _send_push(
+        restaurant=restaurant,
+        title=("🔴 Créditos casi agotados" if level == "critical" else "🟡 Saldo bajo"),
+        body=f"Saldo actual: ${balance:.2f}. Recarga para evitar interrupciones.",
+        url=f"/portal/{restaurant.slug}/billing/",
+        urgency=("high" if level == "critical" else "low"),
+        tag=f"low-balance-{level}",
+    )
 
 
 def _send_call_blocked_balance_email(restaurant: Restaurant) -> None:
@@ -1526,6 +1633,15 @@ def _send_payment_failed_email(restaurant: Restaurant) -> None:
     except Exception:
         logger.exception("payment_failed_email: failed | restaurant=%s", restaurant.slug)
 
+    _send_push(
+        restaurant=restaurant,
+        title="❌ Pago fallido",
+        body=f"Actualiza tu método de pago para mantener {restaurant.name} activo.",
+        url=f"/portal/{restaurant.slug}/billing/",
+        urgency="high",
+        tag="payment-failed",
+    )
+
 
 def _send_subscription_welcome_email(restaurant: Restaurant) -> None:
     """Send a welcome email when a subscription is activated."""
@@ -1559,6 +1675,15 @@ def _send_subscription_welcome_email(restaurant: Restaurant) -> None:
         logger.info("subscription_welcome_email: sent to %s | restaurant=%s", notify_email, restaurant.slug)
     except Exception:
         logger.exception("subscription_welcome_email: failed | restaurant=%s", restaurant.slug)
+
+    _send_push(
+        restaurant=restaurant,
+        title="🎉 ¡Agente activo!",
+        body=f"Concierge AI ya contesta llamadas para {restaurant.name}.",
+        url=f"/portal/{restaurant.slug}/",
+        urgency="normal",
+        tag="subscription-welcome",
+    )
 
 
 def _send_subscription_cancelled_email(restaurant: Restaurant) -> None:
@@ -1594,6 +1719,15 @@ def _send_subscription_cancelled_email(restaurant: Restaurant) -> None:
         logger.info("subscription_cancelled_email: sent to %s | restaurant=%s", notify_email, restaurant.slug)
     except Exception:
         logger.exception("subscription_cancelled_email: failed | restaurant=%s", restaurant.slug)
+
+    _send_push(
+        restaurant=restaurant,
+        title="⛔ Suscripción cancelada",
+        body=f"Tu agente sigue activo hasta {ctx['period_end'] or 'fin del período'}.",
+        url=f"/portal/{restaurant.slug}/billing/",
+        urgency="normal",
+        tag="subscription-cancelled",
+    )
 
 
 def _send_knowledge_gap_alert(restaurant: Restaurant, detail) -> None:
@@ -1639,6 +1773,15 @@ def _send_knowledge_gap_alert(restaurant: Restaurant, detail) -> None:
                     notify_email, unanswered[:80], restaurant.slug)
     except Exception:
         logger.exception("knowledge_gap_alert: failed | restaurant=%s", restaurant.slug)
+
+    _send_push(
+        restaurant=restaurant,
+        title="❓ Pregunta sin respuesta",
+        body=unanswered[:140],
+        url=f"/portal/{restaurant.slug}/knowledge-base/",
+        urgency="low",
+        tag="kb-gap",
+    )
 
 
 def _send_post_call_sms(call_event: CallEvent, restaurant: Restaurant) -> None:
@@ -3299,8 +3442,22 @@ def portal_dashboard(request, slug):
         "avg_cover_set": avg_cover is not None,
         "confirmed_count": confirmed_count,
         "pending_leads": pending_leads,
+        "pending_actions": _pending_actions_for_dashboard(restaurant),
     }
     return render(request, "portal/dashboard.html", context)
+
+
+def _pending_actions_for_dashboard(restaurant):
+    """Unresolved action tokens for the pending queue card on the dashboard."""
+    return list(
+        CallActionToken.objects.filter(
+            restaurant=restaurant,
+            used_at__isnull=True,
+            expires_at__gt=timezone.now(),
+        )
+        .select_related("call_detail")
+        .order_by("created_at")[:10]   # oldest first, cap at 10 for sanity
+    )
 
 
 @portal_view(require_owner=True)
@@ -4123,7 +4280,13 @@ def portal_notifications(request, slug):
         restaurant=restaurant, role="operator", is_active=True
     ).select_related("user").first()
 
+    current_membership = request.membership   # always exists for portal_view
+
     if request.method == "POST":
+        # ── Per-user account-level push opt-in (everyone, regardless of role) ──
+        current_membership.notify_via_push = "my_notify_via_push" in request.POST
+        current_membership.save(update_fields=["notify_via_push"])
+
         restaurant.notify_via_email       = "notify_via_email" in request.POST
         restaurant.notify_email           = request.POST.get("notify_email", "").strip()
         restaurant.notify_on_reservation  = "notify_on_reservation" in request.POST
@@ -4139,24 +4302,26 @@ def portal_notifications(request, slug):
 
         if operator_membership:
             operator_membership.notify_email           = request.POST.get("op_notify_email", "").strip()
+            operator_membership.notify_via_push        = "op_notify_via_push" in request.POST
             operator_membership.notify_on_reservation  = "op_notify_on_reservation" in request.POST
             operator_membership.notify_on_complaint    = "op_notify_on_complaint" in request.POST
             operator_membership.notify_on_followup     = "op_notify_on_followup" in request.POST
             operator_membership.notify_on_non_customer = "op_notify_on_non_customer" in request.POST
             operator_membership.save(update_fields=[
-                "notify_email",
+                "notify_email", "notify_via_push",
                 "notify_on_reservation", "notify_on_complaint",
                 "notify_on_followup", "notify_on_non_customer",
             ])
 
         saved = True
-        logger.info("portal_notifications: saved prefs | restaurant=%s | email=%s",
-                     restaurant.slug, restaurant.notify_via_email)
+        logger.info("portal_notifications: saved prefs | restaurant=%s | email=%s push=%s",
+                     restaurant.slug, restaurant.notify_via_email, restaurant.notify_via_push)
 
     return render(request, "portal/notifications.html", {
-        "restaurant": restaurant,
-        "saved":      saved,
-        "operator":   operator_membership,
+        "restaurant":    restaurant,
+        "saved":         saved,
+        "operator":      operator_membership,
+        "my_membership": current_membership,
     })
 
 
@@ -4576,3 +4741,385 @@ def _handle_stripe_event(event, data):
 
 def demo_call(request):
     return render(request, "demo_call.html")
+
+
+# ─── Web Push Notifications ───────────────────────────────────────────────────
+
+from django.contrib.staticfiles import finders
+from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_POST
+
+from .models import CallActionToken
+from .push import send_push as _send_push
+
+
+# ─── Push helpers for alert pipeline ─────────────────────────────────────────
+
+def _get_or_create_action_token(detail: "CallDetail", restaurant: "Restaurant", action_type: str) -> "CallActionToken | None":
+    """
+    Idempotent: if an unused token already exists for this (call, action_type), return it.
+    Otherwise create a new one. Returns None on error.
+    """
+    if not detail:
+        return None
+    try:
+        existing = CallActionToken.objects.filter(
+            call_detail=detail, action_type=action_type, used_at__isnull=True,
+        ).order_by("-created_at").first()
+        if existing and not existing.is_expired:
+            return existing
+        return CallActionToken.objects.create(
+            call_detail=detail, restaurant=restaurant, action_type=action_type,
+        )
+    except Exception:
+        logger.exception("failed to create action token | restaurant=%s action=%s", restaurant.slug, action_type)
+        return None
+
+
+def _push_url_for_action(restaurant: "Restaurant", token: "CallActionToken | None") -> str:
+    """Deep-link URL for push notifications. Falls back to Call History if no token."""
+    if token:
+        return f"/portal/{restaurant.slug}/r/{token.token}/"
+    return f"/portal/{restaurant.slug}/calls/"
+
+
+def _format_caller_label(detail: "CallDetail | None", call_event: "CallEvent | None" = None) -> str:
+    """Pretty 'Name · +1 786 555…' or just phone if name is unknown."""
+    name  = (detail.caller_name if detail else "") or ""
+    phone = ""
+    if call_event:
+        phone = (call_event.payload.get("call", {}).get("from_number") or "")
+    if not phone and detail:
+        phone = detail.caller_phone or ""
+    if name and phone:
+        return f"{name} · {phone}"
+    return name or phone or "Unknown caller"
+
+
+# ─── One-tap response page (no login — token-secured) ────────────────────────
+
+CALLBACK_WHEN_LABELS = {
+    "15min":       "en 15 minutos",
+    "1h":          "dentro de una hora",
+    "tomorrow_am": "mañana por la mañana",
+}
+
+
+def _client_ip(request) -> str:
+    fwd = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "") or ""
+
+
+def _build_caller_sms(t: "CallActionToken", action: str, note: str, cb_when: str) -> str:
+    """Compose the SMS sent to the caller after owner taps an action button."""
+    r = t.restaurant
+    d = t.call_detail
+    date  = t.edited_date  or d.reservation_date
+    time  = t.edited_time  or d.reservation_time
+    party = t.edited_party or d.party_size
+    name  = d.caller_name or ""
+
+    date_str  = date.strftime("%a %-d %b")  if date  else ""
+    time_str  = time.strftime("%-I:%M %p")  if time  else ""
+    party_str = f"{party} personas"         if party else ""
+
+    when_str = " ".join(p for p in (date_str, time_str, party_str) if p) or "tu solicitud"
+
+    if action == t.RESP_CONFIRMED:
+        msg = (f"¡Hola{(' ' + name) if name else ''}! Tu reserva en {r.name} "
+               f"para {when_str} está confirmada. ¡Te esperamos!")
+    elif action == t.RESP_DECLINED:
+        msg = (f"Hola{(' ' + name) if name else ''}, lamentablemente no tenemos "
+               f"disponibilidad en {r.name} para {when_str}. "
+               f"Llámanos para buscar otra opción.")
+    elif action == t.RESP_CALLBACK:
+        when = CALLBACK_WHEN_LABELS.get(cb_when, "en breve")
+        msg = (f"Hola{(' ' + name) if name else ''}, te llamamos {when} "
+               f"desde {r.name} para confirmar tu solicitud.")
+    else:
+        return ""
+
+    if note:
+        msg += f"\n\n— {note}"
+    msg += "\n\n(Mensaje automatizado. Por favor no responder por SMS.)"
+    return msg
+
+
+def call_action_page(request, slug, token):
+    """Render the one-tap response page. No login required — token is the auth."""
+    t = get_object_or_404(
+        CallActionToken.objects.select_related("call_detail", "call_detail__call_event", "restaurant"),
+        token=token, restaurant__slug=slug,
+    )
+
+    if t.is_expired:
+        return render(request, "portal/call_action_expired.html", {"t": t}, status=410)
+    if t.is_used:
+        return render(request, "portal/call_action_done.html", {"t": t})
+
+    transcript = ""
+    try:
+        transcript = (t.call_detail.call_event.payload.get("call", {}).get("transcript") or "").strip()
+    except Exception:
+        pass
+
+    return render(request, "portal/call_action.html", {
+        "t":          t,
+        "call":       t.call_detail,
+        "restaurant": t.restaurant,
+        "transcript": transcript,
+    })
+
+
+@require_POST
+def call_action_respond(request, slug, token):
+    """Owner taps a button → SMS uploaded to caller, token marked used."""
+    t = get_object_or_404(
+        CallActionToken.objects.select_related("call_detail", "restaurant"),
+        token=token, restaurant__slug=slug,
+    )
+
+    # Idempotent: if already used or expired, do nothing extra
+    if t.is_expired:
+        return JsonResponse({"ok": False, "error": "expired"}, status=410)
+    if t.is_used:
+        return JsonResponse({"ok": True, "already": t.response})
+
+    action  = request.POST.get("action", "").strip()
+    note    = request.POST.get("note", "")[:500]
+    cb_when = request.POST.get("callback_when", "").strip()
+
+    if action not in (t.RESP_CONFIRMED, t.RESP_DECLINED, t.RESP_CALLBACK):
+        return JsonResponse({"ok": False, "error": "bad_action"}, status=400)
+
+    # Optional inline-edited reservation details
+    edited_fields = []
+    if request.POST.get("date"):
+        try:
+            from datetime import datetime
+            t.edited_date = datetime.strptime(request.POST["date"], "%Y-%m-%d").date()
+            edited_fields.append("edited_date")
+        except (ValueError, KeyError):
+            pass
+    if request.POST.get("time"):
+        try:
+            from datetime import datetime
+            t.edited_time = datetime.strptime(request.POST["time"], "%H:%M").time()
+            edited_fields.append("edited_time")
+        except (ValueError, KeyError):
+            pass
+    if request.POST.get("party"):
+        try:
+            v = int(request.POST["party"])
+            if v > 0:
+                t.edited_party = v
+                edited_fields.append("edited_party")
+        except (ValueError, KeyError):
+            pass
+
+    t.response      = action
+    t.response_note = note
+    t.used_at       = timezone.now()
+    t.used_by       = request.user if request.user.is_authenticated else None
+    t.used_from_ip  = _client_ip(request) or None
+    t.save(update_fields=["response", "response_note", "used_at", "used_by", "used_from_ip", *edited_fields])
+
+    # Mirror the action onto CallDetail.reservation_status when relevant
+    if t.action_type == t.ACTION_RESERVATION and t.call_detail:
+        new_status = {
+            t.RESP_CONFIRMED: "confirmed",
+            t.RESP_DECLINED:  "lost",
+            t.RESP_CALLBACK:  "pending",
+        }.get(action)
+        if new_status:
+            t.call_detail.reservation_status = new_status
+            if new_status == "confirmed":
+                t.call_detail.reservation_confirmed_at = timezone.now()
+            t.call_detail.save(update_fields=["reservation_status", "reservation_confirmed_at"])
+
+    # Dispatch caller SMS in background — same pattern as email sends
+    msg = _build_caller_sms(t, action, note, cb_when)
+    caller_phone = t.call_detail.caller_phone or ""
+    if msg and caller_phone:
+        threading.Thread(
+            target=_send_sms_via_twilio,
+            args=(t.restaurant, caller_phone, msg),
+            daemon=True,
+        ).start()
+        logger.info("call_action: %s sent to %s | token=%s restaurant=%s",
+                    action, caller_phone, t.token[:12], t.restaurant.slug)
+    else:
+        logger.warning("call_action: no SMS sent — phone=%r msg_empty=%s | token=%s",
+                       caller_phone, not msg, t.token[:12])
+
+    return JsonResponse({"ok": True, "response": action})
+
+
+@portal_view()
+def portal_pending_actions_count(request, slug):
+    """Polled by dashboard JS every 30s to detect new/resolved pending actions."""
+    count = CallActionToken.objects.filter(
+        restaurant=request.restaurant,
+        used_at__isnull=True,
+        expires_at__gt=timezone.now(),
+    ).count()
+    return JsonResponse({"count": count})
+
+
+@require_POST
+def call_action_resolve(request, slug, token):
+    """Owner already handled this outside the system — mark resolved, silence escalation."""
+    t = get_object_or_404(CallActionToken, token=token, restaurant__slug=slug)
+    if t.is_expired:
+        return JsonResponse({"ok": False, "error": "expired"}, status=410)
+    if t.is_used:
+        return JsonResponse({"ok": True, "already": t.response})
+    t.response     = t.RESP_RESOLVED
+    t.used_at      = timezone.now()
+    t.used_by      = request.user if request.user.is_authenticated else None
+    t.used_from_ip = _client_ip(request) or None
+    t.save(update_fields=["response", "used_at", "used_by", "used_from_ip"])
+    return JsonResponse({"ok": True, "response": t.RESP_RESOLVED})
+
+
+@never_cache
+def push_service_worker(request):
+    """
+    Serve sw.js from project root so it can claim scope '/'.
+    A service worker can only control pages under its own path; serving it
+    from /static/portal/sw.js would limit its scope to /static/portal/*.
+    """
+    path = finders.find("portal/sw.js")
+    if not path:
+        return HttpResponse("// service worker not found\n", content_type="application/javascript", status=404)
+    with open(path, "rb") as fh:
+        body = fh.read()
+    resp = HttpResponse(body, content_type="application/javascript")
+    resp["Service-Worker-Allowed"] = "/"
+    return resp
+
+
+@never_cache
+def pwa_manifest(request):
+    """Serve manifest.json from project root for PWA install support."""
+    path = finders.find("portal/manifest.json")
+    if not path:
+        return HttpResponse("{}", content_type="application/manifest+json", status=404)
+    with open(path, "rb") as fh:
+        body = fh.read()
+    return HttpResponse(body, content_type="application/manifest+json")
+
+
+@portal_view()
+@require_POST
+def portal_push_subscribe(request, slug):
+    """Save a browser push subscription. Idempotent on (user, restaurant, endpoint)."""
+    try:
+        payload = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"ok": False, "error": "invalid_json"}, status=400)
+
+    sub = payload.get("subscription") or {}
+    endpoint = sub.get("endpoint", "")
+    keys = sub.get("keys") or {}
+    p256dh = keys.get("p256dh", "")
+    auth   = keys.get("auth", "")
+
+    if not (endpoint and p256dh and auth):
+        return JsonResponse({"ok": False, "error": "missing_fields"}, status=400)
+
+    user_agent = (payload.get("userAgent") or request.META.get("HTTP_USER_AGENT") or "")[:300]
+    label = _derive_device_label(user_agent)
+
+    obj, created = PushSubscription.objects.update_or_create(
+        user=request.user,
+        restaurant=request.restaurant,
+        endpoint=endpoint,
+        defaults={
+            "key_p256dh": p256dh,
+            "key_auth":   auth,
+            "user_agent": user_agent,
+            "label":      label,
+        },
+    )
+
+    # Account-level opt-in: subscribing a device implies "yes, I want push for this restaurant".
+    # User can later turn this off in Settings without removing the device subscriptions.
+    RestaurantMembership.objects.filter(
+        user=request.user, restaurant=request.restaurant,
+    ).update(notify_via_push=True)
+
+    return JsonResponse({"ok": True, "created": created, "id": obj.pk, "label": obj.label})
+
+
+@portal_view()
+@require_POST
+def portal_push_unsubscribe(request, slug):
+    """Delete a push subscription. Accepts either endpoint or subscription id."""
+    try:
+        payload = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"ok": False, "error": "invalid_json"}, status=400)
+
+    qs = PushSubscription.objects.filter(user=request.user, restaurant=request.restaurant)
+    endpoint = payload.get("endpoint")
+    sub_id   = payload.get("id")
+    if endpoint:
+        qs = qs.filter(endpoint=endpoint)
+    elif sub_id:
+        qs = qs.filter(pk=sub_id)
+    else:
+        return JsonResponse({"ok": False, "error": "missing_endpoint_or_id"}, status=400)
+
+    deleted, _ = qs.delete()
+    return JsonResponse({"ok": True, "deleted": deleted})
+
+
+@portal_view()
+@require_POST
+def portal_push_test(request, slug):
+    """Send a test push to all of this restaurant's subscribers. Bypasses throttle via urgency=high."""
+    _send_push(
+        restaurant=request.restaurant,
+        title="🔔 Concierge test",
+        body="Push notifications are working on this device.",
+        url=reverse("portal_dashboard", args=[slug]),
+        urgency="high",
+        tag="concierge-test",
+    )
+    return JsonResponse({"ok": True})
+
+
+def _derive_device_label(user_agent: str) -> str:
+    """Best-effort human-readable device label from User-Agent string."""
+    ua = user_agent or ""
+    ua_l = ua.lower()
+    if "iphone" in ua_l:
+        device = "iPhone"
+    elif "ipad" in ua_l:
+        device = "iPad"
+    elif "android" in ua_l:
+        device = "Android"
+    elif "macintosh" in ua_l or "mac os x" in ua_l:
+        device = "Mac"
+    elif "windows" in ua_l:
+        device = "Windows"
+    elif "linux" in ua_l:
+        device = "Linux"
+    else:
+        device = "Device"
+
+    if "edg/" in ua_l:
+        browser = "Edge"
+    elif "chrome/" in ua_l and "chromium" not in ua_l:
+        browser = "Chrome"
+    elif "firefox/" in ua_l:
+        browser = "Firefox"
+    elif "safari/" in ua_l:
+        browser = "Safari"
+    else:
+        browser = ""
+
+    return f"{device} ({browser})" if browser else device

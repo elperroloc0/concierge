@@ -6,9 +6,11 @@ from django.contrib import admin, messages
 logger = logging.getLogger(__name__)
 
 from .models import (
+    CallActionToken,
     CallDetail,
     CallerMemory,
     CallEvent,
+    PushSubscription,
     Restaurant,
     RestaurantKnowledgeBase,
     RestaurantMembership,
@@ -992,6 +994,27 @@ class CallerMemoryAdmin(admin.ModelAdmin):
         ("Staff Annotations", {"fields": ("preferences", "staff_notes")}),
         ("Timestamps", {"fields": ("created_at", "updated_at")}),
     )
+
+
+@admin.register(PushSubscription)
+class PushSubscriptionAdmin(admin.ModelAdmin):
+    list_display   = ("user", "restaurant", "label", "user_agent_short", "last_seen_at", "created_at")
+    list_filter    = ("restaurant",)
+    search_fields  = ("user__email", "endpoint", "user_agent", "label")
+    readonly_fields = ("endpoint", "key_p256dh", "key_auth", "created_at", "last_seen_at")
+
+    @admin.display(description="Device")
+    def user_agent_short(self, obj):
+        return (obj.user_agent or "")[:60]
+
+
+@admin.register(CallActionToken)
+class CallActionTokenAdmin(admin.ModelAdmin):
+    list_display   = ("created_at", "restaurant", "action_type", "response", "escalation_level", "used_at", "expires_at")
+    list_filter    = ("action_type", "response", "restaurant")
+    search_fields  = ("token", "call_detail__caller_phone", "call_detail__caller_name")
+    readonly_fields = ("token", "created_at", "expires_at", "used_at", "used_by", "used_from_ip", "age_minutes")
+    date_hierarchy = "created_at"
 
 
 # ─── Restaurant Admin ─────────────────────────────────────────────────────────
