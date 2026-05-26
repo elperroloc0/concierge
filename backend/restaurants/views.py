@@ -3259,23 +3259,40 @@ def portal_dashboard(request, slug):
     from django.db.models import Sum
 
     now = timezone.now()
-    thirty_days_ago = now - timedelta(days=30)
-    sixty_days_ago = now - timedelta(days=60)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday_start = today_start - timedelta(days=1)
 
-    # Current 30d events
+    # ── Period filter (Today / 7d / 30d / All) ────────────────────────────────
+    period = request.GET.get("period", "30d")
+    if period not in ("today", "7d", "30d", "all"):
+        period = "30d"
+    if period == "today":
+        cutoff = today_start
+    elif period == "7d":
+        cutoff = now - timedelta(days=7)
+    elif period == "all":
+        # Use restaurant creation date as the "all-time" anchor; cap to 365d for charts
+        cutoff = max(
+            restaurant.created_at if getattr(restaurant, "created_at", None) else (now - timedelta(days=365)),
+            now - timedelta(days=365),
+        )
+    else:  # "30d" default
+        cutoff = now - timedelta(days=30)
+    period_delta = now - cutoff
+    prev_cutoff  = cutoff - period_delta
+
+    # Current period events
     ended_events = list(
         CallEvent.objects.filter(
-            restaurant=restaurant, detail__isnull=False, created_at__gte=thirty_days_ago
+            restaurant=restaurant, detail__isnull=False, created_at__gte=cutoff
         ).order_by("created_at")
     )
 
-    # Previous 30d events (for trend comparison)
+    # Previous period events (for trend comparison)
     prev_events = list(
         CallEvent.objects.filter(
             restaurant=restaurant, detail__isnull=False,
-            created_at__gte=sixty_days_ago, created_at__lt=thirty_days_ago,
+            created_at__gte=prev_cutoff, created_at__lt=cutoff,
         )
     )
 
@@ -3287,9 +3304,16 @@ def portal_dashboard(request, slug):
     topic_outcome = defaultdict(Counter)       # topic -> {outcome: count}
     total_duration_sec = 0
 
+    # Per-bucket series for sparklines / charts
+    minutes_by_day = defaultdict(int)
+    calls_count_by_day = defaultdict(int)
+    callers_by_day = defaultdict(set)
+    leads_by_day_dt = defaultdict(int)
+
     for event in ended_events:
         call_data = event.payload.get("call", {})
-        caller_numbers.append(call_data.get("from_number", "Unknown"))
+        from_number = call_data.get("from_number", "Unknown")
+        caller_numbers.append(from_number)
 
         topics, outcome, duration = _classify_call(event.payload)
         total_duration_sec += duration
@@ -3300,18 +3324,85 @@ def portal_dashboard(request, slug):
         for topic in topics:
             topic_outcome[topic][outcome] += 1
 
+        day_key = event.created_at.date()
+        minutes_by_day[day_key] += duration / 60.0
+        calls_count_by_day[day_key] += 1
+        callers_by_day[day_key].add(from_number)
+
+    # Reservation leads per day (within the active period)
+    for _d in CallDetail.objects.filter(
+        call_event__restaurant=restaurant,
+        wants_reservation=True,
+        created_at__gte=cutoff,
+    ).only("created_at"):
+        leads_by_day_dt[_d.created_at.date()] += 1
+
     total_calls = len(ended_events)
     unique_callers = len(set(caller_numbers))
     repeat_callers = sum(1 for _, c in Counter(caller_numbers).items() if c > 1)
     total_minutes = round(total_duration_sec / 60)
 
+    # ── Build ordered series for sparklines (one slot per day in the period) ──
+    period_days = max(1, period_delta.days or 1)
+    if period == "today":
+        # 24 hourly buckets for today's sparkline
+        buckets = list(range(24))
+        spark_minutes = [0] * 24
+        spark_calls   = [0] * 24
+        spark_unique  = [0] * 24
+        spark_repeat  = [0] * 24
+        spark_leads   = [0] * 24
+        seen_so_far   = set()
+        for event in ended_events:
+            h = event.created_at.hour
+            call_data = event.payload.get("call", {})
+            phone = call_data.get("from_number", "Unknown")
+            _, _, duration = _classify_call(event.payload)
+            spark_minutes[h] += round(duration / 60.0)
+            spark_calls[h]   += 1
+            if phone in seen_so_far:
+                spark_repeat[h] += 1
+            else:
+                spark_unique[h] += 1
+                seen_so_far.add(phone)
+        for _d in CallDetail.objects.filter(
+            call_event__restaurant=restaurant,
+            wants_reservation=True,
+            created_at__gte=cutoff,
+        ).only("created_at"):
+            spark_leads[_d.created_at.hour] += 1
+    else:
+        # Daily buckets covering [cutoff, now]
+        start_date = cutoff.date()
+        days_in_period = (now.date() - start_date).days + 1
+        days_in_period = min(days_in_period, 90)  # cap for "all"
+        spark_days_list = [(start_date + timedelta(days=i)) for i in range(days_in_period)]
+        spark_minutes = []
+        spark_calls   = []
+        spark_unique  = []
+        spark_repeat  = []
+        spark_leads   = []
+        seen_so_far   = set()
+        for day in spark_days_list:
+            spark_minutes.append(int(round(minutes_by_day.get(day, 0))))
+            spark_calls.append(calls_count_by_day.get(day, 0))
+            day_callers = callers_by_day.get(day, set())
+            spark_unique.append(len(day_callers - seen_so_far))
+            spark_repeat.append(len(day_callers & seen_so_far))
+            seen_so_far |= day_callers
+            spark_leads.append(leads_by_day_dt.get(day, 0))
+
     # Previous period baseline for trends
-    prev_caller_numbers = [
-        e.payload.get("call", {}).get("from_number", "Unknown") for e in prev_events
-    ]
-    prev_total_calls = len(prev_events)
+    prev_caller_numbers = []
+    prev_total_duration_sec = 0
+    for e in prev_events:
+        prev_caller_numbers.append(e.payload.get("call", {}).get("from_number", "Unknown"))
+        _, _, dur = _classify_call(e.payload)
+        prev_total_duration_sec += dur
+    prev_total_calls   = len(prev_events)
     prev_unique_callers = len(set(prev_caller_numbers))
     prev_repeat_callers = sum(1 for _, c in Counter(prev_caller_numbers).items() if c > 1)
+    prev_total_minutes = round(prev_total_duration_sec / 60)
 
     # Leads
     leads_today = CallDetail.objects.filter(
@@ -3322,10 +3413,19 @@ def portal_dashboard(request, slug):
         created_at__gte=yesterday_start, created_at__lt=today_start,
     ).count()
     leads_30d = CallDetail.objects.filter(
-        call_event__restaurant=restaurant, wants_reservation=True, created_at__gte=thirty_days_ago,
+        call_event__restaurant=restaurant, wants_reservation=True,
+        created_at__gte=(now - timedelta(days=30)),
+    ).count()
+    leads_period = CallDetail.objects.filter(
+        call_event__restaurant=restaurant, wants_reservation=True, created_at__gte=cutoff,
+    ).count()
+    prev_leads_period = CallDetail.objects.filter(
+        call_event__restaurant=restaurant, wants_reservation=True,
+        created_at__gte=prev_cutoff, created_at__lt=cutoff,
     ).count()
 
-    # Cost / ROI
+    # Cost / ROI (always 30 days regardless of period — financial reporting window)
+    thirty_days_ago = now - timedelta(days=30)
     cost_agg = CallDetail.objects.filter(
         call_event__restaurant=restaurant, call_event__created_at__gte=thirty_days_ago,
     ).aggregate(total=Sum("call_cost"))
@@ -3374,10 +3474,11 @@ def portal_dashboard(request, slug):
         return {"pct": abs(pct), "up": pct >= 0}
 
     trends = {
-        "calls":  _trend(total_calls, prev_total_calls),
-        "unique": _trend(unique_callers, prev_unique_callers),
-        "repeat": _trend(repeat_callers, prev_repeat_callers),
-        "leads":  _trend(leads_today, leads_yesterday),
+        "minutes": _trend(total_minutes, prev_total_minutes),
+        "calls":   _trend(total_calls, prev_total_calls),
+        "unique":  _trend(unique_callers, prev_unique_callers),
+        "repeat":  _trend(repeat_callers, prev_repeat_callers),
+        "leads":   _trend(leads_period, prev_leads_period),
     }
 
     # Heatmap: pre-compute opacity (0.0–1.0) for template
@@ -3394,17 +3495,23 @@ def portal_dashboard(request, slug):
         for d in range(7)
     ]
 
-    # Topic × Outcome table (sorted by volume)
-    topic_outcome_table = [
-        {
-            "topic": topic,
-            "resolved":   topic_outcome[topic].get("Resolved", 0),
-            "escalated":  topic_outcome[topic].get("Escalated", 0),
-            "incomplete": topic_outcome[topic].get("Incomplete", 0),
-            "total":      sum(topic_outcome[topic].values()),
-        }
-        for topic in sorted(topic_outcome, key=lambda t: -sum(topic_outcome[t].values()))
-    ]
+    # Topic × Outcome table (sorted by volume, with per-cell intensity)
+    topic_outcome_table = []
+    for topic in sorted(topic_outcome, key=lambda t: -sum(topic_outcome[t].values())):
+        r = topic_outcome[topic].get("Resolved", 0)
+        e = topic_outcome[topic].get("Escalated", 0)
+        i = topic_outcome[topic].get("Incomplete", 0)
+        total = r + e + i
+        topic_outcome_table.append({
+            "topic":          topic,
+            "resolved":       r,
+            "escalated":      e,
+            "incomplete":     i,
+            "total":          total,
+            "res_intensity":  round(r / total, 2) if total else 0,
+            "esc_intensity":  round(e / total, 2) if total else 0,
+            "inc_intensity":  round(i / total, 2) if total else 0,
+        })
 
     recent_reservation_inquiries = (
         CallDetail.objects
@@ -3412,17 +3519,152 @@ def portal_dashboard(request, slug):
         .order_by("-created_at")[:5]
     )
 
+    # ── Hero banner: greeting + overnight summary + today's stat boxes ────────
+    user = request.user
+    user_first_name = (
+        getattr(user, "first_name", "").strip()
+        or (user.get_full_name() if hasattr(user, "get_full_name") else "")
+        or (user.email.split("@")[0] if getattr(user, "email", None) else "")
+    )
+
+    current_hour = now.hour
+    if current_hour < 11:
+        greeting = "Good morning"
+    elif current_hour < 17:
+        greeting = "Good afternoon"
+    elif current_hour < 21:
+        greeting = "Good evening"
+    else:
+        greeting = "Welcome back"
+
+    # Today scoped (always — these power the hero stat boxes regardless of period)
+    today_qs = CallDetail.objects.filter(
+        call_event__restaurant=restaurant, created_at__gte=today_start
+    )
+    today_calls_total = today_qs.count()
+    today_urgent      = today_qs.filter(
+        Q(follow_up_needed=True) | Q(needs_review=True)
+    ).count()
+    today_bookings    = today_qs.filter(reservation_status="confirmed").count()
+
+    # Overnight context: calls from yesterday 22:00 → today 06:00 (rough "while you slept")
+    overnight_start = today_start - timedelta(hours=2)   # yesterday 22:00 local
+    overnight_end   = today_start + timedelta(hours=6)   # today 06:00 local
+    overnight_count = CallDetail.objects.filter(
+        call_event__restaurant=restaurant,
+        created_at__gte=overnight_start, created_at__lt=overnight_end,
+    ).count() if current_hour < 12 else 0  # only relevant in the morning
+
+    # Story copy — adapts to time of day
+    if overnight_count and current_hour < 12:
+        hero_eyebrow = "The agent worked overnight"
+        if today_urgent:
+            hero_headline = (
+                f"{overnight_count} call{'s' if overnight_count != 1 else ''} handled while you slept · "
+                f"{today_urgent} need{'s' if today_urgent == 1 else ''} your attention before service"
+            )
+        else:
+            hero_headline = (
+                f"{overnight_count} call{'s' if overnight_count != 1 else ''} handled while you slept · "
+                f"nothing needs you right now"
+            )
+    elif today_calls_total == 0:
+        hero_eyebrow = "Quiet day"
+        hero_headline = "No calls yet today. The agent is standing by."
+    elif today_urgent:
+        hero_eyebrow = f"{today_calls_total} call{'s' if today_calls_total != 1 else ''} today"
+        hero_headline = (
+            f"{today_urgent} need{'s' if today_urgent == 1 else ''} your attention"
+        )
+    else:
+        hero_eyebrow = f"{today_calls_total} call{'s' if today_calls_total != 1 else ''} today"
+        hero_headline = "Everything handled — nothing needs you right now."
+
     kb_score, kb_missing = _kb_health_score(restaurant)
+
+    # ── Build SVG-ready line + area paths for sparkline charts ────────────────
+    def _spark_line(series, vb_w=100, vb_h=30, pad=2):
+        n = len(series)
+        if n == 0:
+            return {"line": "", "area": "", "last_x": None, "last_y": None}
+        if n == 1:
+            cy = vb_h / 2
+            return {
+                "line": f"M0,{cy} L{vb_w},{cy}",
+                "area": "",
+                "last_x": round(vb_w, 2),
+                "last_y": round(cy, 2),
+            }
+        max_v = max(series) or 1
+        step  = vb_w / (n - 1)
+        usable_h = vb_h - pad * 2
+        points = []
+        for i, v in enumerate(series):
+            x = round(i * step, 2)
+            y = round(pad + (1 - v / max_v) * usable_h, 2)
+            points.append((x, y))
+        line = "M" + " L".join(f"{x},{y}" for x, y in points)
+        area = (
+            f"M{points[0][0]},{vb_h} L"
+            + " L".join(f"{x},{y}" for x, y in points)
+            + f" L{points[-1][0]},{vb_h} Z"
+        )
+        return {
+            "line": line,
+            "area": area,
+            "last_x": points[-1][0],
+            "last_y": points[-1][1],
+        }
+
+    sparks = {
+        "minutes": _spark_line(spark_minutes),
+        "calls":   _spark_line(spark_calls),
+        "unique":  _spark_line(spark_unique),
+        "repeat":  _spark_line(spark_repeat),
+        "leads":   _spark_line(spark_leads),
+    }
+
+    # Calls-per-day — full-width line + area chart with last-point dot.
+    calls_per_day_values = list(calls_by_day.values())
+    calls_per_day_labels_list = list(calls_by_day.keys())
+    calls_per_day = _spark_line(calls_per_day_values, vb_w=300, vb_h=100, pad=6)
+    calls_per_day_last_value  = calls_per_day_values[-1] if calls_per_day_values else 0
+    calls_per_day_first_label = calls_per_day_labels_list[0]  if calls_per_day_labels_list else ""
+    calls_per_day_last_label  = calls_per_day_labels_list[-1] if calls_per_day_labels_list else ""
+    calls_per_day_mid_label   = calls_per_day_labels_list[len(calls_per_day_labels_list)//2] if calls_per_day_labels_list else ""
 
     context = {
         "restaurant": restaurant,
+        "period": period,
+        # Hero
+        "user_first_name":   user_first_name,
+        "greeting":          greeting,
+        "hero_eyebrow":      hero_eyebrow,
+        "hero_headline":     hero_headline,
+        "today_calls_total": today_calls_total,
+        "today_urgent":      today_urgent,
+        "today_bookings":    today_bookings,
+        # KPIs (period-scoped)
         "total_calls": total_calls,
         "total_minutes": total_minutes,
         "unique_callers": unique_callers,
         "repeat_callers": repeat_callers,
         "leads_today": leads_today,
+        "leads_period": leads_period,
         "leads_30d": leads_30d,
         "trends": trends,
+        # Sparkline series (JSON-safe lists for inline SVG)
+        "spark_minutes": spark_minutes,
+        "spark_calls":   spark_calls,
+        "spark_unique":  spark_unique,
+        "spark_repeat":  spark_repeat,
+        "spark_leads":   spark_leads,
+        "sparks":        sparks,
+        "calls_per_day":              calls_per_day,
+        "calls_per_day_last_value":   calls_per_day_last_value,
+        "calls_per_day_first_label":  calls_per_day_first_label,
+        "calls_per_day_mid_label":    calls_per_day_mid_label,
+        "calls_per_day_last_label":   calls_per_day_last_label,
         "recent_reservation_inquiries": recent_reservation_inquiries,
         "calls_by_day_labels": json.dumps(list(calls_by_day.keys())),
         "calls_by_day_data": json.dumps(list(calls_by_day.values())),
@@ -3439,25 +3681,35 @@ def portal_dashboard(request, slug):
         "cost_per_resolved": cost_per_resolved,
         "resolved_count": resolved_count,
         "roi_data": roi_data,
+        "avg_cover": avg_cover,
         "avg_cover_set": avg_cover is not None,
         "confirmed_count": confirmed_count,
         "pending_leads": pending_leads,
-        "pending_actions": _pending_actions_for_dashboard(restaurant),
     }
     return render(request, "portal/dashboard.html", context)
 
 
-def _pending_actions_for_dashboard(restaurant):
-    """Unresolved action tokens for the pending queue card on the dashboard."""
-    return list(
-        CallActionToken.objects.filter(
-            restaurant=restaurant,
-            used_at__isnull=True,
-            expires_at__gt=timezone.now(),
-        )
-        .select_related("call_detail")
-        .order_by("created_at")[:10]   # oldest first, cap at 10 for sanity
+def _pending_action_queue(restaurant):
+    """
+    Return {"active": [...], "missed": [...]} for the inbox pending-queue banner.
+
+    - active  = unused tokens still inside their TTL → urgent.
+    - missed  = unused tokens whose TTL has lapsed within the last 7 days →
+                visible for accountability + possible recovery, dismissible.
+    """
+    now = timezone.now()
+    base = (
+        CallActionToken.objects.filter(restaurant=restaurant, used_at__isnull=True)
+        .select_related("call_detail", "call_detail__call_event")
     )
+    active = list(base.filter(expires_at__gt=now).order_by("created_at")[:10])
+    missed = list(
+        base.filter(
+            expires_at__lte=now,
+            expires_at__gt=now - timezone.timedelta(days=7),
+        ).order_by("expires_at")[:10]
+    )
+    return {"active": active, "missed": missed}
 
 
 @portal_view(require_owner=True)
@@ -3613,7 +3865,7 @@ def portal_calls(request, slug):
     date_from          = request.GET.get("date_from", "")
     date_to            = request.GET.get("date_to", "")
     phone_filter       = request.GET.get("phone", "").strip()
-    tab                = request.GET.get("tab", "all")  # v2 tabs: all / needs_action / reservations / resolved
+    tab                = request.GET.get("tab", "inbox")  # v2 tabs: inbox / needs_action / archive / deep
     selected_pk        = request.GET.get("selected", "")
 
     # Use CallDetail as the primary queryset — one row per call (post-migration 0049).
@@ -3636,7 +3888,6 @@ def portal_calls(request, slug):
     follow_ups_pending   = base_qs.filter(
         Q(follow_up_needed=True) | Q(needs_review=True)
     ).count()
-    resolved_count       = base_qs.filter(follow_up_needed=False, needs_review=False).count()
     sms_sent            = SmsLog.objects.filter(
         call_event__restaurant=restaurant, status="sent"
     ).count()
@@ -3644,6 +3895,36 @@ def portal_calls(request, slug):
     # Calls received today (in restaurant timezone, falls back to server time)
     today = timezone.localdate()
     calls_today = base_qs.filter(created_at__date=today).count()
+
+    # ── Two-tier archive: today (Inbox) / 1–30d (Archive) / 30d+ (Deep) ────────
+    #
+    # Three orthogonal lenses over the same data:
+    #   - Inbox        = calls received today (calendar day), not spam
+    #   - Needs action = anything still needing operator attention (any age):
+    #                    follow_up_needed / needs_review / pending reservation
+    #   - Archive      = 1–30 days old that's NOT in Needs action, OR spam
+    #   - Deep archive = >30 days old that's NOT in Needs action, not spam
+    #
+    # A flagged-but-unhandled call lives in Needs action forever until acted on
+    # (Confirm / Mark resolved / etc) — it does NOT auto-fall into Archive.
+    today          = timezone.localdate()
+    cutoff_archive = timezone.now() - timezone.timedelta(days=30)
+    needs_action_q = (
+        Q(follow_up_needed=True)
+        | Q(needs_review=True)
+        | Q(wants_reservation=True, reservation_status="pending")
+    )
+    inbox_q   = (~Q(is_spam=True)) & Q(created_at__date=today)
+    archive_q = Q(created_at__gte=cutoff_archive) & (
+        Q(is_spam=True)
+        | (~Q(created_at__date=today) & ~needs_action_q)
+    )
+    deep_q    = Q(created_at__lt=cutoff_archive) & ~needs_action_q & ~Q(is_spam=True)
+
+    inbox_count        = base_qs.filter(inbox_q).count()
+    archive_count      = base_qs.filter(archive_q).count()
+    deep_count         = base_qs.filter(deep_q).count()
+    needs_action_count = base_qs.filter(needs_action_q).count()
 
     # ── Apply filters to paginated queryset ───────────────────────────────────
     qs = base_qs
@@ -3664,11 +3945,13 @@ def portal_calls(request, slug):
 
     # v2 tabs (overlay on existing filters)
     if tab == "needs_action":
-        qs = qs.filter(Q(follow_up_needed=True) | Q(needs_review=True))
-    elif tab == "reservations":
-        qs = qs.filter(wants_reservation=True)
-    elif tab == "resolved":
-        qs = qs.filter(follow_up_needed=False, needs_review=False)
+        qs = qs.filter(needs_action_q)
+    elif tab == "archive":
+        qs = qs.filter(archive_q)
+    elif tab == "deep":
+        qs = qs.filter(deep_q)
+    else:  # "inbox" (default) or any legacy value
+        qs = qs.filter(inbox_q)
 
     # ── Repeat caller detection (phone numbers with >1 call) ──────────────────
     from django.db.models import Count as _Count
@@ -3717,6 +4000,37 @@ def portal_calls(request, slug):
     _card_keep.pop("selected", None)
     card_keep_qs = _card_keep.urlencode()
 
+    # ── Pending action queue (urgent banner + per-card flags) ─────────────────
+    pending_action_queue = _pending_action_queue(restaurant)
+    _now = timezone.now()
+    # Build call_detail.pk -> ("active"|"missed", "Missed Xd ago"|None) lookup
+    _token_state_by_detail = {}
+    _missed_label_by_detail = {}
+    for _t in pending_action_queue["active"]:
+        _token_state_by_detail[_t.call_detail_id] = "active"
+    for _t in pending_action_queue["missed"]:
+        if _t.call_detail_id in _token_state_by_detail:
+            continue
+        _token_state_by_detail[_t.call_detail_id] = "missed"
+        _days = (_now - _t.expires_at).days
+        _missed_label_by_detail[_t.call_detail_id] = (
+            "Missed today" if _days < 1
+            else "Missed 1d ago" if _days == 1
+            else f"Missed {_days}d ago"
+        )
+
+    # Pre-compute the urgent-banner CTA target: oldest active token's call event.
+    _banner_event_pk = None
+    if pending_action_queue["active"]:
+        _banner_event_pk = pending_action_queue["active"][0].call_detail.call_event_id
+    elif pending_action_queue["missed"]:
+        _banner_event_pk = pending_action_queue["missed"][0].call_detail.call_event_id
+
+    # Oldest active waiting time for the banner copy
+    _banner_oldest_age = ""
+    if pending_action_queue["active"]:
+        _banner_oldest_age = _short_time_ago(pending_action_queue["active"][0].created_at)
+
     # ── Phones with an existing CallerMemory profile (for v2 "View profile" link) ──
     page_phones = [
         d.caller_phone for d in page_qs.object_list if d.caller_phone
@@ -3744,20 +4058,22 @@ def portal_calls(request, slug):
         )
         display_initial = canonical_name[:1].upper() if canonical_name else ("#" if detail.caller_phone else "?")
         enriched.append({
-            "event":           event,
-            "date":            detail.created_at,
-            "time_ago":        _short_time_ago(detail.created_at),
-            "from_number":     call_data.get("from_number", ""),
-            "duration_sec":    detail.duration_seconds or 0,
-            "outcome":         outcome,
-            "transcript":      call_data.get("transcript", ""),
-            "detail":          detail,
-            "sms_logs":        list(event.sms_logs.all()),
-            "call_count":      repeat_phones.get(phone, 1) if phone else 1,
-            "memory":          memory,
-            "display_name":    display_name,
-            "display_initial": display_initial,
-            "has_name":        bool(canonical_name),
+            "event":              event,
+            "date":               detail.created_at,
+            "time_ago":           _short_time_ago(detail.created_at),
+            "from_number":        call_data.get("from_number", ""),
+            "duration_sec":       detail.duration_seconds or 0,
+            "outcome":            outcome,
+            "transcript":         call_data.get("transcript", ""),
+            "detail":             detail,
+            "sms_logs":           list(event.sms_logs.all()),
+            "call_count":         repeat_phones.get(phone, 1) if phone else 1,
+            "memory":             memory,
+            "display_name":       display_name,
+            "display_initial":    display_initial,
+            "has_name":           bool(canonical_name),
+            "pending_token_state": _token_state_by_detail.get(detail.id),  # "active" | "missed" | None
+            "missed_label":        _missed_label_by_detail.get(detail.id, ""),
         })
 
     # Resolve the currently-selected call for v2 split-pane UI
@@ -3792,12 +4108,18 @@ def portal_calls(request, slug):
         "keep_qs":             keep_qs,
         "page_keep_qs":        page_keep_qs,
         "card_keep_qs":        card_keep_qs,
+        "pending_action_queue": pending_action_queue,
+        "banner_event_pk":      _banner_event_pk,
+        "banner_oldest_age":    _banner_oldest_age,
         # stats
         "total_calls":         total_calls,
         "reservation_intents":  reservation_intents,
         "reservations_pending": reservations_pending,
         "follow_ups_pending":  follow_ups_pending,
-        "resolved_count":      resolved_count,
+        "needs_action_count":  needs_action_count,
+        "inbox_count":         inbox_count,
+        "archive_count":       archive_count,
+        "deep_count":          deep_count,
         "calls_today":         calls_today,
         "sms_sent":            sms_sent,
     })
@@ -3904,6 +4226,83 @@ def portal_call_note(request, slug, event_pk):
 
 
 @portal_view()
+def portal_call_set_reason(request, slug, event_pk):
+    """AJAX: change the call_reason classification of a CallDetail."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    restaurant = request.restaurant
+    event = get_object_or_404(CallEvent, pk=event_pk, restaurant=restaurant)
+    reason = request.POST.get("reason", "").strip()
+    valid_reasons = {v for v, _ in CallDetail.CALL_REASON_CHOICES}
+    if reason not in valid_reasons:
+        return JsonResponse({"ok": False, "error": "Invalid reason"}, status=400)
+    try:
+        detail = event.detail
+    except CallDetail.DoesNotExist:
+        return JsonResponse({"ok": False, "error": "No detail"}, status=404)
+    detail.call_reason = reason
+    detail.save(update_fields=["call_reason", "updated_at"])
+    return JsonResponse({"ok": True, "reason": reason})
+
+
+@portal_view()
+def portal_call_set_spam(request, slug, event_pk):
+    """AJAX: toggle the is_spam flag on a CallDetail."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    restaurant = request.restaurant
+    event = get_object_or_404(CallEvent, pk=event_pk, restaurant=restaurant)
+    value = request.POST.get("is_spam", "").strip().lower() in ("1", "true", "yes")
+    try:
+        detail = event.detail
+    except CallDetail.DoesNotExist:
+        return JsonResponse({"ok": False, "error": "No detail"}, status=404)
+    detail.is_spam = value
+    detail.save(update_fields=["is_spam", "updated_at"])
+    return JsonResponse({"ok": True, "is_spam": value})
+
+
+@portal_view()
+def portal_call_reopen(request, slug, event_pk):
+    """AJAX: reopen a previously-resolved call (sets follow_up_needed=True)."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    restaurant = request.restaurant
+    event = get_object_or_404(CallEvent, pk=event_pk, restaurant=restaurant)
+    try:
+        detail = event.detail
+    except CallDetail.DoesNotExist:
+        return JsonResponse({"ok": False, "error": "No detail"}, status=404)
+    detail.follow_up_needed = True
+    detail.reviewed_at      = None
+    detail.save(update_fields=["follow_up_needed", "reviewed_at", "updated_at"])
+    return JsonResponse({"ok": True})
+
+
+@portal_view()
+def portal_dismiss_action(request, slug, event_pk):
+    """
+    AJAX: dismiss the unused action token(s) attached to a call.
+
+    Used by the v2 inbox when staff decides an expired/missed action no longer
+    needs handling. Marks every unused CallActionToken for this CallDetail as
+    used_at=now / response=resolved so it disappears from the pending queue.
+    """
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    restaurant = request.restaurant
+    event = get_object_or_404(CallEvent, pk=event_pk, restaurant=restaurant)
+    try:
+        detail = event.detail
+    except CallDetail.DoesNotExist:
+        return JsonResponse({"ok": False, "error": "No detail"}, status=404)
+    updated = CallActionToken.objects.filter(
+        call_detail=detail, used_at__isnull=True
+    ).update(used_at=timezone.now(), response=CallActionToken.RESP_RESOLVED)
+    return JsonResponse({"ok": True, "dismissed": updated})
+
+
+@portal_view()
 def portal_mark_reviewed(request, slug, event_pk):
     """AJAX: mark a defective call as reviewed."""
     if request.method != "POST":
@@ -3986,21 +4385,186 @@ def portal_guest_detail(request, slug, memory_pk):
             memory.save(update_fields=["pending_name"])
             saved = True
 
-    # Call history for this phone number at this restaurant
-    call_history = (
+    # ── Call history for this phone (full set; we cap timeline below) ─────────
+    call_history_qs = (
         CallDetail.objects
         .filter(caller_phone=memory.phone, call_event__restaurant=restaurant)
         .select_related("call_event")
-        .order_by("-created_at")[:20]
+        .order_by("created_at")
+    )
+    call_history = list(call_history_qs)
+
+    # ── SMS history for this guest (any SMS attached to their calls) ──────────
+    sms_history = list(
+        SmsLog.objects.filter(
+            call_event__restaurant=restaurant,
+            call_event__detail__caller_phone=memory.phone,
+        ).select_related("call_event").order_by("created_at")
     )
 
+    # ── Chat-style timeline: interleave calls + SMS, oldest first ─────────────
+    timeline_events = []
+    for d in call_history:
+        timeline_events.append({"kind": "call", "at": d.created_at, "detail": d})
+    for s in sms_history:
+        timeline_events.append({"kind": "sms",  "at": s.created_at, "sms":    s})
+    timeline_events.sort(key=lambda e: e["at"])
+    # Cap to last 80 events; older history available via "Load more" in future
+    if len(timeline_events) > 80:
+        timeline_events = timeline_events[-80:]
+
+    # ── AI insights — Estimated lifetime value ───────────────────────────────
+    kb = getattr(restaurant, "knowledge_base", None)
+    avg_cover = getattr(kb, "avg_revenue_per_cover", None) if kb else None
+    confirmed_details = [
+        d for d in call_history if d.reservation_status == "confirmed"
+    ]
+    confirmed_count = len(confirmed_details)
+    avg_party = (
+        sum((d.party_size or 2) for d in confirmed_details) / confirmed_count
+        if confirmed_count else 0
+    )
+    estimated_value = None
+    if avg_cover and confirmed_count:
+        try:
+            estimated_value = round(float(avg_cover) * avg_party * confirmed_count)
+        except (TypeError, ValueError):
+            estimated_value = None
+
+    # ── Topics breakdown — call_reason distribution for this caller ──────────
+    from collections import Counter as _Counter
+    reason_labels = dict(CallDetail.CALL_REASON_CHOICES)
+    reason_counter = _Counter(d.call_reason for d in call_history if d.call_reason)
+    total_calls_for_topics = sum(reason_counter.values())
+    topics = []
+    for value, n in reason_counter.most_common(5):
+        topics.append({
+            "value": value,
+            "label": reason_labels.get(value, value),
+            "count": n,
+            "pct":   int(n / total_calls_for_topics * 100) if total_calls_for_topics else 0,
+        })
+
+    # ── Composer target: most recent CallEvent for this guest (option-a) ─────
+    latest_call_event_pk = call_history[-1].call_event_id if call_history else None
+
+    insights = {
+        "estimated_value":   estimated_value,
+        "avg_cover":         avg_cover,
+        "confirmed_count":   confirmed_count,
+        "avg_party":         round(avg_party, 1) if avg_party else 0,
+        "topics":            topics,
+        "total_for_topics":  total_calls_for_topics,
+    }
+
     return render(request, "portal/guest_detail.html", {
-        "restaurant":   restaurant,
-        "memory":       memory,
-        "call_history": call_history,
-        "saved":        saved,
-        "caller_type_choices": CallerMemory.CALLER_TYPE_CHOICES,
+        "restaurant":             restaurant,
+        "memory":                 memory,
+        "call_history":           call_history,
+        "sms_history":            sms_history,
+        "timeline_events":        timeline_events,
+        "insights":               insights,
+        "latest_call_event_pk":   latest_call_event_pk,
+        "initial_last_call_id":   max((d.id for d in call_history), default=0),
+        "initial_last_sms_id":    max((s.id for s in sms_history),  default=0),
+        "saved":                  saved,
+        "caller_type_choices":    CallerMemory.CALLER_TYPE_CHOICES,
     })
+
+
+@portal_view()
+def portal_guest_sms(request, slug, memory_pk):
+    """
+    AJAX: send an SMS from the guest profile (no active call context).
+
+    Implementation note: every SmsLog row still requires a CallEvent (legacy
+    schema constraint), so we attach the outbound SMS to the guest's most
+    recent CallEvent. The operator just sees "send to Ángel" — the linkage is
+    only for storage continuity.
+    """
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    restaurant = request.restaurant
+    memory     = get_object_or_404(CallerMemory, pk=memory_pk, restaurant=restaurant)
+
+    # Find the latest CallEvent for this guest's phone
+    latest_detail = (
+        CallDetail.objects
+        .filter(caller_phone=memory.phone, call_event__restaurant=restaurant)
+        .select_related("call_event")
+        .order_by("-created_at")
+        .first()
+    )
+    if not latest_detail or not latest_detail.call_event:
+        return JsonResponse(
+            {"error": "Cannot send SMS — no call history for this guest yet."},
+            status=400,
+        )
+    event = latest_detail.call_event
+
+    if not memory.phone:
+        return JsonResponse({"error": "Guest profile has no phone number."}, status=400)
+
+    sms_type       = request.POST.get("sms_type", "").strip()
+    custom_message = request.POST.get("message", "").strip()
+    if not sms_type:
+        return JsonResponse({"error": "sms_type is required."}, status=400)
+
+    kb      = getattr(restaurant, "knowledge_base", None)
+    message = _build_sms_message(sms_type, restaurant, kb, custom_message)
+    if not message:
+        return JsonResponse(
+            {"error": f"No content available for type '{sms_type}'."},
+            status=400,
+        )
+
+    log = SmsLog(restaurant=restaurant, call_event=event, to_number=memory.phone, message=message)
+    try:
+        log.twilio_sid = _send_sms_via_twilio(restaurant, memory.phone, message)
+        log.status     = SmsLog.STATUS_SENT
+        log.save()
+        logger.info("portal_guest_sms: sent to %s (memory=%s)", memory.phone, memory.pk)
+        return JsonResponse({"ok": True, "message": message, "to_number": memory.phone})
+    except Exception as exc:
+        log.status        = SmsLog.STATUS_FAILED
+        log.error_message = str(exc)
+        log.save()
+        logger.exception("portal_guest_sms: failed for memory %s", memory.pk)
+        return JsonResponse({"error": str(exc)}, status=500)
+
+
+@portal_view()
+def portal_guest_activity(request, slug, memory_pk):
+    """
+    AJAX poll: returns the latest CallDetail id + SmsLog id for this guest.
+
+    The guest profile page polls this every 30s; when either id changes vs the
+    value captured at page load, the page reloads so the new inbound SMS or
+    call shows up in the timeline.
+    """
+    restaurant = request.restaurant
+    memory     = get_object_or_404(CallerMemory, pk=memory_pk, restaurant=restaurant)
+    last_call_id = (
+        CallDetail.objects
+        .filter(caller_phone=memory.phone, call_event__restaurant=restaurant)
+        .order_by("-id")
+        .values_list("id", flat=True)
+        .first()
+        or 0
+    )
+    last_sms_id = (
+        SmsLog.objects
+        .filter(
+            call_event__restaurant=restaurant,
+            call_event__detail__caller_phone=memory.phone,
+        )
+        .order_by("-id")
+        .values_list("id", flat=True)
+        .first()
+        or 0
+    )
+    return JsonResponse({"last_call_id": last_call_id, "last_sms_id": last_sms_id})
 
 
 @portal_view()

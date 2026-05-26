@@ -385,7 +385,7 @@ p  { margin: 0; }
   align-items: center; justify-content: center;
   font-size: 16px;
   cursor: pointer;
-  margin-right: 12px;
+  margin-bottom: 18px;
 }
 .v2-sidebar-overlay {
   display: none;
@@ -455,6 +455,104 @@ p  { margin: 0; }
 .v2-chip-dot {
   width: 6px; height: 6px; border-radius: 99px; background: currentColor;
   display: inline-block;
+}
+
+/* ────────────────────────────────────────────────────────────
+   URGENT BANNER (inbox header)
+   ──────────────────────────────────────────────────────────── */
+
+.v2-urgent-banner {
+  position: relative;
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 18px;
+  border-radius: 20px;
+  color: white;
+  background: linear-gradient(135deg, #4361ee 0%, #1f3fc3 70%, #173098 100%);
+  box-shadow: 0 12px 28px -10px rgba(31, 63, 195, 0.50);
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+.v2-urgent-banner::after {
+  content: '';
+  position: absolute; right: -40px; top: -40px;
+  width: 160px; height: 160px;
+  border-radius: 99px;
+  background: rgba(199, 210, 255, 0.4);
+  filter: blur(28px);
+  pointer-events: none;
+}
+.v2-urgent-banner-body {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column; gap: 1px;
+  min-width: 0;
+}
+.v2-urgent-banner .eyebrow {
+  font: 600 11px 'Geist', sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+}
+.v2-urgent-banner .headline {
+  font: 600 16px 'Geist', sans-serif;
+  letter-spacing: -.02em;
+  color: white;
+}
+.v2-urgent-banner .meta {
+  position: relative; z-index: 1;
+  font: 300 12px 'Geist', sans-serif;
+  color: rgba(255, 255, 255, 0.78);
+  margin-left: 14px;
+  padding-left: 14px;
+  border-left: 1px solid rgba(255, 255, 255, 0.25);
+}
+.v2-urgent-banner .arrow-btn {
+  position: relative; z-index: 1;
+  margin-left: auto;
+  width: 42px; height: 42px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--accent-deep);
+  border: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform .15s, box-shadow .15s;
+  flex-shrink: 0;
+}
+.v2-urgent-banner .arrow-btn:hover {
+  transform: translateX(3px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+/* Subdued variant: only missed (no active) — accountability, not urgency */
+.v2-urgent-banner.subdued {
+  background: linear-gradient(135deg, var(--cream-50) 0%, var(--cream-200) 100%);
+  color: var(--ink);
+  box-shadow: var(--shadow-soft);
+}
+.v2-urgent-banner.subdued::after { display: none; }
+.v2-urgent-banner.subdued .eyebrow { color: var(--muted); }
+.v2-urgent-banner.subdued .headline { color: var(--ink); }
+.v2-urgent-banner.subdued .meta {
+  color: var(--muted-strong);
+  border-left-color: var(--warm-line);
+}
+.v2-urgent-banner.subdued .arrow-btn {
+  background: var(--ink); color: white;
+}
+
+/* "Missed Xd ago" badge on a call card (when token expired-unused) */
+.v2-call-card .missed-badge {
+  position: absolute; top: 12px; right: 12px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font: 600 10px 'Geist', sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(0, 0, 0, 0.07);
+  color: var(--muted-strong);
+  white-space: nowrap;
 }
 
 /* ────────────────────────────────────────────────────────────
@@ -717,6 +815,93 @@ p  { margin: 0; }
   flex-shrink: 0;
 }
 
+/* ── Editable reason chip (click chip → menu of reasons) ──── */
+.v2-reason-edit { position: relative; display: inline-block; }
+.v2-reason-edit > summary {
+  list-style: none; cursor: pointer; user-select: none;
+}
+.v2-reason-edit > summary::-webkit-details-marker { display: none; }
+.v2-reason-edit > summary::marker { content: ""; }
+.v2-reason-edit > summary > .v2-chip { padding-right: 18px; position: relative; }
+.v2-reason-edit > summary > .v2-chip::after {
+  content: '▾';
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  font-size: 10px; opacity: 0.55;
+}
+.v2-reason-edit-menu {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  z-index: 50;
+  min-width: 200px;
+  max-height: 320px; overflow-y: auto;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--cream-50);
+  border: 1px solid var(--warm-line);
+  box-shadow: var(--shadow-card);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.v2-reason-edit-menu button {
+  text-align: left;
+  width: 100%;
+  padding: 7px 12px;
+  border-radius: 12px;
+  background: transparent;
+  border: none;
+  font: 500 13px 'Geist', sans-serif; letter-spacing: -.005em;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.v2-reason-edit-menu button:hover { background: rgba(255, 255, 255, 0.75); }
+.v2-reason-edit-menu button.current {
+  background: var(--accent); color: white;
+}
+
+/* ── Overflow "⋯" menu in call-detail header ─────────────── */
+.v2-detail-overflow { position: relative; display: inline-block; }
+.v2-detail-overflow > summary {
+  list-style: none; cursor: pointer; user-select: none;
+  width: 30px; height: 30px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid var(--warm-line);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  color: var(--muted-strong);
+  transition: background .15s;
+}
+.v2-detail-overflow > summary:hover { background: rgba(255, 255, 255, 0.95); }
+.v2-detail-overflow > summary::-webkit-details-marker { display: none; }
+.v2-detail-overflow > summary::marker { content: ""; }
+.v2-detail-overflow-menu {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  z-index: 50;
+  min-width: 190px;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--cream-50);
+  border: 1px solid var(--warm-line);
+  box-shadow: var(--shadow-card);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.v2-detail-overflow-menu button,
+.v2-detail-overflow-menu a {
+  text-align: left;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  font: 500 13px 'Geist', sans-serif; letter-spacing: -.005em;
+  color: var(--ink-soft);
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  text-decoration: none;
+}
+.v2-detail-overflow-menu button:hover,
+.v2-detail-overflow-menu a:hover { background: rgba(255, 255, 255, 0.75); }
+.v2-detail-overflow-menu button.danger { color: #991b1b; }
+.v2-detail-overflow-menu button.danger:hover { background: #fee2e2; }
+
 .v2-call-detail-body {
   flex: 1;
   overflow-y: auto;
@@ -850,4 +1035,1074 @@ p  { margin: 0; }
   color: var(--muted);
   font-size: 12px;
   letter-spacing: 0.02em;
+}
+
+/* ────────────────────────────────────────────────────────────
+   GUEST PROFILE (guest_detail.html)
+   3-column layout: profile · chat timeline · AI insights
+   ──────────────────────────────────────────────────────────── */
+
+.v2-guest-layout {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr) 280px;
+  gap: 18px;
+  align-items: flex-start;
+}
+@media (max-width: 1100px) {
+  .v2-guest-layout { grid-template-columns: 1fr; }
+}
+
+/* ── Left: profile card ───────────────────────────────────── */
+.v2-profile-card {
+  padding: 22px 20px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.v2-profile-card .v2-avatar { margin: 0 auto; }
+.v2-profile-card h2 {
+  margin-top: 14px;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -.035em;
+}
+.v2-profile-name-edit {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 14px;
+}
+.v2-profile-name-edit input {
+  flex: 1; min-width: 0;
+  padding: 8px 14px;
+  border-radius: 99px;
+  background: white;
+  border: 1px solid var(--warm-line);
+  font: 600 14px 'Geist', sans-serif;
+  letter-spacing: -.02em;
+  outline: none;
+}
+.v2-profile-name-edit input:focus {
+  border-color: rgba(31, 63, 195, 0.45);
+  box-shadow: 0 0 0 3px rgba(31, 63, 195, 0.10);
+}
+.v2-profile-contacts {
+  font-family: 'Geist Mono', monospace;
+  font-size: 12.5px;
+  color: var(--muted-strong);
+  margin-top: 10px;
+  line-height: 1.6;
+}
+.v2-profile-chips {
+  display: flex; justify-content: center; gap: 6px;
+  margin-top: 14px; flex-wrap: wrap;
+}
+
+/* Stats grid inside profile area */
+.v2-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--warm-line);
+}
+.v2-stat {
+  text-align: center;
+  padding: 0 6px;
+  border-left: 1px solid var(--warm-line);
+}
+.v2-stat:first-child { border-left: none; }
+.v2-stat .v {
+  font: 900 22px 'Geist', sans-serif;
+  letter-spacing: -.03em;
+  line-height: 1;
+  color: var(--ink);
+}
+.v2-stat .l {
+  font: 600 10.5px 'Geist', sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-strong);
+  margin-top: 4px;
+}
+
+/* Editable annotation blocks (preferences, staff notes, caller type) */
+.v2-annot-block {
+  padding: 14px 16px;
+  margin-top: 12px;
+}
+.v2-annot-block .label-tiny { display: block; margin-bottom: 6px; }
+.v2-annot-block textarea,
+.v2-annot-block select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--warm-line);
+  font: 300 13px 'Geist', sans-serif;
+  letter-spacing: -.005em;
+  color: var(--ink);
+  outline: none;
+  resize: vertical;
+}
+.v2-annot-block select { cursor: pointer; padding: 8px 12px; }
+.v2-annot-block textarea:focus,
+.v2-annot-block select:focus {
+  border-color: rgba(31, 63, 195, 0.45);
+  box-shadow: 0 0 0 3px rgba(31, 63, 195, 0.10);
+}
+
+/* ── Center: chat-like timeline ───────────────────────────── */
+.v2-timeline-wrap {
+  display: flex; flex-direction: column;
+  min-height: 0;
+  /* Reserve room for header + composer on tall viewports */
+  max-height: calc(100vh - 120px);
+  overflow: hidden;
+}
+.v2-timeline-head {
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--warm-line);
+  display: flex; align-items: center; gap: 10px;
+}
+.v2-timeline-head h3 { font-size: 18px; }
+.v2-timeline {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 22px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+/* A single chronological event in the timeline */
+.v2-event {
+  display: flex; gap: 12px;
+  position: relative;
+}
+.v2-event-time {
+  flex-shrink: 0;
+  width: 56px;
+  text-align: right;
+  font: 500 11px 'Geist Mono', monospace;
+  color: var(--muted);
+  padding-top: 11px;
+  line-height: 1.3;
+}
+.v2-event-time .dt { display: block; font-weight: 600; color: var(--muted-strong); }
+.v2-event-body { flex: 1; min-width: 0; }
+
+/* Call event card */
+.v2-event-call {
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid var(--warm-line);
+  border-radius: 16px;
+  padding: 13px 15px;
+  transition: background .15s;
+  text-decoration: none; color: var(--ink);
+  display: block;
+}
+.v2-event-call:hover { background: rgba(255, 255, 255, 0.92); }
+.v2-event-call.urgent {
+  background: linear-gradient(135deg, rgba(199, 210, 255, 0.30), rgba(255, 255, 255, 0.85));
+  border-color: rgba(31, 63, 195, 0.18);
+}
+.v2-event-call-head {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 6px; flex-wrap: wrap;
+}
+.v2-event-call-head .pill-icon {
+  width: 28px; height: 28px;
+  border-radius: 99px;
+  background: rgba(31, 63, 195, 0.10);
+  color: var(--accent);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px;
+}
+.v2-event-call-head .head-title {
+  font: 600 13.5px 'Geist', sans-serif;
+  letter-spacing: -.01em;
+}
+.v2-event-call-head .dur {
+  font: 500 11px 'Geist Mono', monospace;
+  color: var(--muted);
+}
+.v2-event-call-head .open-link {
+  margin-left: auto;
+  font: 600 11.5px 'Geist', sans-serif;
+  color: var(--accent);
+  text-decoration: none;
+}
+.v2-event-call-head .open-link:hover { color: var(--accent-deep); }
+.v2-event-call p {
+  font: 300 13px 'Geist', sans-serif;
+  color: var(--ink-soft);
+  line-height: 1.55;
+  margin-top: 4px;
+}
+
+/* SMS bubble (inside timeline) */
+.v2-event-sms {
+  display: flex;
+  width: 100%;
+}
+.v2-event-sms .bubble {
+  max-width: 84%;
+  padding: 9px 14px;
+  border-radius: 16px;
+  font: 300 13px 'Geist', sans-serif;
+  letter-spacing: -.005em;
+  line-height: 1.5;
+}
+.v2-event-sms.outbound .bubble {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  margin-left: auto;
+  color: white;
+  border-bottom-right-radius: 6px;
+  box-shadow: 0 4px 12px -4px rgba(31, 63, 195, 0.30);
+}
+.v2-event-sms.inbound .bubble {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--warm-line);
+  color: var(--ink-soft);
+  border-bottom-left-radius: 6px;
+}
+.v2-event-sms.outbound > div { margin-left: auto; }
+.v2-event-sms .status {
+  font: 600 9.5px 'Geist', sans-serif; letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.v2-event-sms.outbound .status { text-align: right; }
+
+/* Composer at the bottom of timeline */
+.v2-composer {
+  border-top: 1px solid var(--warm-line);
+  padding: 14px 22px;
+  background: rgba(255, 252, 248, 0.7);
+  display: flex; gap: 8px; align-items: center;
+  flex-wrap: wrap;
+}
+.v2-composer select,
+.v2-composer textarea {
+  padding: 10px 14px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--warm-line);
+  font: 400 13px 'Geist', sans-serif;
+  letter-spacing: -.005em;
+  color: var(--ink);
+  outline: none;
+}
+.v2-composer select { min-width: 180px; cursor: pointer; }
+.v2-composer textarea {
+  flex: 1; min-width: 200px;
+  border-radius: 18px;
+  resize: vertical;
+  min-height: 42px;
+}
+.v2-composer .feedback {
+  flex-basis: 100%;
+  font: 300 12px 'Geist', sans-serif; color: var(--muted-strong);
+}
+
+/* ── Right: AI insights ───────────────────────────────────── */
+.v2-insights { display: flex; flex-direction: column; gap: 12px; }
+.v2-insights .label-tiny { padding: 0 4px; }
+
+.v2-insight-card {
+  padding: 16px 18px;
+}
+.v2-insight-card .label-tiny { display: block; margin-bottom: 6px; }
+.v2-insight-card .value {
+  font: 900 28px 'Geist', sans-serif;
+  letter-spacing: -.035em;
+  color: var(--ink);
+  display: flex; align-items: baseline; gap: 6px;
+}
+.v2-insight-card .value .unit {
+  font: 300 12px 'Geist', sans-serif;
+  color: var(--muted-strong);
+}
+.v2-insight-card .sub {
+  font: 300 12px 'Geist', sans-serif;
+  color: var(--muted-strong);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+.v2-insight-card .empty {
+  font: 300 12.5px 'Geist', sans-serif;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* Featured insight (cobalt-orb card) — for future "Pattern detected" */
+.v2-insight-featured {
+  position: relative;
+  padding: 18px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #4361ee 0%, #1f3fc3 70%, #173098 100%);
+  color: white;
+  overflow: hidden;
+  box-shadow: 0 14px 32px -12px rgba(31, 63, 195, 0.50);
+}
+.v2-insight-featured::after {
+  content: ''; position: absolute;
+  top: -50px; right: -50px;
+  width: 200px; height: 200px;
+  border-radius: 99px;
+  background: rgba(199, 210, 255, 0.40);
+  filter: blur(30px);
+  pointer-events: none;
+}
+.v2-insight-featured > * { position: relative; z-index: 1; }
+.v2-insight-featured .eyebrow {
+  font: 600 11px 'Geist', sans-serif; letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.85);
+}
+.v2-insight-featured p {
+  font: 400 14px 'Geist', sans-serif;
+  line-height: 1.55;
+  margin-top: 8px;
+}
+
+/* Topic bar */
+.v2-topic { margin-bottom: 10px; }
+.v2-topic:last-child { margin-bottom: 0; }
+.v2-topic-row {
+  display: flex; justify-content: space-between;
+  font: 500 12px 'Geist', sans-serif;
+  margin-bottom: 5px;
+}
+.v2-topic-row .n {
+  font-family: 'Geist Mono', monospace;
+  color: var(--muted);
+}
+.v2-topic-track {
+  height: 6px; border-radius: 99px;
+  background: rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+.v2-topic-fill {
+  height: 100%; border-radius: 99px;
+  background: var(--accent);
+}
+
+/* Pending name confirmation banner */
+.v2-pending-name {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(31, 63, 195, 0.08), rgba(199, 210, 255, 0.30));
+  border: 1px solid rgba(31, 63, 195, 0.18);
+  font: 400 13px 'Geist', sans-serif;
+}
+.v2-pending-name .actions { margin-left: auto; display: flex; gap: 6px; }
+
+/* ────────────────────────────────────────────────────────────
+   GUESTS LIST (guests.html)
+   ──────────────────────────────────────────────────────────── */
+
+.v2-guests-list {
+  display: flex; flex-direction: column;
+  gap: 8px;
+}
+
+.v2-guest-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid var(--warm-line);
+  text-decoration: none;
+  color: var(--ink);
+  transition: background .15s, border-color .15s, box-shadow .15s;
+}
+.v2-guest-row:hover {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 4px 14px -6px rgba(56, 36, 12, 0.12);
+}
+.v2-guest-row-meta {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.v2-guest-row-name {
+  font: 600 14.5px 'Geist', sans-serif;
+  letter-spacing: -.02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.v2-guest-row-name.unnamed {
+  font-family: 'Geist Mono', monospace;
+  color: var(--muted-strong);
+}
+.v2-guest-row-phone {
+  font: 500 11.5px 'Geist Mono', monospace;
+  color: var(--muted);
+}
+.v2-guest-row-tags {
+  display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap;
+}
+.v2-guest-row-summary {
+  font: 300 12px 'Geist', sans-serif;
+  color: var(--muted-strong);
+  margin-top: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.v2-guest-row-stats {
+  text-align: right;
+  flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 3px;
+  align-items: flex-end;
+}
+.v2-guest-row-stats .calls {
+  font: 900 17px 'Geist', sans-serif;
+  letter-spacing: -.02em;
+  color: var(--ink);
+  line-height: 1;
+}
+.v2-guest-row-stats .last {
+  font: 500 11px 'Geist Mono', monospace;
+  color: var(--muted);
+}
+.v2-guest-row-actions {
+  display: none;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.v2-guest-row:hover .v2-guest-row-actions { display: inline-flex; }
+.v2-guest-row-actions button {
+  width: 32px; height: 32px;
+  padding: 0;
+  border-radius: 99px;
+  background: white;
+  border: 1px solid var(--warm-line-strong);
+  color: var(--muted-strong);
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px;
+}
+.v2-guest-row-actions button:hover {
+  background: #fee2e2; color: #991b1b; border-color: rgba(153, 27, 27, 0.20);
+}
+
+/* Add-guest expandable form */
+.v2-add-guest {
+  margin-bottom: 16px;
+}
+.v2-add-guest > summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px;
+  border-radius: 99px;
+  background: var(--ink);
+  color: white;
+  font: 600 13px 'Geist', sans-serif;
+  user-select: none;
+}
+.v2-add-guest > summary::-webkit-details-marker { display: none; }
+.v2-add-guest > summary::marker { content: ""; }
+.v2-add-guest-form {
+  margin-top: 14px;
+  padding: 18px 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+  background: var(--cream-50);
+  border: 1px solid var(--warm-line);
+  border-radius: 20px;
+}
+.v2-add-guest-form .full { grid-column: 1 / -1; }
+.v2-add-guest-form label {
+  font: 600 11px 'Geist', sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-strong);
+  display: block; margin-bottom: 5px;
+}
+.v2-add-guest-form input,
+.v2-add-guest-form select,
+.v2-add-guest-form textarea {
+  width: 100%;
+  padding: 9px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--warm-line);
+  font: 300 13px 'Geist', sans-serif;
+  letter-spacing: -.005em;
+  color: var(--ink);
+  outline: none;
+  resize: vertical;
+}
+.v2-add-guest-form input:focus,
+.v2-add-guest-form select:focus,
+.v2-add-guest-form textarea:focus {
+  border-color: rgba(31, 63, 195, 0.45);
+  box-shadow: 0 0 0 3px rgba(31, 63, 195, 0.10);
+}
+.v2-add-guest-form .actions {
+  grid-column: 1 / -1;
+  display: flex; gap: 8px; justify-content: flex-end;
+  margin-top: 4px;
+}
+
+/* Breadcrumb */
+.v2-breadcrumb {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 18px;
+  font: 600 12px 'Geist', sans-serif;
+  letter-spacing: -.005em;
+}
+.v2-breadcrumb a { color: var(--muted-strong); text-decoration: none; }
+.v2-breadcrumb a:hover { color: var(--accent); }
+.v2-breadcrumb .sep { color: var(--muted); }
+.v2-breadcrumb .current { color: var(--ink); }
+
+/* ────────────────────────────────────────────────────────────
+   DASHBOARD (dashboard.html)
+   Hero banner, KPI cards with sparklines, heatmap, ROI,
+   bars / topic table / recent reservations
+   ──────────────────────────────────────────────────────────── */
+
+.v2-dash-grid {
+  display: flex; flex-direction: column;
+  gap: 18px;
+}
+
+/* ── Hero banner (cobalt gradient + overnight summary + stats) ───── */
+.v2-dash-hero {
+  position: relative;
+  display: flex; gap: 22px; align-items: stretch;
+  padding: 26px 30px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #4361ee 0%, #1f3fc3 70%, #173098 100%);
+  color: white;
+  overflow: hidden;
+  box-shadow: 0 18px 40px -16px rgba(31, 63, 195, 0.50);
+}
+.v2-dash-hero::after {
+  content: '';
+  position: absolute; right: -60px; top: -60px;
+  width: 280px; height: 280px;
+  border-radius: 99px;
+  background: rgba(199, 210, 255, 0.30);
+  filter: blur(40px);
+  pointer-events: none;
+}
+.v2-dash-hero-left {
+  flex: 1; min-width: 0;
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column;
+  gap: 10px;
+}
+.v2-dash-hero-eyebrow {
+  font: 600 11px 'Geist', sans-serif;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.80);
+}
+.v2-dash-hero-greeting {
+  font: 900 32px 'Geist', sans-serif;
+  letter-spacing: -.035em;
+  color: white;
+  display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.v2-dash-hero-greeting .agent-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 11px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.30);
+  font: 600 12px 'Geist', sans-serif; letter-spacing: -.005em;
+  color: rgba(255, 255, 255, 0.92);
+}
+.v2-dash-hero-greeting .agent-chip .dot {
+  width: 6px; height: 6px; border-radius: 99px; background: #6ee7a0;
+  box-shadow: 0 0 0 3px rgba(110, 231, 160, 0.30);
+}
+.v2-dash-hero-story-eyebrow {
+  font: 600 11px 'Geist', sans-serif;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 8px;
+}
+.v2-dash-hero-story {
+  font: 500 17px 'Geist', sans-serif;
+  letter-spacing: -.02em;
+  color: white;
+  line-height: 1.45;
+  max-width: 560px;
+}
+.v2-dash-hero-actions {
+  display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+}
+.v2-dash-hero-actions .btn {
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--accent-deep);
+  border-color: transparent;
+}
+.v2-dash-hero-actions .btn:hover {
+  background: white;
+  box-shadow: 0 6px 18px -4px rgba(0, 0, 0, 0.20);
+}
+.v2-dash-hero-actions .btn.ghost {
+  background: rgba(255, 255, 255, 0.14);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+}
+.v2-dash-hero-actions .btn.ghost:hover {
+  background: rgba(255, 255, 255, 0.24);
+  border-color: rgba(255, 255, 255, 0.50);
+}
+
+.v2-dash-hero-stats {
+  position: relative; z-index: 1;
+  display: flex; gap: 10px;
+  align-items: stretch;
+  align-self: center;
+}
+.v2-dash-hero-stat {
+  width: 88px; min-height: 88px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  display: flex; flex-direction: column; justify-content: space-between;
+  color: white;
+}
+.v2-dash-hero-stat .v {
+  font: 900 28px 'Geist', sans-serif;
+  letter-spacing: -.035em;
+  line-height: 1;
+}
+.v2-dash-hero-stat .l {
+  font: 600 10px 'Geist', sans-serif;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+@media (max-width: 900px) {
+  .v2-dash-hero { flex-direction: column; }
+  .v2-dash-hero-stats { align-self: flex-start; }
+}
+
+/* ── KPI cards grid (5 cards, first is wider accent) ─────── */
+.v2-dash-kpis {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 1100px) { .v2-dash-kpis { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px)  { .v2-dash-kpis { grid-template-columns: 1fr; } }
+.v2-dash-kpi.accent {
+  background: linear-gradient(135deg, rgba(31, 63, 195, 0.10), rgba(199, 210, 255, 0.45));
+  border: 1px solid rgba(31, 63, 195, 0.20);
+  box-shadow: var(--shadow-soft);
+  border-radius: 24px;
+  position: relative; overflow: hidden;
+}
+.v2-dash-kpi.accent::after {
+  content: ''; position: absolute;
+  top: -40px; right: -40px;
+  width: 180px; height: 180px;
+  border-radius: 99px;
+  background: rgba(199, 210, 255, 0.40);
+  filter: blur(30px);
+  pointer-events: none;
+}
+.v2-dash-kpi.accent > * { position: relative; z-index: 1; }
+.v2-dash-kpi.accent .v2-dash-kpi-label,
+.v2-dash-kpi.accent .v2-dash-kpi-label .trend { color: var(--accent-deep); }
+.v2-dash-kpi.accent .v2-dash-kpi-value { color: var(--accent-deep); }
+.v2-dash-kpi.accent .v2-dash-spark .area { fill: rgba(31, 63, 195, 0.18); }
+.v2-dash-kpi.accent .v2-dash-spark .line { stroke: var(--accent-deep); stroke-width: 2; }
+.v2-dash-kpi.accent .v2-dash-spark .dot { r: 3; }
+
+.v2-dash-kpi {
+  padding: 16px 16px 12px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.v2-dash-kpi-label {
+  font: 600 10.5px 'Geist', sans-serif;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  color: var(--muted-strong);
+  display: flex; align-items: center; gap: 6px;
+}
+.v2-dash-kpi-label .trend {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: rgba(31, 63, 195, 0.10);
+  color: var(--accent-deep);
+  font: 600 10.5px 'Geist', sans-serif; letter-spacing: -.005em;
+  text-transform: none;
+}
+.v2-dash-kpi-label .trend.down {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--muted-strong);
+}
+.v2-dash-kpi-value {
+  display: flex; align-items: baseline; gap: 6px;
+  font: 900 40px 'Geist', sans-serif;
+  letter-spacing: -.04em;
+  color: var(--ink);
+  line-height: 1;
+}
+.v2-dash-kpi-value .unit {
+  font: 600 13px 'Geist', sans-serif;
+  color: var(--muted);
+}
+.v2-dash-spark {
+  display: block;
+  width: 100%;
+  height: 56px;
+  margin-top: 10px;
+  overflow: visible;
+}
+.v2-dash-spark .area { fill: rgba(31, 63, 195, 0.10); stroke: none; }
+.v2-dash-spark .line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.v2-dash-spark .dot { fill: var(--accent-deep); }
+
+/* ── Generic dashboard card heading ───────────────────────── */
+.v2-dash-card {
+  padding: 18px 20px;
+}
+.v2-dash-card-head {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 14px;
+}
+.v2-dash-card-head h3 { font-size: 16px; }
+.v2-dash-card-head .meta {
+  margin-left: auto;
+  font: 500 11.5px 'Geist Mono', monospace;
+  color: var(--muted);
+}
+
+/* ── Heatmap (7 × 24) ─────────────────────────────────────── */
+.v2-dash-heatmap-wrap { overflow-x: auto; }
+.v2-dash-heatmap {
+  display: grid;
+  grid-template-columns: 36px repeat(24, 1fr);
+  gap: 3px;
+  min-width: 560px;
+}
+.v2-dash-heatmap .hdr,
+.v2-dash-heatmap .row-label {
+  font: 600 10px 'Geist Mono', monospace;
+  color: var(--muted);
+  text-align: center;
+  letter-spacing: 0;
+}
+.v2-dash-heatmap .row-label { text-align: right; padding-right: 4px; align-self: center; }
+.v2-dash-heatmap .cell {
+  aspect-ratio: 1;
+  border-radius: 4px;
+  background: rgba(31, 63, 195, var(--cell-op, 0));
+  min-width: 14px;
+  min-height: 14px;
+}
+.v2-dash-heatmap .cell.zero { background: rgba(0, 0, 0, 0.04); }
+.v2-dash-heatmap-legend {
+  display: flex; align-items: center; gap: 6px;
+  font: 500 10.5px 'Geist Mono', monospace;
+  color: var(--muted);
+}
+.v2-dash-heatmap-legend .scale {
+  display: inline-flex; gap: 3px;
+}
+.v2-dash-heatmap-legend .scale .step {
+  width: 14px; height: 14px;
+  border-radius: 4px;
+  background: rgba(31, 63, 195, var(--op, 0));
+}
+
+/* ── ROI block ────────────────────────────────────────────── */
+.v2-dash-roi {
+  display: flex; flex-direction: column;
+  gap: 14px;
+}
+.v2-dash-roi-row {
+  display: flex; gap: 12px;
+}
+.v2-dash-roi-stat {
+  flex: 1;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid var(--warm-line);
+}
+.v2-dash-roi-stat .label {
+  font: 600 10px 'Geist', sans-serif;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  color: var(--muted-strong);
+}
+.v2-dash-roi-stat .v {
+  font: 900 22px 'Geist', sans-serif;
+  letter-spacing: -.03em;
+  color: var(--ink);
+  margin-top: 6px;
+  line-height: 1;
+}
+.v2-dash-roi-stat .sub {
+  font: 300 11.5px 'Geist', sans-serif;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.v2-dash-roi-empty {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(31, 63, 195, 0.08), rgba(199, 210, 255, 0.20));
+  border: 1px solid rgba(31, 63, 195, 0.15);
+}
+.v2-dash-roi-empty .label {
+  font: 600 10px 'Geist', sans-serif;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  color: var(--accent-deep);
+}
+.v2-dash-roi-empty p {
+  font: 300 13px 'Geist', sans-serif;
+  color: var(--ink-soft);
+  line-height: 1.55;
+  margin-top: 6px;
+}
+.v2-dash-roi-empty form {
+  margin-top: 12px;
+  display: flex; gap: 8px; align-items: center;
+}
+.v2-dash-roi-empty input {
+  flex: 1;
+  padding: 9px 14px;
+  border-radius: 99px;
+  background: white;
+  border: 1px solid var(--warm-line);
+  font: 600 13px 'Geist', sans-serif; letter-spacing: -.005em;
+  color: var(--ink);
+  outline: none;
+}
+.v2-dash-roi-empty input:focus {
+  border-color: rgba(31, 63, 195, 0.45);
+  box-shadow: 0 0 0 3px rgba(31, 63, 195, 0.10);
+}
+
+/* ── Bar chart (calls per day) ────────────────────────────── */
+.v2-dash-bars {
+  display: block;
+  width: 100%;
+  height: 140px;
+}
+.v2-dash-bars rect { fill: var(--accent); rx: 2; ry: 2; }
+.v2-dash-bars rect.muted { fill: rgba(31, 63, 195, 0.20); }
+.v2-dash-bars text {
+  font: 500 9px 'Geist Mono', monospace;
+  fill: var(--muted);
+}
+
+/* ── Topic × outcome (3-column intensity grid) ─────────────── */
+.v2-dash-topics {
+  display: grid;
+  grid-template-columns: 1fr 38px 38px 38px;
+  gap: 0 6px;
+  align-items: center;
+}
+.v2-dash-topics .head {
+  font: 600 9px 'Geist', sans-serif;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  color: var(--muted);
+  padding-bottom: 6px;
+}
+.v2-dash-topics .head.res { color: #2e6f3e; text-align: center; }
+.v2-dash-topics .head.esc { color: var(--accent-deep); text-align: center; }
+.v2-dash-topics .head.inc { text-align: center; }
+.v2-dash-topics .topic-name {
+  display: flex; align-items: center; gap: 6px;
+  font: 500 12.5px 'Geist', sans-serif;
+  padding: 7px 0;
+  border-top: 1px solid var(--warm-line);
+}
+.v2-dash-topics .topic-name .total {
+  margin-left: auto;
+  font: 500 10.5px 'Geist Mono', monospace;
+  color: var(--muted);
+}
+.v2-dash-topics .cell {
+  padding: 7px 0;
+  border-top: 1px solid var(--warm-line);
+  display: flex; justify-content: center;
+}
+.v2-dash-topics .cell .pill {
+  font: 500 11px 'Geist Mono', monospace;
+  padding: 2px 9px;
+  border-radius: 6px;
+  min-width: 24px;
+  text-align: center;
+  background: transparent;
+  color: var(--muted);
+}
+.v2-dash-topics .cell.has-value .pill.res {
+  background: rgba(46, 111, 62, calc(0.08 + var(--int, 0) * 0.55));
+  color: #2e6f3e;
+}
+.v2-dash-topics .cell.has-value .pill.esc {
+  background: rgba(31, 63, 195, calc(0.08 + var(--int, 0) * 0.55));
+  color: var(--accent-deep);
+}
+.v2-dash-topics .cell.has-value .pill.inc {
+  background: rgba(0, 0, 0, calc(0.05 + var(--int, 0) * 0.18));
+  color: var(--ink);
+}
+
+/* ── KB completion donut card ─────────────────────────────── */
+.v2-dash-kb {
+  position: relative;
+  padding: 20px;
+  overflow: hidden;
+}
+.v2-dash-kb::after {
+  content: '';
+  position: absolute;
+  top: -80px; right: -80px;
+  width: 220px; height: 220px;
+  border-radius: 99px;
+  background: rgba(199, 210, 255, 0.35);
+  filter: blur(30px);
+  pointer-events: none;
+}
+.v2-dash-kb > * { position: relative; z-index: 1; }
+.v2-dash-kb-row {
+  display: flex; align-items: center; gap: 18px;
+  margin-top: 12px;
+}
+.v2-dash-kb-text { flex: 1; }
+.v2-dash-kb-text h3 { font-size: 16px; margin-bottom: 4px; }
+.v2-dash-kb-text p {
+  font: 300 12.5px 'Geist', sans-serif;
+  color: var(--muted-strong);
+  line-height: 1.5;
+}
+.v2-dash-kb-text strong { color: var(--accent-deep); font-weight: 600; }
+
+/* ── Calls-per-day line/area chart ────────────────────────── */
+.v2-dash-calls-day-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 140px;
+  padding-bottom: 20px;
+}
+.v2-dash-calls-day-wrap .chart {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 120px;
+}
+.v2-dash-calls-day-wrap .chart .area { fill: rgba(31, 63, 195, 0.12); stroke: none; }
+.v2-dash-calls-day-wrap .chart .line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.v2-dash-calls-day-wrap .chart .dot { fill: var(--accent-deep); }
+.v2-dash-calls-day-wrap .last-label {
+  font: 600 11px 'Geist Mono', monospace;
+  fill: var(--accent-deep);
+}
+.v2-dash-calls-day-wrap .xlabel {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  display: flex; justify-content: space-between;
+  font: 500 9.5px 'Geist Mono', monospace;
+  color: var(--muted);
+}
+
+/* ── ROI setup (dashed cobalt) ────────────────────────────── */
+.v2-dash-roi-setup {
+  padding: 18px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(255, 255, 252, 0.95), rgba(199, 210, 255, 0.30));
+  border: 1px dashed rgba(31, 63, 195, 0.40);
+}
+.v2-dash-roi-setup .label-tiny { color: var(--accent-deep); display: block; margin-bottom: 8px; }
+.v2-dash-roi-setup p {
+  font: 300 13px 'Geist', sans-serif;
+  color: var(--ink-soft);
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+.v2-dash-roi-setup .input-row {
+  display: flex; gap: 8px; align-items: center;
+}
+.v2-dash-roi-setup .input-pill {
+  flex: 1;
+  display: flex; align-items: center; gap: 4px;
+  background: white;
+  border-radius: 99px;
+  padding: 6px 14px;
+  border: 1px solid var(--warm-line-strong);
+}
+.v2-dash-roi-setup .input-pill input {
+  border: none; outline: none; background: transparent;
+  font: 500 13px 'Geist Mono', monospace;
+  width: 100%; color: var(--ink);
+}
+.v2-dash-roi-setup .input-pill .pre,
+.v2-dash-roi-setup .input-pill .suf {
+  font: 500 12px 'Geist Mono', monospace;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ── Recent reservations list ─────────────────────────────── */
+.v2-dash-recent { display: flex; flex-direction: column; gap: 6px; }
+.v2-dash-recent-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--warm-line);
+  text-decoration: none;
+  color: var(--ink);
+}
+.v2-dash-recent-row:last-child { border-bottom: none; }
+.v2-dash-recent-row:hover { background: rgba(0, 0, 0, 0.025); border-radius: 10px; }
+.v2-dash-recent-name {
+  font: 600 13.5px 'Geist', sans-serif;
+  letter-spacing: -.015em;
+}
+.v2-dash-recent-meta {
+  font: 300 11.5px 'Geist', sans-serif;
+  color: var(--muted-strong);
+}
+.v2-dash-recent-time {
+  margin-left: auto;
+  font: 500 11.5px 'Geist Mono', monospace;
+  color: var(--muted);
+}
+
+/* ── Filter pills (period) — small variant for page-head ──── */
+.v2-period-pills { display: inline-flex; gap: 4px; padding: 3px; border-radius: 99px; background: rgba(0,0,0,0.05); }
+.v2-period-pills a {
+  padding: 5px 12px;
+  border-radius: 99px;
+  font: 600 12px 'Geist', sans-serif; letter-spacing: -.005em;
+  color: var(--muted-strong);
+  text-decoration: none;
+  transition: background .15s, color .15s;
+}
+.v2-period-pills a.active {
+  background: white;
+  color: var(--ink);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
 }

@@ -1,493 +1,384 @@
-{% extends "portal/base.html" %}
+{% extends "portal/base_v2.html" %}
+{% load static %}
+
 {% block title %}Dashboard{% endblock %}
-{% block page_title %}Dashboard{% endblock %}
 {% block nav_dashboard %}active{% endblock %}
 
 {% block content %}
 
-{# Pending action queue — at the very top, only visible when items pending #}
-{% include "portal/_pending_queue.html" %}
+{# ── Page head ─────────────────────────────────────────────────── #}
+<div class="v2-page-head">
+  <div class="v2-page-head-title">
+    <div class="label-tiny v2-page-head-eyebrow">{% now "l · M j · g:i A" %}</div>
+    <h1>Dashboard</h1>
+  </div>
 
-<h4 class="fw-bold mb-1">Welcome back</h4>
-<p class="text-muted mb-4">Last 30 days — {{ restaurant.name }}</p>
+  <span class="v2-agent-chip {% if agent_status == 'active' %}{% elif agent_status == 'no_credits' %}danger{% elif agent_status == 'past_due' %}warn{% else %}idle{% endif %}">
+    <span class="dot"></span>
+    {% if agent_status == 'active' %}Agent live
+    {% elif agent_status == 'no_credits' %}No credits
+    {% elif agent_status == 'past_due' %}Payment due
+    {% else %}Agent inactive{% endif %}
+  </span>
 
-<!-- ── Stat cards ─────────────────────────────────────────────────────────── -->
-<div class="row g-3 mb-4">
+  <div class="v2-page-head-actions">
+    <div class="v2-period-pills">
+      <a href="?period=today" class="{% if period == 'today' %}active{% endif %}">Today</a>
+      <a href="?period=7d"    class="{% if period == '7d' %}active{% endif %}">7d</a>
+      <a href="?period=30d"   class="{% if period == '30d' or not period %}active{% endif %}">30d</a>
+      <a href="?period=all"   class="{% if period == 'all' %}active{% endif %}">All</a>
+    </div>
+  </div>
+</div>
 
-  <!-- Call Minutes -->
-  <div class="col-6 col-sm">
-    <div class="card stat-card p-3 h-100">
-      <div class="d-flex justify-content-between align-items-start mb-1">
-        <div class="text-muted small"><i class="bi bi-clock-fill me-1"></i>Call Minutes</div>
+<div class="v2-dash-grid">
+
+  {# A: Today's pulse hero #}
+  <div class="v2-dash-hero">
+    <div class="v2-dash-hero-left">
+      <div class="v2-dash-hero-eyebrow">{% now "l · M j · g:i A" %}</div>
+      <div class="v2-dash-hero-greeting">
+        {{ greeting }}{% if user_first_name %}, {{ user_first_name }}{% endif %}.
       </div>
-      <div class="fs-2 fw-bold">{{ total_minutes }}</div>
-      <div class="text-muted" style="font-size:.72rem;">last 30 days</div>
+
+      <div class="v2-dash-hero-story-eyebrow">{{ hero_eyebrow }}</div>
+      <div class="v2-dash-hero-story">{{ hero_headline }}</div>
+
+      <div class="v2-dash-hero-actions">
+        <a href="{% url 'portal_calls' restaurant.slug %}" class="btn">
+          Open inbox <i class="bi bi-arrow-right"></i>
+        </a>
+        {% if today_calls_total > 0 %}
+          <a href="{% url 'portal_calls' restaurant.slug %}?period=today" class="btn ghost">
+            <i class="bi bi-play-circle"></i> Review all
+          </a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="v2-dash-hero-stats">
+      <div class="v2-dash-hero-stat">
+        <div class="v">{{ today_calls_total }}</div>
+        <div class="l">Calls</div>
+      </div>
+      <div class="v2-dash-hero-stat">
+        <div class="v">{{ today_urgent }}</div>
+        <div class="l">Urgent</div>
+      </div>
+      <div class="v2-dash-hero-stat">
+        <div class="v">{{ today_bookings }}</div>
+        <div class="l">Bookings</div>
+      </div>
     </div>
   </div>
 
-  <!-- Total Calls -->
-  <div class="col-6 col-sm">
-    <div class="card stat-card p-3 h-100">
-      <div class="d-flex justify-content-between align-items-start mb-1">
-        <div class="text-muted small"><i class="bi bi-telephone-fill me-1"></i>Total Calls</div>
+  {# B.1: KPI row — 5 tiles, first one (Call minutes) accent #}
+  <div class="v2-dash-kpis">
+
+    {# CALL MINUTES — accent #}
+    <div class="v2-dash-kpi accent">
+      <div class="v2-dash-kpi-label">
+        Call minutes
+        {% if trends.minutes %}
+          <span class="trend {% if not trends.minutes.up %}down{% endif %}">
+            {% if trends.minutes.up %}↑{% else %}↓{% endif %} {{ trends.minutes.pct }}%
+          </span>
+        {% endif %}
+      </div>
+      <div class="v2-dash-kpi-value">{{ total_minutes }}<span class="unit">min</span></div>
+      <svg class="v2-dash-spark" viewBox="0 0 100 30" preserveAspectRatio="none">
+        {% if sparks.minutes.area %}<path class="area" d="{{ sparks.minutes.area }}"/>{% endif %}
+        {% if sparks.minutes.line %}<path class="line" d="{{ sparks.minutes.line }}"/>{% endif %}
+        {% if sparks.minutes.last_x %}
+          <circle class="dot" cx="{{ sparks.minutes.last_x }}" cy="{{ sparks.minutes.last_y }}" r="2"/>
+        {% endif %}
+      </svg>
+    </div>
+
+    {# TOTAL CALLS #}
+    <div class="v2-dash-kpi glass">
+      <div class="v2-dash-kpi-label">
+        Total calls
         {% if trends.calls %}
-          {% if trends.calls.up %}
-            <span class="badge rounded-pill trend-up">↑ {{ trends.calls.pct }}%</span>
-          {% else %}
-            <span class="badge rounded-pill trend-dn">↓ {{ trends.calls.pct }}%</span>
-          {% endif %}
+          <span class="trend {% if not trends.calls.up %}down{% endif %}">
+            {% if trends.calls.up %}↑{% else %}↓{% endif %} {{ trends.calls.pct }}%
+          </span>
         {% endif %}
       </div>
-      <div class="fs-2 fw-bold">{{ total_calls }}</div>
-      <div class="text-muted" style="font-size:.72rem;">vs prev 30 days</div>
+      <div class="v2-dash-kpi-value">{{ total_calls }}</div>
+      <svg class="v2-dash-spark" viewBox="0 0 100 30" preserveAspectRatio="none">
+        {% if sparks.calls.area %}<path class="area" d="{{ sparks.calls.area }}"/>{% endif %}
+        {% if sparks.calls.line %}<path class="line" d="{{ sparks.calls.line }}"/>{% endif %}
+        {% if sparks.calls.last_x %}
+          <circle class="dot" cx="{{ sparks.calls.last_x }}" cy="{{ sparks.calls.last_y }}" r="2"/>
+        {% endif %}
+      </svg>
     </div>
-  </div>
 
-  <!-- Unique Callers -->
-  <div class="col-6 col-sm">
-    <div class="card stat-card p-3 h-100">
-      <div class="d-flex justify-content-between align-items-start mb-1">
-        <div class="text-muted small"><i class="bi bi-people-fill me-1"></i>Unique Callers</div>
+    {# UNIQUE CALLERS #}
+    <div class="v2-dash-kpi glass">
+      <div class="v2-dash-kpi-label">
+        Unique callers
         {% if trends.unique %}
-          {% if trends.unique.up %}
-            <span class="badge rounded-pill trend-up">↑ {{ trends.unique.pct }}%</span>
-          {% else %}
-            <span class="badge rounded-pill trend-dn">↓ {{ trends.unique.pct }}%</span>
-          {% endif %}
+          <span class="trend {% if not trends.unique.up %}down{% endif %}">
+            {% if trends.unique.up %}↑{% else %}↓{% endif %} {{ trends.unique.pct }}%
+          </span>
         {% endif %}
       </div>
-      <div class="fs-2 fw-bold">{{ unique_callers }}</div>
-      <div class="text-muted" style="font-size:.72rem;">vs prev 30 days</div>
+      <div class="v2-dash-kpi-value">{{ unique_callers }}</div>
+      <svg class="v2-dash-spark" viewBox="0 0 100 30" preserveAspectRatio="none">
+        {% if sparks.unique.area %}<path class="area" d="{{ sparks.unique.area }}"/>{% endif %}
+        {% if sparks.unique.line %}<path class="line" d="{{ sparks.unique.line }}"/>{% endif %}
+        {% if sparks.unique.last_x %}
+          <circle class="dot" cx="{{ sparks.unique.last_x }}" cy="{{ sparks.unique.last_y }}" r="2"/>
+        {% endif %}
+      </svg>
     </div>
-  </div>
 
-  <!-- Repeat Callers -->
-  <div class="col-6 col-sm">
-    <div class="card stat-card p-3 h-100">
-      <div class="d-flex justify-content-between align-items-start mb-1">
-        <div class="text-muted small"><i class="bi bi-arrow-repeat me-1"></i>Repeat Callers</div>
+    {# REPEAT CALLERS #}
+    <div class="v2-dash-kpi glass">
+      <div class="v2-dash-kpi-label">
+        Repeat callers
         {% if trends.repeat %}
-          {% if trends.repeat.up %}
-            <span class="badge rounded-pill trend-up">↑ {{ trends.repeat.pct }}%</span>
-          {% else %}
-            <span class="badge rounded-pill trend-dn">↓ {{ trends.repeat.pct }}%</span>
-          {% endif %}
+          <span class="trend {% if not trends.repeat.up %}down{% endif %}">
+            {% if trends.repeat.up %}↑{% else %}↓{% endif %} {{ trends.repeat.pct }}%
+          </span>
         {% endif %}
       </div>
-      <div class="fs-2 fw-bold">{{ repeat_callers }}</div>
-      <div class="text-muted" style="font-size:.72rem;">vs prev 30 days</div>
+      <div class="v2-dash-kpi-value">{{ repeat_callers }}</div>
+      <svg class="v2-dash-spark" viewBox="0 0 100 30" preserveAspectRatio="none">
+        {% if sparks.repeat.area %}<path class="area" d="{{ sparks.repeat.area }}"/>{% endif %}
+        {% if sparks.repeat.line %}<path class="line" d="{{ sparks.repeat.line }}"/>{% endif %}
+        {% if sparks.repeat.last_x %}
+          <circle class="dot" cx="{{ sparks.repeat.last_x }}" cy="{{ sparks.repeat.last_y }}" r="2"/>
+        {% endif %}
+      </svg>
     </div>
-  </div>
 
-  <!-- Reservation Leads Today -->
-  <div class="col-6 col-sm">
-    <div class="card stat-card p-3 h-100" style="border-left: 3px solid var(--color-primary-400);">
-      <div class="d-flex justify-content-between align-items-start mb-1">
-        <div class="text-muted small"><i class="bi bi-calendar-check-fill me-1"></i>Reservation Leads Today</div>
+    {# RESERVATION LEADS #}
+    <div class="v2-dash-kpi glass">
+      <div class="v2-dash-kpi-label">
+        Reservation leads
         {% if trends.leads %}
-          {% if trends.leads.up %}
-            <span class="badge rounded-pill trend-up">↑ {{ trends.leads.pct }}%</span>
-          {% else %}
-            <span class="badge rounded-pill trend-dn">↓ {{ trends.leads.pct }}%</span>
-          {% endif %}
+          <span class="trend {% if not trends.leads.up %}down{% endif %}">
+            {% if trends.leads.up %}↑{% else %}↓{% endif %} {{ trends.leads.pct }}%
+          </span>
         {% endif %}
       </div>
-      <div class="fs-2 fw-bold text-primary">{{ leads_today }}</div>
-      <div class="text-muted" style="font-size:.72rem;">vs yesterday &middot; {{ leads_30d }} this month</div>
-    </div>
-  </div>
-
-</div>
-
-<!-- ── KB Health ──────────────────────────────────────────────────────────── -->
-<div class="row g-3 mb-4">
-  <div class="col-12">
-    <div class="card hover-lift p-3">
-      <div class="d-flex align-items-center justify-content-between mb-2">
-        <h6 class="fw-semibold mb-0"><i class="bi bi-database-fill me-1 text-secondary"></i>Agent Knowledge Base — Completion</h6>
-        <a href="{% url 'portal_kb' restaurant.slug %}" class="btn btn-sm btn-dark">
-          Edit <i class="bi bi-pencil-fill ms-1"></i>
-        </a>
-      </div>
-      <div class="d-flex align-items-center gap-3">
-        <div class="flex-grow-1">
-          <div class="progress" style="height: 10px; border-radius: 6px;">
-            {% if kb_score >= 80 %}
-              <div class="progress-bar bg-success" style="width: {{ kb_score }}%;"></div>
-            {% elif kb_score >= 50 %}
-              <div class="progress-bar bg-warning" style="width: {{ kb_score }}%;"></div>
-            {% else %}
-              <div class="progress-bar bg-danger" style="width: {{ kb_score }}%;"></div>
-            {% endif %}
-          </div>
-        </div>
-        <span class="fw-bold {% if kb_score >= 80 %}text-success{% elif kb_score >= 50 %}text-warning{% else %}text-danger{% endif %}" style="min-width:38px;">{{ kb_score }}%</span>
-      </div>
-      {% if kb_missing %}
-      <div class="alert alert-warning py-2 px-3 mt-3 mb-0 d-flex gap-2 align-items-start">
-        <i class="bi bi-exclamation-triangle-fill mt-1 flex-shrink-0"></i>
-        <div class="small">
-          <strong>Critical fields missing:</strong>
-          {% for f in kb_missing %}
-            <span class="badge bg-warning text-dark me-1">{{ f }}</span>
-          {% endfor %}
-          — the agent may not answer calls correctly.
-          <a href="{% url 'portal_kb' restaurant.slug %}" class="ms-1 fw-semibold">Fix now &rarr;</a>
-        </div>
-      </div>
-      {% endif %}
-    </div>
-  </div>
-</div>
-
-<!-- ── Charts row ────────────────────────────────────────────────────────── -->
-<div class="row g-3 mb-4">
-  <div class="col-lg-7">
-    <div class="card hover-lift p-3 h-100 d-flex flex-column">
-      <h6 class="fw-semibold mb-3">Calls per Day</h6>
-      <div class="flex-grow-1" style="position:relative; min-height:180px;">
-        <canvas id="callsChart"></canvas>
-      </div>
-    </div>
-  </div>
-  <div class="col-lg-5">
-    <div class="card hover-lift p-3 h-100">
-      <h6 class="fw-semibold mb-3">Topics</h6>
-      <canvas id="topicsChart" height="120"></canvas>
-    </div>
-  </div>
-</div>
-
-<!-- ── ROI / Cost cards ───────────────────────────────────────────────────── -->
-<div class="row g-3 mb-4">
-
-  <div class="col-sm-6">
-    <div class="card p-3 h-100" style="border-left: 3px solid var(--color-danger);">
-      <div class="text-muted small mb-1">
-        <i class="bi bi-calendar-heart me-1"></i>Cost per Reservation Lead
-        <span class="tip-anchor ms-1" data-tip="How much you spend on AI per every caller who wanted a reservation">
-          <i class="bi bi-info-circle" style="cursor:default;"></i>
-        </span>
-      </div>
-      {% if cost_per_lead %}
-        <div class="fs-2 fw-bold">${{ cost_per_lead }}</div>
-        <div class="text-muted" style="font-size:.72rem;">{{ leads_30d }} leads this month</div>
-      {% else %}
-        <div class="fs-4 fw-bold text-muted">—</div>
-        <div class="text-muted" style="font-size:.72rem;">No reservation leads yet</div>
-      {% endif %}
-    </div>
-  </div>
-
-  <div class="col-sm-6">
-    <div class="card p-3 h-100" style="border-left: 3px solid var(--color-success);">
-      <div class="text-muted small mb-1">
-        <i class="bi bi-check-circle-fill me-1"></i>Cost per Resolved Call
-        <span class="tip-anchor ms-1" data-tip="How much you spend on AI per every call fully handled without transferring to staff">
-          <i class="bi bi-info-circle" style="cursor:default;"></i>
-        </span>
-      </div>
-      {% if cost_per_resolved %}
-        <div class="fs-2 fw-bold">${{ cost_per_resolved }}</div>
-        <div class="text-muted" style="font-size:.72rem;">{{ resolved_count }} resolved this month</div>
-      {% else %}
-        <div class="fs-4 fw-bold text-muted">—</div>
-        <div class="text-muted" style="font-size:.72rem;">No resolved calls yet</div>
-      {% endif %}
-    </div>
-  </div>
-
-</div>
-
-<!-- ── ROI estimate ───────────────────────────────────────────────────────── -->
-{% if roi_data %}
-<div class="row g-3 mb-4">
-  <div class="col-12">
-    <div class="card p-3" style="border-left: 4px solid var(--color-primary-500); background: linear-gradient(135deg, var(--color-primary-50) 0%, #fff 100%);">
-      <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
-        <div>
-          <div class="text-muted small mb-1 fw-semibold text-uppercase" style="letter-spacing:.05em; font-size:.68rem;">
-            <i class="bi bi-graph-up-arrow me-1"></i>ROI — Last 30 Days
-          </div>
-          <div class="d-flex align-items-baseline gap-3 flex-wrap">
-            <div>
-              <span class="fs-1 fw-bold text-primary">{{ roi_data.roi_multiplier }}×</span>
-              <span class="text-muted small ms-1">return on AI spend</span>
-            </div>
-            <div class="text-muted small">
-              <span class="fw-semibold text-dark">${{ roi_data.estimated_revenue }}</span> estimated revenue
-              vs <span class="fw-semibold text-dark">${{ roi_data.total_cost }}</span> AI cost
-            </div>
-          </div>
-          <div class="text-muted mt-1" style="font-size:.72rem;">
-            {{ roi_data.confirmed_count }} confirmed reservation{{ roi_data.confirmed_count|pluralize }} × {{ roi_data.avg_party }} avg guests × ${{ roi_data.avg_cover }}/cover
-            {% if pending_leads %}&middot; <a href="{% url 'portal_calls' restaurant.slug %}?reservation=1" class="text-warning fw-semibold">{{ pending_leads }} lead{{ pending_leads|pluralize }} pending review</a>{% endif %}
-          </div>
-        </div>
-        <form method="post" action="{% url 'portal_update_avg_cover' restaurant.slug %}" class="d-flex align-items-center gap-2 align-self-center">
-          {% csrf_token %}
-          <input type="number" name="avg_revenue_per_cover" value="{{ roi_data.avg_cover }}" min="1" step="0.01"
-                 class="form-control form-control-sm" style="width:90px;" placeholder="$/cover">
-          <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
-{% else %}
-<div class="row g-3 mb-4">
-  <div class="col-12">
-    <div class="card p-3" style="border: 2px dashed var(--color-border); background: var(--color-neutral-50);">
-      <div class="d-flex align-items-center gap-3 flex-wrap">
-        <i class="bi bi-graph-up-arrow fs-3 text-muted"></i>
-        <div class="flex-grow-1">
-          <div class="fw-semibold small">ROI not yet available</div>
-          {% if not avg_cover_set %}
-            <div class="text-muted small">Set your average revenue per cover to enable ROI tracking.</div>
-          {% elif confirmed_count == 0 and pending_leads > 0 %}
-            <div class="text-muted small">
-              {{ pending_leads }} reservation lead{{ pending_leads|pluralize }} waiting — confirm them in Call History to calculate ROI.
-            </div>
-          {% else %}
-            <div class="text-muted small">No confirmed reservations this month yet.</div>
-          {% endif %}
-        </div>
-        {% if not avg_cover_set %}
-          <form method="post" action="{% url 'portal_update_avg_cover' restaurant.slug %}" class="d-flex align-items-center gap-2">
-            {% csrf_token %}
-            <input type="number" name="avg_revenue_per_cover" min="1" step="0.01"
-                   class="form-control form-control-sm" style="width:90px;" placeholder="$/cover">
-            <button type="submit" class="btn btn-sm btn-dark">Set <i class="bi bi-arrow-right ms-1"></i></button>
-          </form>
-        {% elif pending_leads > 0 %}
-          <a href="{% url 'portal_calls' restaurant.slug %}?reservation=1" class="btn btn-sm btn-dark">Review leads <i class="bi bi-arrow-right ms-1"></i></a>
+      <div class="v2-dash-kpi-value">{{ leads_period }}</div>
+      <svg class="v2-dash-spark" viewBox="0 0 100 30" preserveAspectRatio="none">
+        {% if sparks.leads.area %}<path class="area" d="{{ sparks.leads.area }}"/>{% endif %}
+        {% if sparks.leads.line %}<path class="line" d="{{ sparks.leads.line }}"/>{% endif %}
+        {% if sparks.leads.last_x %}
+          <circle class="dot" cx="{{ sparks.leads.last_x }}" cy="{{ sparks.leads.last_y }}" r="2"/>
         {% endif %}
-      </div>
+      </svg>
     </div>
   </div>
-</div>
-{% endif %}
 
-<!-- ── Heatmap ────────────────────────────────────────────────────────────── -->
-<div class="row g-3 mb-4">
-  <div class="col-12">
-    <div class="card hover-lift p-3">
-      <h6 class="fw-semibold mb-3"><i class="bi bi-grid-3x3-gap-fill me-1 text-secondary"></i>Call Volume by Hour &amp; Day of Week</h6>
-      <div style="overflow-x: auto;">
-        <table class="table table-borderless mb-0" style="min-width: 700px; table-layout: fixed;">
-          <thead>
-            <tr>
-              <th style="width: 42px;"></th>
-              {% for h in "0123456789" %}
-                <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">{{ h }}</th>
-              {% endfor %}
-              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">10</th>
-              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">11</th>
-              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">12</th>
-              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">13</th>
-              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">14</th>
-              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">15</th>
-              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">16</th>
-              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">17</th>
-              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">18</th>
-              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">19</th>
-              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">20</th>
-              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">21</th>
-              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">22</th>
-              <th class="text-center p-0" style="font-size:.6rem;color:#999;width:3.8%;">23</th>
-            </tr>
-          </thead>
-          <tbody>
+  {# B.2: Main grid 1.55:1 — Left: Heatmap + Calls/day + Topic. Right: KB + Cost + ROI + Recent #}
+  <div style="display:grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; align-items: flex-start;">
+
+    {# ─── LEFT column ─── #}
+    <div style="display:flex; flex-direction:column; gap: 14px;">
+
+      {# Heatmap card #}
+      <div class="v2-dash-card glass-deep">
+        <div class="v2-dash-card-head">
+          <h3>Call volume · hour × day</h3>
+          <span class="v2-chip v2-chip-soft" style="font-size:11px;">Peak: see clusters</span>
+          <div class="v2-dash-heatmap-legend" style="margin-left:auto;">
+            Low
+            <div class="scale">
+              <div class="step" style="--op: 0.08"></div>
+              <div class="step" style="--op: 0.25"></div>
+              <div class="step" style="--op: 0.50"></div>
+              <div class="step" style="--op: 0.75"></div>
+              <div class="step" style="--op: 1.0"></div>
+            </div>
+            High
+          </div>
+        </div>
+        <div class="v2-dash-heatmap-wrap">
+          <div class="v2-dash-heatmap">
+            <div></div>
+            <div class="hdr">0</div><div class="hdr"></div><div class="hdr"></div>
+            <div class="hdr">3</div><div class="hdr"></div><div class="hdr"></div>
+            <div class="hdr">6</div><div class="hdr"></div><div class="hdr"></div>
+            <div class="hdr">9</div><div class="hdr"></div><div class="hdr"></div>
+            <div class="hdr">12</div><div class="hdr"></div><div class="hdr"></div>
+            <div class="hdr">15</div><div class="hdr"></div><div class="hdr"></div>
+            <div class="hdr">18</div><div class="hdr"></div><div class="hdr"></div>
+            <div class="hdr">21</div><div class="hdr"></div><div class="hdr"></div>
+
             {% for row in heatmap_rows %}
-            <tr style="height: 22px;">
-              <td class="pe-2 text-end align-middle" style="font-size:.7rem;color:#666;font-weight:500;white-space:nowrap;">{{ row.day }}</td>
+              <div class="row-label">{{ row.day }}</div>
               {% for cell in row.hours %}
-              <td class="p-0 align-middle" style="height:22px;">
-                <div title="{{ cell.count }} call{{ cell.count|pluralize }}"
-                     style="height:18px;border-radius:3px;margin:1px;
-                            background:rgba(67,97,238,{{ cell.opacity }});
-                            {% if cell.count == 0 %}background:var(--color-neutral-100);{% endif %}">
-                </div>
-              </td>
+                <div class="cell {% if cell.count == 0 %}zero{% endif %}"
+                     style="--cell-op: {{ cell.opacity }};"
+                     title="{{ cell.count }} call{{ cell.count|pluralize }}"></div>
               {% endfor %}
-            </tr>
             {% endfor %}
-          </tbody>
-        </table>
-        <div class="d-flex align-items-center gap-2 mt-2" style="font-size:.7rem;color:#999;">
-          <span>Low</span>
-          <div style="width:60px;height:8px;border-radius:4px;background:linear-gradient(to right, #f3f4f6, rgba(67,97,238,1));"></div>
-          <span>High</span>
+          </div>
+        </div>
+      </div>
+
+      {# Calls per day + Topic × outcome side-by-side #}
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+
+        <div class="v2-dash-card glass" style="display:flex; flex-direction:column;">
+          <div class="v2-dash-card-head">
+            <h3>Calls per day</h3>
+            <span class="meta">{% if period == 'today' %}today{% elif period == '7d' %}7d{% elif period == 'all' %}all{% else %}30d{% endif %}</span>
+          </div>
+          {% if calls_per_day.line %}
+            <div class="v2-dash-calls-day-wrap">
+              <svg class="chart" viewBox="0 0 300 100" preserveAspectRatio="none">
+                <path class="area" d="{{ calls_per_day.area }}"/>
+                <path class="line" d="{{ calls_per_day.line }}"/>
+                {% if calls_per_day.last_x %}
+                  <circle class="dot" cx="{{ calls_per_day.last_x }}" cy="{{ calls_per_day.last_y }}" r="3"/>
+                {% endif %}
+              </svg>
+              <div class="xlabel">
+                <span>{{ calls_per_day_first_label }}</span>
+                {% if calls_per_day_mid_label and calls_per_day_mid_label != calls_per_day_first_label and calls_per_day_mid_label != calls_per_day_last_label %}
+                  <span>{{ calls_per_day_mid_label }}</span>
+                {% endif %}
+                <span>{{ calls_per_day_last_label }}</span>
+              </div>
+            </div>
+          {% else %}
+            <div class="v2-empty" style="padding:40px 0;">
+              <i class="bi bi-bar-chart"></i>
+              <p style="font-size:12px;">Not enough data yet.</p>
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="v2-dash-card glass" style="display:flex; flex-direction:column;">
+          <div class="v2-dash-card-head">
+            <h3>Topic × outcome</h3>
+            <span class="meta">{{ total_calls }}</span>
+          </div>
+          {% if topic_outcome_table %}
+            <div class="v2-dash-topics">
+              <div class="head"></div>
+              <div class="head res">Res</div>
+              <div class="head esc">Esc</div>
+              <div class="head inc">Inc</div>
+              {% for row in topic_outcome_table %}
+                <div class="topic-name">
+                  <span>{{ row.topic }}</span>
+                  <span class="total">{{ row.total }}</span>
+                </div>
+                <div class="cell {% if row.resolved %}has-value{% endif %}" style="--int: {{ row.res_intensity }};">
+                  <span class="pill res">{% if row.resolved %}{{ row.resolved }}{% else %}—{% endif %}</span>
+                </div>
+                <div class="cell {% if row.escalated %}has-value{% endif %}" style="--int: {{ row.esc_intensity }};">
+                  <span class="pill esc">{% if row.escalated %}{{ row.escalated }}{% else %}—{% endif %}</span>
+                </div>
+                <div class="cell {% if row.incomplete %}has-value{% endif %}" style="--int: {{ row.inc_intensity }};">
+                  <span class="pill inc">{% if row.incomplete %}{{ row.incomplete }}{% else %}—{% endif %}</span>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="v2-empty" style="padding:30px 0;">
+              <i class="bi bi-pie-chart"></i>
+              <p style="font-size:12px;">No topic data yet.</p>
+            </div>
+          {% endif %}
         </div>
       </div>
     </div>
-  </div>
-</div>
 
-<!-- ── Topic × Outcome + Outcomes donut ──────────────────────────────────── -->
-<div class="row g-3 mb-4">
+    {# ─── RIGHT column ─── #}
+    <div style="display:flex; flex-direction:column; gap: 14px;">
 
-  <!-- Topic × Outcome table -->
-  <div class="col-lg-7">
-    <div class="card hover-lift p-3 h-100">
-      <h6 class="fw-semibold mb-3"><i class="bi bi-table me-1 text-secondary"></i>Topic × Outcome</h6>
-      {% if topic_outcome_table %}
-      <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0" style="font-size:.82rem;">
-          <thead class="table-light">
-            <tr>
-              <th>Topic</th>
-              <th class="text-center" style="color:var(--color-success);">Resolved</th>
-              <th class="text-center" style="color:var(--color-danger);">Escalated</th>
-              <th class="text-center" style="color:var(--color-warning);">Incomplete</th>
-              <th class="text-center text-muted">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in topic_outcome_table %}
-            <tr>
-              <td class="fw-semibold">{{ row.topic }}</td>
-              <td class="text-center">
-                {% if row.resolved %}
-                  <span class="badge rounded-pill" style="background:var(--color-success-light);color:var(--color-success-text);">{{ row.resolved }}</span>
-                {% else %}<span class="text-muted">—</span>{% endif %}
-              </td>
-              <td class="text-center">
-                {% if row.escalated %}
-                  <span class="badge rounded-pill" style="background:var(--color-danger-light);color:var(--color-danger-text);">{{ row.escalated }}</span>
-                {% else %}<span class="text-muted">—</span>{% endif %}
-              </td>
-              <td class="text-center">
-                {% if row.incomplete %}
-                  <span class="badge rounded-pill" style="background:var(--color-warning-light);color:var(--color-warning-text);">{{ row.incomplete }}</span>
-                {% else %}<span class="text-muted">—</span>{% endif %}
-              </td>
-              <td class="text-center text-muted fw-semibold">{{ row.total }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% else %}
-      <p class="text-muted small mb-0">No call data yet.</p>
-      {% endif %}
-    </div>
-  </div>
-
-  <!-- Call Outcomes donut -->
-  <div class="col-lg-5">
-    <div class="card hover-lift p-3 h-100">
-      <h6 class="fw-semibold mb-3">Call Outcomes</h6>
-      <canvas id="outcomeChart" height="140"></canvas>
-    </div>
-  </div>
-
-</div>
-
-<!-- ── Recent Reservation Inquiries ──────────────────────────────────────── -->
-<div class="row g-3">
-  <div class="col-12">
-    <div class="card hover-lift p-3">
-      <div class="d-flex align-items-center justify-content-between mb-3">
-        <h6 class="fw-semibold mb-0">Recent Reservation Inquiries</h6>
-        <a href="{% url 'portal_guests' restaurant.slug %}?reason=reservation" class="btn btn-sm btn-dark">
-          View all <i class="bi bi-arrow-right ms-1"></i>
-        </a>
-      </div>
-      {% if recent_reservation_inquiries %}
-      <ul class="list-group list-group-flush">
-        {% for d in recent_reservation_inquiries %}
-        <li class="list-group-item px-0 py-2 d-flex justify-content-between align-items-start">
-          <div>
-            <div class="fw-semibold small">{{ d.caller_name|default:d.caller_phone|default:"Unknown" }}</div>
-            <div class="text-muted" style="font-size:.78rem;">
-              {% if d.party_size %}<i class="bi bi-people-fill me-1"></i>{{ d.party_size }} &middot; {% endif %}
-              {{ d.reservation_date }} {% if d.reservation_time %}at {{ d.reservation_time }}{% endif %}
-            </div>
+      {# KB completion with donut #}
+      <div class="v2-dash-kb glass-deep">
+        <div style="display:flex; align-items:center;">
+          <span class="label-tiny">Agent knowledge base</span>
+          <a href="{% url 'portal_kb' restaurant.slug %}"
+             style="margin-left:auto; font:600 11.5px 'Geist',sans-serif; color: var(--accent-deep); text-decoration:none;">
+            Edit →
+          </a>
+        </div>
+        <div class="v2-dash-kb-row">
+          <svg width="92" height="92" viewBox="0 0 92 92">
+            <circle cx="46" cy="46" r="36" fill="none" stroke="rgba(0,0,0,0.06)" stroke-width="10"/>
+            <circle cx="46" cy="46" r="36" fill="none" stroke="url(#kbGrad)" stroke-width="10"
+                    stroke-linecap="round"
+                    stroke-dasharray="{% widthratio kb_score 100 226 %} 226"
+                    transform="rotate(-90 46 46)"/>
+            <defs>
+              <linearGradient id="kbGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#5973d8"/>
+                <stop offset="100%" stop-color="#1f3fc3"/>
+              </linearGradient>
+            </defs>
+            <text x="46" y="51" text-anchor="middle"
+                  font-family="Geist Mono, monospace" font-size="20" font-weight="600"
+                  fill="var(--ink)">{{ kb_score }}%</text>
+          </svg>
+          <div class="v2-dash-kb-text">
+            {% if kb_score >= 90 %}
+              <h3>Almost complete</h3>
+            {% elif kb_score >= 60 %}
+              <h3>Coming along</h3>
+            {% else %}
+              <h3>Needs setup</h3>
+            {% endif %}
+            <p>
+              {% if kb_missing %}
+                Add {% for m in kb_missing %}<strong>{{ m }}</strong>{% if not forloop.last %}{% if forloop.counter == kb_missing|length|add:"-1" %} and {% else %}, {% endif %}{% endif %}{% endfor %} to reach 100%.
+              {% else %}
+                Your knowledge base is complete. The agent has everything it needs.
+              {% endif %}
+            </p>
           </div>
-          <span class="text-muted" style="font-size:.75rem; white-space:nowrap;">{{ d.created_at|timesince }} ago</span>
-        </li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <p class="text-muted small mb-0">No reservation inquiries yet.</p>
-      {% endif %}
-      <div class="mt-3 pt-2 border-top d-flex gap-2">
-        <a href="{% url 'portal_kb' restaurant.slug %}" class="btn btn-sm btn-primary">
-          <i class="bi bi-database-fill me-1"></i>Knowledge Base
-        </a>
-        <a href="{% url 'portal_calls' restaurant.slug %}" class="btn btn-sm btn-dark">
-          <i class="bi bi-telephone-inbound me-1"></i>Call History
-        </a>
+        </div>
+      </div>
+
+      {# Recent reservation inquiries #}
+      <div class="v2-dash-card glass">
+        <div class="v2-dash-card-head">
+          <h3>Recent reservation inquiries</h3>
+          <a href="{% url 'portal_calls' restaurant.slug %}?reason=reservation"
+             class="meta" style="color: var(--accent); text-decoration:none;">View all →</a>
+        </div>
+        {% if recent_reservation_inquiries %}
+          <div class="v2-dash-recent">
+            {% for d in recent_reservation_inquiries %}
+              <a href="{% url 'portal_calls' restaurant.slug %}?selected={{ d.call_event_id }}#call-detail"
+                 class="v2-dash-recent-row">
+                <div class="v2-avatar avatar-accent" style="width:28px;height:28px;font-size:11px;">
+                  {% if d.caller_name %}{{ d.caller_name|slice:":1"|upper }}{% else %}#{% endif %}
+                </div>
+                <div style="flex:1; min-width:0;">
+                  <div class="v2-dash-recent-name">
+                    {{ d.caller_name|default:d.caller_phone|default:"Unknown" }}
+                    {% if d.party_size %}<span class="mono" style="font-size:10.5px;color:var(--muted);font-weight:500;">· party of {{ d.party_size }}</span>{% endif %}
+                  </div>
+                  <div class="v2-dash-recent-meta">
+                    {% if d.reservation_date %}{{ d.reservation_date|date:"M j" }}{% endif %}
+                    {% if d.reservation_time %} · {{ d.reservation_time|time:"g:i A" }}{% endif %}
+                    {% if not d.reservation_date and not d.reservation_time %}{{ d.created_at|date:"M j" }}{% endif %}
+                  </div>
+                </div>
+                <span class="v2-dash-recent-time">{{ d.created_at|timesince|cut:", "|truncatewords:1 }}</span>
+              </a>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="v2-empty" style="padding:30px 0;">
+            <i class="bi bi-calendar-check"></i>
+            <p style="font-size:12px;">No reservation inquiries yet.</p>
+          </div>
+        {% endif %}
       </div>
     </div>
   </div>
 </div>
-{% endblock %}
-
-{% block extra_head %}
-<style>
-  .trend-up { background: var(--color-success-light); color: var(--color-success-text); font-size: .7rem; }
-  .trend-dn { background: var(--color-danger-light);  color: var(--color-danger-text);  font-size: .7rem; }
-  .tip-anchor { position: relative; display: inline-block; }
-  .tip-anchor::after {
-    content: attr(data-tip);
-    position: absolute;
-    bottom: calc(100% + 6px);
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--color-neutral-800);
-    color: var(--color-neutral-50);
-    font-size: .72rem;
-    white-space: nowrap;
-    padding: 4px 8px;
-    border-radius: var(--radius-sm);
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity .15s;
-    z-index: 9999;
-  }
-  .tip-anchor:hover::after { opacity: 1; }
-</style>
-{% endblock %}
-
-{% block extra_scripts %}
-<script>
-const CHART_COLORS = ["#4361ee","#3f37c9","#7209b7","#f72585","#4cc9f0","#e2b96f","#2dc653"];
-
-// Calls per day
-new Chart(document.getElementById("callsChart"), {
-  type: "bar",
-  data: {
-    labels: {{ calls_by_day_labels|safe }},
-    datasets: [{
-      label: "Calls",
-      data: {{ calls_by_day_data|safe }},
-      backgroundColor: "#4361ee",
-      borderRadius: 4,
-    }]
-  },
-  options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
-});
-
-// Topics donut
-new Chart(document.getElementById("topicsChart"), {
-  type: "doughnut",
-  data: {
-    labels: {{ topic_labels|safe }},
-    datasets: [{ data: {{ topic_data|safe }}, backgroundColor: CHART_COLORS }]
-  },
-  options: { plugins: { legend: { position: "right" } }, cutout: "60%" }
-});
-
-// Outcomes donut
-new Chart(document.getElementById("outcomeChart"), {
-  type: "doughnut",
-  data: {
-    labels: {{ outcome_labels|safe }},
-    datasets: [{ data: {{ outcome_data|safe }}, backgroundColor: ["#2dc653","#f72585","#e2b96f"] }]
-  },
-  options: { plugins: { legend: { position: "right" } }, cutout: "60%" }
-});
-</script>
 {% endblock %}

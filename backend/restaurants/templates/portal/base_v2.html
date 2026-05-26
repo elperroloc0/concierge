@@ -37,7 +37,6 @@
       <a class="v2-sidebar-item {% block nav_calls %}{% endblock %}" href="{% url 'portal_calls' restaurant.slug %}">
         <span class="v2-sidebar-icon"><i class="bi bi-telephone-inbound-fill"></i></span>
         <span>Call History</span>
-        {% if follow_ups_pending and follow_ups_pending > 0 %}<span class="v2-sidebar-dot"></span>{% endif %}
       </a>
       <a class="v2-sidebar-item {% block nav_guests %}{% endblock %}" href="{% url 'portal_guests' restaurant.slug %}">
         <span class="v2-sidebar-icon"><i class="bi bi-people-fill"></i></span>

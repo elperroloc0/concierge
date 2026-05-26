@@ -6,6 +6,38 @@
 
 {% block content %}
 
+{# ── Urgent banner (active or missed action tokens) ────────────── #}
+{% if pending_action_queue.active %}
+  <div class="v2-urgent-banner">
+    <div class="v2-urgent-banner-body">
+      <div class="eyebrow">
+        {% if banner_oldest_age %}{{ banner_oldest_age }} waiting{% else %}New{% endif %}
+      </div>
+      <div class="headline">
+        {{ pending_action_queue.active|length }} call{{ pending_action_queue.active|length|pluralize }} need{{ pending_action_queue.active|length|pluralize:"s," }} your response
+      </div>
+    </div>
+    {% if pending_action_queue.missed %}
+      <div class="meta">{{ pending_action_queue.missed|length }} missed</div>
+    {% endif %}
+    <a class="arrow-btn"
+       href="?tab=needs_action{% if banner_event_pk %}&selected={{ banner_event_pk }}{% endif %}#call-detail"
+       aria-label="Open urgent call">→</a>
+  </div>
+{% elif pending_action_queue.missed %}
+  <div class="v2-urgent-banner subdued">
+    <div class="v2-urgent-banner-body">
+      <div class="eyebrow">Last 7 days</div>
+      <div class="headline">
+        {{ pending_action_queue.missed|length }} missed action{{ pending_action_queue.missed|length|pluralize }} — still recoverable
+      </div>
+    </div>
+    <a class="arrow-btn"
+       href="?tab=needs_action{% if banner_event_pk %}&selected={{ banner_event_pk }}{% endif %}#call-detail"
+       aria-label="Review missed actions">→</a>
+  </div>
+{% endif %}
+
 {# ── Page head ─────────────────────────────────────────────────── #}
 <div class="v2-page-head">
   <div class="v2-page-head-title">
@@ -45,17 +77,21 @@
   <aside class="v2-calls-list glass">
     <div class="v2-calls-filters">
       {# Status pills (always visible) #}
-      <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}tab=all"
-         class="v2-filter-pill {% if not reason_filter and tab|default:'all' == 'all' %}active{% endif %}">
-        All <span class="count">{{ total_calls }}</span>
+      <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}tab=inbox"
+         class="v2-filter-pill {% if not reason_filter and tab|default:'inbox' == 'inbox' %}active{% endif %}">
+        Inbox <span class="count">{{ inbox_count }}</span>
       </a>
       <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}tab=needs_action"
-         class="v2-filter-pill {% if not reason_filter and tab == 'needs_action' %}active{% elif follow_ups_pending and tab != 'needs_action' %}urgent{% endif %}">
-        Needs action <span class="count">{{ follow_ups_pending }}</span>
+         class="v2-filter-pill {% if not reason_filter and tab == 'needs_action' %}active{% elif needs_action_count and tab != 'needs_action' %}urgent{% endif %}">
+        Needs action <span class="count">{{ needs_action_count }}</span>
       </a>
-      <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}tab=resolved"
-         class="v2-filter-pill {% if not reason_filter and tab == 'resolved' %}active{% endif %}">
-        Resolved <span class="count">{{ resolved_count }}</span>
+      <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}tab=archive"
+         class="v2-filter-pill {% if not reason_filter and tab == 'archive' %}active{% endif %}">
+        Archive <span class="count">{{ archive_count }}</span>
+      </a>
+      <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}tab=deep"
+         class="v2-filter-pill {% if not reason_filter and tab == 'deep' %}active{% endif %}">
+        Deep archive <span class="count">{{ deep_count }}</span>
       </a>
 
       {# Reason pills hidden inside a dropdown #}
@@ -71,7 +107,7 @@
           </summary>
           <div class="v2-filter-more-menu">
             {% if reason_filter %}
-              <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}tab=all"
+              <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}tab=inbox"
                  class="v2-filter-pill">
                 Clear reason
               </a>
@@ -111,8 +147,8 @@
         <a href="?{% if card_keep_qs %}{{ card_keep_qs }}&{% endif %}selected={{ c.event.pk }}#call-detail"
            class="v2-call-card {% if c.event.pk == is_selected %}active{% endif %}">
 
-          {% if c.detail.needs_review or c.detail.follow_up_needed %}
-            <span class="urgent-dot"></span>
+          {% if c.pending_token_state == "missed" %}
+            <span class="missed-badge">{{ c.missed_label|default:"Missed" }}</span>
           {% endif %}
 
           <div class="v2-avatar
@@ -221,14 +257,45 @@
         {% if c.memory %}</a>{% else %}</div>{% endif %}
 
         <div class="v2-call-detail-actions-top">
-          {% if d.call_reason %}
-            <span class="v2-chip {% if d.call_reason == 'complaint' %}v2-chip-danger{% elif d.call_reason == 'reservation' %}v2-chip-mint{% else %}v2-chip-soft{% endif %}">
-              <span class="v2-chip-dot"></span>
-              {{ d.get_call_reason_display }}
-            </span>
-          {% endif %}
+          <div style="display:flex; gap:8px; align-items:center;">
+            <details class="v2-reason-edit"
+                     data-url="{% url 'portal_call_set_reason' restaurant.slug c.event.pk %}">
+              <summary>
+                <span class="v2-chip {% if d.call_reason == 'complaint' %}v2-chip-danger{% elif d.call_reason == 'reservation' %}v2-chip-mint{% else %}v2-chip-soft{% endif %}">
+                  <span class="v2-chip-dot"></span>
+                  {{ d.get_call_reason_display|default:"Set reason" }}
+                </span>
+              </summary>
+              <div class="v2-reason-edit-menu">
+                {% for value, label in reason_choices %}
+                  <button type="button" data-reason="{{ value }}"
+                          class="{% if d.call_reason == value %}current{% endif %}">{{ label }}</button>
+                {% endfor %}
+              </div>
+            </details>
+
+            <details class="v2-detail-overflow">
+              <summary aria-label="More actions">⋯</summary>
+              <div class="v2-detail-overflow-menu">
+                {% if d.follow_up_needed or d.needs_review %}
+                  {# Already shown as primary "Mark resolved" button — no duplicate here #}
+                {% else %}
+                  <button type="button" class="reopen-call-btn"
+                          data-url="{% url 'portal_call_reopen' restaurant.slug c.event.pk %}">
+                    <i class="bi bi-arrow-counterclockwise"></i> Reopen
+                  </button>
+                {% endif %}
+                <button type="button" class="toggle-spam-btn"
+                        data-url="{% url 'portal_call_set_spam' restaurant.slug c.event.pk %}"
+                        data-current="{% if d.is_spam %}1{% else %}0{% endif %}">
+                  <i class="bi bi-{% if d.is_spam %}check-circle{% else %}slash-circle{% endif %}"></i>
+                  {% if d.is_spam %}Unmark as spam{% else %}Mark as spam{% endif %}
+                </button>
+              </div>
+            </details>
+          </div>
           {% if c.call_count > 1 and d.caller_phone %}
-            <a href="?tab=all&phone={{ d.caller_phone }}" class="v2-link-action" title="Filter list by this phone">
+            <a href="?phone={{ d.caller_phone }}" class="v2-link-action" title="Show all calls from this phone">
               {{ c.call_count }} calls <i class="bi bi-arrow-right"></i>
             </a>
           {% endif %}
@@ -294,47 +361,28 @@
         </div>
         {% endif %}
 
-        {% if c.sms_logs or restaurant.enable_sms %}
+        {% if c.sms_logs %}
         <div class="paper v2-call-section">
-          <span class="label-tiny">SMS thread</span>
-          {% if c.sms_logs %}
-            <div class="v2-sms-thread" style="margin-bottom:10px;">
-              {% for sms in c.sms_logs %}
-                <div class="v2-sms-bubble {{ sms.direction }}">
-                  <div class="v2-sms-meta">
-                    <span>{{ sms.created_at|time:"H:i" }} · {{ sms.created_at|date:"M d" }}</span>
-                    <span>{% if sms.direction == 'inbound' %}REPLY{% else %}{{ sms.status|upper }}{% endif %}</span>
-                  </div>
-                  <div>{{ sms.message }}</div>
+          <div style="display:flex; align-items:center; margin-bottom:10px;">
+            <span class="label-tiny">SMS thread</span>
+            {% if c.memory and restaurant.enable_sms %}
+              <a href="{% url 'portal_guest_detail' restaurant.slug c.memory.pk %}"
+                 class="v2-link-action" style="margin-left:auto;">
+                Send via profile <i class="bi bi-arrow-right"></i>
+              </a>
+            {% endif %}
+          </div>
+          <div class="v2-sms-thread">
+            {% for sms in c.sms_logs %}
+              <div class="v2-sms-bubble {{ sms.direction }}">
+                <div class="v2-sms-meta">
+                  <span>{{ sms.created_at|time:"H:i" }} · {{ sms.created_at|date:"M d" }}</span>
+                  <span>{% if sms.direction == 'inbound' %}REPLY{% else %}{{ sms.status|upper }}{% endif %}</span>
                 </div>
-              {% endfor %}
-            </div>
-          {% endif %}
-          {% if restaurant.enable_sms %}
-            <form class="sms-send-form"
-                  data-url="{% url 'portal_send_sms' restaurant.slug c.event.pk %}"
-                  style="display:flex; flex-direction:column; gap:8px;">
-              <select name="sms_type" class="input sms-type-select" style="padding:10px 14px;">
-                <option value="menu_link">Menu link</option>
-                <option value="bar_menu_link">Bar menu link</option>
-                <option value="hours">Hours</option>
-                <option value="music">Live music info</option>
-                <option value="valet">Valet &amp; parking</option>
-                <option value="social_media">Social media</option>
-                <option value="address">Address</option>
-                <option value="event_inquiry">Events contact</option>
-                <option value="website">Website</option>
-                <option value="custom">Custom message…</option>
-              </select>
-              <textarea name="message" class="input sms-custom-msg" rows="2" maxlength="320"
-                        placeholder="Write your message…"
-                        style="display:none; border-radius:14px; padding:10px 14px; resize:vertical;"></textarea>
-              <button type="submit" class="btn">
-                <i class="bi bi-send"></i> Send SMS
-              </button>
-              <div class="sms-feedback" style="display:none;"></div>
-            </form>
-          {% endif %}
+                <div>{{ sms.message }}</div>
+              </div>
+            {% endfor %}
+          </div>
         </div>
         {% endif %}
 
@@ -342,10 +390,17 @@
 
       {# Persistent action bar #}
       <div class="v2-call-actions">
-        {% if d.follow_up_needed or d.needs_review %}
+        {% if d.follow_up_needed or d.needs_review or c.pending_token_state == "active" %}
           <button class="btn btn-accent resolve-followup-btn"
                   data-url="{% url 'portal_resolve_followup' restaurant.slug c.event.pk %}">
             <i class="bi bi-check-lg"></i> Mark resolved
+          </button>
+        {% endif %}
+        {% if c.pending_token_state == "missed" %}
+          <button class="btn dismiss-action-btn"
+                  data-url="{% url 'portal_dismiss_action' restaurant.slug c.event.pk %}"
+                  title="No longer act on this missed item">
+            <i class="bi bi-x-lg"></i> Dismiss
           </button>
         {% endif %}
         {% if d.caller_phone or c.from_number %}
@@ -377,6 +432,59 @@
 {% block extra_scripts %}
 <script>
   const csrfToken = document.cookie.split('; ').find(r => r.startsWith('csrftoken='))?.split('=')[1] || '';
+
+  // ── Generic helper: POST + reload ──────────────────────────────
+  async function postAndReload(url, body) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken,
+                   ...(body ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}) },
+        body: body || undefined,
+      });
+      if (res.ok) location.reload();
+      else alert('Could not save.');
+    } catch { alert('Network error.'); }
+  }
+
+  // ── Edit call reason (chip → dropdown) ─────────────────────────
+  document.querySelectorAll('.v2-reason-edit-menu button').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const details = btn.closest('.v2-reason-edit');
+      const url = details.dataset.url;
+      const reason = btn.dataset.reason;
+      postAndReload(url, new URLSearchParams({ reason }).toString());
+    });
+  });
+
+  // ── Mark / unmark spam ─────────────────────────────────────────
+  document.querySelector('.toggle-spam-btn')?.addEventListener('click', (e) => {
+    const btn = e.currentTarget;
+    const next = btn.dataset.current === '1' ? '0' : '1';
+    postAndReload(btn.dataset.url, new URLSearchParams({ is_spam: next }).toString());
+  });
+
+  // ── Reopen resolved call ───────────────────────────────────────
+  document.querySelector('.reopen-call-btn')?.addEventListener('click', (e) => {
+    postAndReload(e.currentTarget.dataset.url);
+  });
+
+  // ── Dismiss missed action ───────────────────────────────────────
+  document.querySelector('.dismiss-action-btn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-hourglass"></i> Dismissing…';
+    try {
+      const res = await fetch(btn.dataset.url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken },
+      });
+      if (res.ok) { location.reload(); }
+      else { btn.disabled = false; btn.innerHTML = orig; alert('Could not save.'); }
+    } catch { btn.disabled = false; btn.innerHTML = orig; }
+  });
 
   // ── Mark resolved ───────────────────────────────────────────────
   document.querySelector('.resolve-followup-btn')?.addEventListener('click', async (e) => {
@@ -411,40 +519,5 @@
     widget.querySelector('.v2-chip-mint, .v2-chip-danger')?.addEventListener('click', () => setReservationStatus(widget, 'pending'));
   });
 
-  // ── SMS send form ────────────────────────────────────────────────
-  document.querySelectorAll('.sms-send-form').forEach(form => {
-    const typeSelect = form.querySelector('.sms-type-select');
-    const customMsg  = form.querySelector('.sms-custom-msg');
-    const feedback   = form.querySelector('.sms-feedback');
-    typeSelect.addEventListener('change', () => {
-      const isCustom = typeSelect.value === 'custom';
-      customMsg.style.display = isCustom ? '' : 'none';
-      customMsg.required = isCustom;
-    });
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const btn = form.querySelector('button[type=submit]');
-      const orig = btn.innerHTML;
-      btn.disabled = true; btn.innerHTML = 'Sending…';
-      const fd = new FormData(form);
-      fd.append('csrfmiddlewaretoken', csrfToken);
-      try {
-        const res  = await fetch(form.dataset.url, { method: 'POST', body: fd });
-        const data = await res.json();
-        feedback.style.display = '';
-        if (data.ok) {
-          feedback.innerHTML = '<div class="v2-alert" style="background:rgba(46,111,62,0.10);color:#2e6f3e;border-color:rgba(46,111,62,0.18);">Sent.</div>';
-          setTimeout(() => location.reload(), 700);
-        } else {
-          feedback.innerHTML = `<div class="v2-alert">${data.error || 'Failed'}</div>`;
-          btn.disabled = false; btn.innerHTML = orig;
-        }
-      } catch {
-        feedback.style.display = '';
-        feedback.innerHTML = '<div class="v2-alert">Network error.</div>';
-        btn.disabled = false; btn.innerHTML = orig;
-      }
-    });
-  });
 </script>
 {% endblock %}
