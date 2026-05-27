@@ -25,7 +25,7 @@ load_dotenv(BASE_DIR.parent / ".env")
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-^3n8^%=#y%w(j#e20upz2ur107e2yhf#yo5$yy1pslp-3alsqx")
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 
 RETELL_WEBHOOK_BASE_URL = os.environ.get("RETELL_WEBHOOK_URL", "").rstrip("/")
 
@@ -75,6 +75,15 @@ except ImportError:
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "False").lower() == "true"
+
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "django-insecure-dev-only-DO-NOT-USE-IN-PROD"
+    else:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured(
+            "DJANGO_SECRET_KEY must be set in the environment when DEBUG=False"
+        )
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get(
     "ALLOWED_HOSTS",

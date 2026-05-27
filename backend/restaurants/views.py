@@ -2351,11 +2351,30 @@ def _send_sms_via_twilio(restaurant, to_number: str, message: str) -> str:
     return msg.sid
 
 
-def _build_sms_message(sms_type: str, restaurant, kb, custom_message: str = "") -> str | None:
+def _determine_caller_lang(call_detail, restaurant) -> str:
+    """Pick the SMS language for the caller.
+
+    English by default. We switch to the restaurant's primary language only
+    when Retell's `language_consistency=True` confirms the agent stayed in that
+    language throughout the call — i.e. the caller actually spoke it. The
+    signal is binary ("agent switched or not"), so we treat True as positive
+    evidence and everything else as English.
+    """
+    if not restaurant or restaurant.primary_lang in (None, "", "en"):
+        return "en"
+    if not call_detail:
+        return "en"
+    sig = getattr(call_detail, "call_signals", None) or {}
+    if sig.get("language_consistency") is True:
+        return restaurant.primary_lang
+    return "en"
+
+
+def _build_sms_message(sms_type: str, restaurant, kb, custom_message: str = "", lang: str = "en") -> str | None:
     """Build an SMS message from DB data based on the requested type.
 
-    All outbound SMS are English by default — caller-language detection is
-    not wired up yet (see _build_caller_sms for the equivalent note).
+    `lang` is set by the caller via `_determine_caller_lang(call_detail, restaurant)`.
+    Defaults to English; falls back to ES templates when explicitly requested.
     """
     name = restaurant.name if restaurant else ""
 
@@ -2363,30 +2382,30 @@ def _build_sms_message(sms_type: str, restaurant, kb, custom_message: str = "") 
         url = (kb.food_menu_url if kb else "") or (restaurant.website if restaurant else "")
         if not url:
             return None
-        return f"{name} menu: {url}"[:160]
+        return (f"Menú de {name}: {url}" if lang == "es" else f"{name} menu: {url}")[:160]
 
     if sms_type == "bar_menu_link":
         url = (kb.bar_menu_url if kb else "") or (restaurant.website if restaurant else "")
         if not url:
             return None
-        return f"{name} bar menu: {url}"[:160]
+        return (f"Carta de bar de {name}: {url}" if lang == "es" else f"{name} bar menu: {url}")[:160]
 
     if sms_type == "hours":
         hours = (kb.hours_of_operation if kb else "") or ""
         if not hours:
             return None
-        return f"{name} — hours: {hours}"[:160]
+        return (f"{name} — horario: {hours}" if lang == "es" else f"{name} — hours: {hours}")[:160]
 
     if sms_type == "music":
         details = (kb.live_music_details if kb else "") or ""
         url     = restaurant.social_media_url if restaurant else ""
         if details:
-            base = f"{name} — live music: {details}"
+            base = f"{name} — música en vivo: {details}" if lang == "es" else f"{name} — live music: {details}"
             if url and len(base) + len(url) + 2 <= 160:
                 base += f" {url}"
             return base[:160]
         if url:
-            return f"{name} — live music: {url}"[:160]
+            return (f"{name} — música en vivo: {url}" if lang == "es" else f"{name} — live music: {url}")[:160]
         return None
 
     if sms_type == "valet":
@@ -2394,7 +2413,7 @@ def _build_sms_message(sms_type: str, restaurant, kb, custom_message: str = "") 
             return None
         parts = []
         if kb.has_valet:
-            valet = "Valet available"
+            valet = "Valet disponible" if lang == "es" else "Valet available"
             if kb.valet_cost:
                 valet += f" — {kb.valet_cost}"
             parts.append(valet)
@@ -2409,21 +2428,21 @@ def _build_sms_message(sms_type: str, restaurant, kb, custom_message: str = "") 
         url = (restaurant.social_media_url if restaurant else "") or (restaurant.website if restaurant else "")
         if not url:
             return None
-        return f"Follow {name}: {url}"[:160]
+        return (f"Síguenos en {name}: {url}" if lang == "es" else f"Follow {name}: {url}")[:160]
 
     if sms_type == "address":
         address = restaurant.address_full if restaurant else ""
         if not address:
             return None
-        return f"{name} is at: {address}"[:160]
+        return (f"{name} está en: {address}" if lang == "es" else f"{name} is at: {address}")[:160]
 
     if sms_type == "event_inquiry":
         email = restaurant.contact_email if restaurant else ""
         url   = restaurant.website if restaurant else ""
         if email:
-            return f"{name} events: {email}"[:160]
+            return (f"Eventos en {name}: {email}" if lang == "es" else f"{name} events: {email}")[:160]
         if url:
-            return f"{name} events: {url}"[:160]
+            return (f"Eventos en {name}: {url}" if lang == "es" else f"{name} events: {url}")[:160]
         return None
 
     if sms_type == "website":
@@ -2467,8 +2486,10 @@ def retell_tool_send_sms(request):
         CallEvent.objects.filter(payload__call__call_id=call_id).first()
         if call_id else None
     )
+    detail     = getattr(call_event, "detail", None) if call_event else None
+    lang       = _determine_caller_lang(detail, restaurant)
 
-    message = _build_sms_message(sms_type, restaurant, kb, custom_message)
+    message = _build_sms_message(sms_type, restaurant, kb, custom_message, lang=lang)
     if not message:
         return JsonResponse({"result": f"error: no content available for sms_type '{sms_type}'"})
 
@@ -4120,7 +4141,8 @@ def portal_send_sms(request, slug, event_pk):
         return JsonResponse({"error": "sms_type is required."}, status=400)
 
     kb      = getattr(restaurant, "knowledge_base", None)
-    message = _build_sms_message(sms_type, restaurant, kb, custom_message)
+    lang    = _determine_caller_lang(detail, restaurant)
+    message = _build_sms_message(sms_type, restaurant, kb, custom_message, lang=lang)
 
     if not message:
         return JsonResponse({"error": f"No content available for type '{sms_type}'. Check that the relevant URL or info is filled in."}, status=400)
@@ -4481,7 +4503,8 @@ def portal_guest_sms(request, slug, memory_pk):
         return JsonResponse({"error": "sms_type is required."}, status=400)
 
     kb      = getattr(restaurant, "knowledge_base", None)
-    message = _build_sms_message(sms_type, restaurant, kb, custom_message)
+    lang    = _determine_caller_lang(latest_detail, restaurant)
+    message = _build_sms_message(sms_type, restaurant, kb, custom_message, lang=lang)
     if not message:
         return JsonResponse(
             {"error": f"No content available for type '{sms_type}'."},
@@ -5579,8 +5602,13 @@ def _client_ip(request) -> str:
 def _build_caller_sms(t: "CallActionToken", action: str, note: str, cb_when: str, variant: str = "") -> str:
     """Compose the SMS sent to the caller after owner taps an action button.
 
-    All outbound SMS are English by default — caller-language detection is
-    not wired up yet. Recognised variants: "apology", "comp", "text_reply".
+    Language is chosen via `_determine_caller_lang(t.call_detail, t.restaurant)`:
+    English by default; restaurant's primary language only when Retell's
+    `language_consistency=True` confirms the caller actually spoke it.
+
+    `variant` lets the complaint/callback flows produce different SMS templates
+    while still mapping back to one of the core RESPONSES. Recognised:
+    "apology", "comp", "text_reply".
     """
     r = t.restaurant
     d = t.call_detail
@@ -5590,44 +5618,63 @@ def _build_caller_sms(t: "CallActionToken", action: str, note: str, cb_when: str
     name  = d.caller_name or ""
     greet_name = (" " + name) if name else ""
 
-    date_str  = date.strftime("%a %-d %b")  if date  else ""
-    time_str  = time.strftime("%-I:%M %p")  if time  else ""
-    party_str = f"party of {party}"         if party else ""
+    lang = _determine_caller_lang(d, r)
+    is_es = lang == "es"
 
-    when_str = " ".join(p for p in (date_str, time_str, party_str) if p) or "your request"
+    date_str  = date.strftime("%a %-d %b") if date else ""
+    time_str  = time.strftime("%-I:%M %p") if time else ""
+    party_str = (f"{party} personas" if is_es else f"party of {party}") if party else ""
+    fallback  = "tu solicitud" if is_es else "your request"
+    when_str  = " ".join(p for p in (date_str, time_str, party_str) if p) or fallback
 
-    # Complaint variants — different copy for the apology / compensation paths
     if variant == "apology":
-        msg = (f"Hi{greet_name}, our apologies for your experience at {r.name}. "
-               f"Your feedback matters and we'd like to make it right. The manager will reach out shortly.")
+        if is_es:
+            msg = (f"Hola{greet_name}, le pedimos disculpas por su experiencia en {r.name}. "
+                   f"Su comentario nos importa y queremos compensarlo. El gerente se pondrá en contacto pronto.")
+        else:
+            msg = (f"Hi{greet_name}, our apologies for your experience at {r.name}. "
+                   f"Your feedback matters and we'd like to make it right. The manager will reach out shortly.")
     elif variant == "comp":
-        msg = (f"Hi{greet_name}, we're sorry about what happened. As an apology, please accept 20% off "
-               f"your next visit to {r.name}, valid for 30 days. We hope to see you soon.")
+        if is_es:
+            msg = (f"Hola{greet_name}, lamentamos lo ocurrido. Como disculpa, le ofrecemos un 20% de "
+                   f"descuento en su próxima visita a {r.name}, válido por 30 días. Esperamos verle pronto.")
+        else:
+            msg = (f"Hi{greet_name}, we're sorry about what happened. As an apology, please accept 20% off "
+                   f"your next visit to {r.name}, valid for 30 days. We hope to see you soon.")
     elif variant == "text_reply":
         # Operator typed the entire SMS body in the note field
-        msg = note or f"Hi{greet_name}, this is {r.name}."
+        msg = note or (f"Hola{greet_name}, le escribimos desde {r.name}." if is_es
+                       else f"Hi{greet_name}, this is {r.name}.")
         note = ""  # already consumed
     elif action == t.RESP_CONFIRMED:
-        msg = (f"Hi{greet_name}! Your reservation at {r.name} "
-               f"for {when_str} is confirmed. See you then!")
+        if is_es:
+            msg = (f"¡Hola{greet_name}! Tu reserva en {r.name} "
+                   f"para {when_str} está confirmada. ¡Te esperamos!")
+        else:
+            msg = (f"Hi{greet_name}! Your reservation at {r.name} "
+                   f"for {when_str} is confirmed. See you then!")
     elif action == t.RESP_DECLINED:
-        msg = (f"Hi{greet_name}, unfortunately we don't have availability at {r.name} "
-               f"for {when_str}. Please give us a call to find another option.")
+        if is_es:
+            msg = (f"Hola{greet_name}, lamentablemente no tenemos disponibilidad en {r.name} "
+                   f"para {when_str}. Llámanos para buscar otra opción.")
+        else:
+            msg = (f"Hi{greet_name}, unfortunately we don't have availability at {r.name} "
+                   f"for {when_str}. Please give us a call to find another option.")
     elif action == t.RESP_CALLBACK:
-        when_map = {
-            "15min":        "in about 15 minutes",
-            "1h":           "within the hour",
-            "tomorrow_am":  "tomorrow morning",
-        }
-        when = when_map.get(cb_when, "shortly")
-        msg = (f"Hi{greet_name}, we'll call you {when} "
-               f"from {r.name} to follow up on your request.")
+        when_map_en = {"15min": "in about 15 minutes", "1h": "within the hour", "tomorrow_am": "tomorrow morning"}
+        when_map_es = {"15min": "en unos 15 minutos", "1h": "dentro de una hora", "tomorrow_am": "mañana por la mañana"}
+        when = (when_map_es if is_es else when_map_en).get(cb_when, "en breve" if is_es else "shortly")
+        if is_es:
+            msg = f"Hola{greet_name}, te llamamos {when} desde {r.name} para confirmar tu solicitud."
+        else:
+            msg = f"Hi{greet_name}, we'll call you {when} from {r.name} to follow up on your request."
     else:
         return ""
 
     if note:
         msg += f"\n\n— {note}"
-    msg += "\n\n(Automated message. Please don't reply by SMS.)"
+    msg += ("\n\n(Mensaje automatizado. Por favor no responder por SMS.)" if is_es
+            else "\n\n(Automated message. Please don't reply by SMS.)")
     return msg
 
 
