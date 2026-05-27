@@ -85,15 +85,29 @@ if not SECRET_KEY:
             "DJANGO_SECRET_KEY must be set in the environment when DEBUG=False"
         )
 
-ALLOWED_HOSTS = [h.strip() for h in os.environ.get(
-    "ALLOWED_HOSTS",
-    "localhost,127.0.0.1,testserver,.trycloudflare.com,.ngrok.io,.ngrok-free.app"
-).split(",") if h.strip()]
+_ALLOWED_HOSTS_DEFAULT_DEV = "localhost,127.0.0.1,testserver,.trycloudflare.com,.ngrok.io,.ngrok-free.app"
+_allowed_hosts_env = os.environ.get("ALLOWED_HOSTS")
+if _allowed_hosts_env is None:
+    # No env override. In prod we refuse to silently fall back to dev tunnel
+    # wildcards (Host header injection surface); in dev we keep the convenient
+    # set so ngrok/cloudflared work out of the box.
+    if DEBUG:
+        _allowed_hosts_env = _ALLOWED_HOSTS_DEFAULT_DEV
+    else:
+        _allowed_hosts_env = ""
+ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_env.split(",") if h.strip()]
 
 # Render dynamically assigns hostnames. Add it to allowed hosts if it exists.
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+
+if not DEBUG and not ALLOWED_HOSTS:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured(
+        "ALLOWED_HOSTS must be set (via ALLOWED_HOSTS env var or "
+        "RENDER_EXTERNAL_HOSTNAME) when DEBUG=False"
+    )
 
 CSRF_TRUSTED_ORIGINS = [
     f"https://{h}" for h in ALLOWED_HOSTS if h not in ("localhost", "127.0.0.1", "testserver")
@@ -101,6 +115,21 @@ CSRF_TRUSTED_ORIGINS = [
 
 # Trust X-Forwarded-Proto from reverse proxies (Render, ngrok, etc.)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# ── Production hardening ──────────────────────────────────────────────────────
+# All of these are gated on DEBUG=False so local dev (HTTP, no proxy) stays
+# usable. In prod (Render terminates TLS) the X-Forwarded-Proto header trust
+# above lets these flags work correctly.
+if not DEBUG:
+    SECURE_SSL_REDIRECT          = True
+    SESSION_COOKIE_SECURE        = True
+    CSRF_COOKIE_SECURE           = True
+    SECURE_HSTS_SECONDS          = 31536000   # 1 year — pin TLS in browsers
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD          = True
+    SECURE_CONTENT_TYPE_NOSNIFF  = True
+    SECURE_REFERRER_POLICY       = "same-origin"
+    X_FRAME_OPTIONS              = "DENY"     # block clickjacking via iframes
 
 
 # Application definition
