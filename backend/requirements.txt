@@ -40,3 +40,5 @@ typing_extensions==4.15.0
 urllib3==2.6.3
 whitenoise==6.12.0
 yarl==1.23.0
+py-vapid==1.9.2
+pywebpush==2.0.3
