@@ -2352,38 +2352,41 @@ def _send_sms_via_twilio(restaurant, to_number: str, message: str) -> str:
 
 
 def _build_sms_message(sms_type: str, restaurant, kb, custom_message: str = "") -> str | None:
-    """Build an SMS message from DB data based on the requested type."""
+    """Build an SMS message from DB data based on the requested type.
+
+    All outbound SMS are English by default — caller-language detection is
+    not wired up yet (see _build_caller_sms for the equivalent note).
+    """
     name = restaurant.name if restaurant else ""
-    lang = restaurant.primary_lang if restaurant else "en"
 
     if sms_type == "menu_link":
         url = (kb.food_menu_url if kb else "") or (restaurant.website if restaurant else "")
         if not url:
             return None
-        return (f"Menú de {name}: {url}" if lang == "es" else f"{name} menu: {url}")[:160]
+        return f"{name} menu: {url}"[:160]
 
     if sms_type == "bar_menu_link":
         url = (kb.bar_menu_url if kb else "") or (restaurant.website if restaurant else "")
         if not url:
             return None
-        return (f"Carta de bar de {name}: {url}" if lang == "es" else f"{name} bar menu: {url}")[:160]
+        return f"{name} bar menu: {url}"[:160]
 
     if sms_type == "hours":
         hours = (kb.hours_of_operation if kb else "") or ""
         if not hours:
             return None
-        return (f"{name} — horario: {hours}" if lang == "es" else f"{name} — hours: {hours}")[:160]
+        return f"{name} — hours: {hours}"[:160]
 
     if sms_type == "music":
         details = (kb.live_music_details if kb else "") or ""
         url     = restaurant.social_media_url if restaurant else ""
         if details:
-            base = f"{name} - música en vivo: {details}" if lang == "es" else f"{name} - live music: {details}"
+            base = f"{name} — live music: {details}"
             if url and len(base) + len(url) + 2 <= 160:
                 base += f" {url}"
             return base[:160]
         if url:
-            return (f"{name} - música en vivo: {url}" if lang == "es" else f"{name} - live music: {url}")[:160]
+            return f"{name} — live music: {url}"[:160]
         return None
 
     if sms_type == "valet":
@@ -2391,7 +2394,7 @@ def _build_sms_message(sms_type: str, restaurant, kb, custom_message: str = "") 
             return None
         parts = []
         if kb.has_valet:
-            valet = f"Valet disponible" if lang == "es" else "Valet available"
+            valet = "Valet available"
             if kb.valet_cost:
                 valet += f" — {kb.valet_cost}"
             parts.append(valet)
@@ -2406,21 +2409,21 @@ def _build_sms_message(sms_type: str, restaurant, kb, custom_message: str = "") 
         url = (restaurant.social_media_url if restaurant else "") or (restaurant.website if restaurant else "")
         if not url:
             return None
-        return (f"Síguenos en {name}: {url}" if lang == "es" else f"Follow {name}: {url}")[:160]
+        return f"Follow {name}: {url}"[:160]
 
     if sms_type == "address":
         address = restaurant.address_full if restaurant else ""
         if not address:
             return None
-        return (f"{name} está en: {address}" if lang == "es" else f"{name} is at: {address}")[:160]
+        return f"{name} is at: {address}"[:160]
 
     if sms_type == "event_inquiry":
         email = restaurant.contact_email if restaurant else ""
         url   = restaurant.website if restaurant else ""
         if email:
-            return (f"Eventos en {name}: {email}" if lang == "es" else f"{name} events: {email}")[:160]
+            return f"{name} events: {email}"[:160]
         if url:
-            return (f"Eventos en {name}: {url}" if lang == "es" else f"{name} events: {url}")[:160]
+            return f"{name} events: {url}"[:160]
         return None
 
     if sms_type == "website":
@@ -3582,40 +3585,6 @@ def portal_dashboard(request, slug):
 
     kb_score, kb_missing = _kb_health_score(restaurant)
 
-    # ── Build SVG-ready line + area paths for sparkline charts ────────────────
-    def _spark_line(series, vb_w=100, vb_h=30, pad=2):
-        n = len(series)
-        if n == 0:
-            return {"line": "", "area": "", "last_x": None, "last_y": None}
-        if n == 1:
-            cy = vb_h / 2
-            return {
-                "line": f"M0,{cy} L{vb_w},{cy}",
-                "area": "",
-                "last_x": round(vb_w, 2),
-                "last_y": round(cy, 2),
-            }
-        max_v = max(series) or 1
-        step  = vb_w / (n - 1)
-        usable_h = vb_h - pad * 2
-        points = []
-        for i, v in enumerate(series):
-            x = round(i * step, 2)
-            y = round(pad + (1 - v / max_v) * usable_h, 2)
-            points.append((x, y))
-        line = "M" + " L".join(f"{x},{y}" for x, y in points)
-        area = (
-            f"M{points[0][0]},{vb_h} L"
-            + " L".join(f"{x},{y}" for x, y in points)
-            + f" L{points[-1][0]},{vb_h} Z"
-        )
-        return {
-            "line": line,
-            "area": area,
-            "last_x": points[-1][0],
-            "last_y": points[-1][1],
-        }
-
     sparks = {
         "minutes": _spark_line(spark_minutes),
         "calls":   _spark_line(spark_calls),
@@ -4630,21 +4599,48 @@ def portal_billing(request, slug):
 
     # ── Expense aggregation ──────────────────────────────────────────────────
     from django.db.models import Sum
+    from collections import defaultdict
     now = timezone.now()
-    expenses_7d  = CallDetail.objects.filter(
+    today = now.date()
+
+    expenses_7d  = float(CallDetail.objects.filter(
         call_event__restaurant=restaurant,
         call_cost__isnull=False,
         created_at__gte=now - timezone.timedelta(days=7),
-    ).aggregate(total=Sum("call_cost"))["total"] or 0
-    expenses_30d = CallDetail.objects.filter(
+    ).aggregate(total=Sum("call_cost"))["total"] or 0)
+    expenses_30d = float(CallDetail.objects.filter(
         call_event__restaurant=restaurant,
         call_cost__isnull=False,
         created_at__gte=now - timezone.timedelta(days=30),
-    ).aggregate(total=Sum("call_cost"))["total"] or 0
+    ).aggregate(total=Sum("call_cost"))["total"] or 0)
     recent_calls = CallDetail.objects.filter(
         call_event__restaurant=restaurant,
         call_cost__isnull=False,
     ).select_related("call_event").order_by("-created_at")[:10]
+
+    # Daily-spend timeseries — last 14 days, for the sparkline on the credit card
+    spend_by_day = defaultdict(float)
+    for d in CallDetail.objects.filter(
+        call_event__restaurant=restaurant,
+        call_cost__isnull=False,
+        created_at__gte=now - timezone.timedelta(days=14),
+    ).only("created_at", "call_cost"):
+        spend_by_day[d.created_at.date()] += float(d.call_cost or 0)
+    spend_days   = [today - timezone.timedelta(days=i) for i in range(13, -1, -1)]
+    spend_series = [round(spend_by_day.get(day, 0), 4) for day in spend_days]
+    spend_spark  = _spark_line(spend_series, vb_w=560, vb_h=70, pad=4)
+
+    # Runway estimate (days of credit left at current burn rate)
+    avg_daily_spend = expenses_30d / 30 if expenses_30d else 0
+    runway_days = None
+    if avg_daily_spend > 0:
+        runway_days = int(float(sub.communication_balance) / avg_daily_spend)
+
+    # Days until next renewal
+    days_until_renewal = None
+    if sub.current_period_end:
+        delta = sub.current_period_end - now
+        days_until_renewal = max(0, delta.days)
 
     return render(request, "portal/billing.html", {
         "restaurant": restaurant,
@@ -4652,7 +4648,11 @@ def portal_billing(request, slug):
         "stripe_publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
         "expenses_7d":  expenses_7d,
         "expenses_30d": expenses_30d,
-        "recent_calls": recent_calls,
+        "avg_daily_spend":    avg_daily_spend,
+        "runway_days":        runway_days,
+        "days_until_renewal": days_until_renewal,
+        "spend_spark":        spend_spark,
+        "recent_calls":       recent_calls,
         "features": [
             "AI phone agent available 24/7",
             "Multilingual support — answers in the caller's language",
@@ -5022,6 +5022,114 @@ def portal_report_status(request, slug, report_id):
     return JsonResponse({"status": report.status})
 
 
+def _spark_line(series, vb_w=100, vb_h=30, pad=2):
+    """Build SVG-ready line + area paths for a sparkline.
+
+    Returns {"line": "M…L…", "area": "M…Z", "last_x": float, "last_y": float}.
+    """
+    n = len(series)
+    if n == 0:
+        return {"line": "", "area": "", "last_x": None, "last_y": None}
+    if n == 1:
+        cy = vb_h / 2
+        return {
+            "line": f"M0,{cy} L{vb_w},{cy}",
+            "area": "",
+            "last_x": round(vb_w, 2),
+            "last_y": round(cy, 2),
+        }
+    max_v = max(series) or 1
+    step  = vb_w / (n - 1)
+    usable_h = vb_h - pad * 2
+    points = []
+    for i, v in enumerate(series):
+        x = round(i * step, 2)
+        y = round(pad + (1 - v / max_v) * usable_h, 2)
+        points.append((x, y))
+    line = "M" + " L".join(f"{x},{y}" for x, y in points)
+    area = (
+        f"M{points[0][0]},{vb_h} L"
+        + " L".join(f"{x},{y}" for x, y in points)
+        + f" L{points[-1][0]},{vb_h} Z"
+    )
+    return {
+        "line": line,
+        "area": area,
+        "last_x": points[-1][0],
+        "last_y": points[-1][1],
+    }
+
+
+def _parse_owner_summary(md_text):
+    """Split AI owner_summary into {intro, sections[{n, heading, body_md}]}.
+
+    The AI follows a fixed structure with `## Visión general`, `## Reservas`,
+    `## Fricción y fallos del agente`, `## Escalaciones`, `## Recomendaciones`.
+    Anything before the first `##` becomes the intro / pull-quote.
+    """
+    import re
+    if not md_text:
+        return {"intro": "", "sections": []}
+    text = md_text.strip()
+    parts = re.split(r'^##\s+(?!#)', text, flags=re.MULTILINE)
+    intro = parts[0].strip()
+    sections = []
+    for i, p in enumerate(parts[1:], 1):
+        lines = p.strip().split('\n', 1)
+        heading = lines[0].strip()
+        body = lines[1].strip() if len(lines) > 1 else ''
+        sections.append({"n": f"{i:02d}", "heading": heading, "body_md": body})
+    return {"intro": intro, "sections": sections}
+
+
+def _parse_prompt_suggestions(md_text):
+    """Split AI prompt_suggestions into KB-gap items with severity.
+
+    The AI emits `### N. Título [N llamadas — ALTA/MEDIA/BAJA]` per issue,
+    with a `**Cambio propuesto**:` block at the end that we lift out as the
+    "Sugerencia del agente" green pull-quote on the card.
+    """
+    import re
+    if not md_text:
+        return []
+    text = md_text.strip()
+    if text.lower().startswith("sin cambios"):
+        return []
+    items = []
+    parts = re.split(r'^###\s+\d+\.\s+', text, flags=re.MULTILINE)
+    for p in parts[1:]:
+        lines = p.strip().split('\n', 1)
+        title_line = lines[0].strip()
+        body = lines[1].strip() if len(lines) > 1 else ''
+        sev = "low"
+        if re.search(r'\bALTA\b', title_line, re.IGNORECASE):
+            sev = "high"
+        elif re.search(r'\bMEDIA\b', title_line, re.IGNORECASE):
+            sev = "med"
+        title_clean = re.sub(r'\s*\[[^\]]*\]\s*$', '', title_line).strip()
+
+        # Lift out the suggestion block (everything after **Cambio propuesto**:)
+        suggestion = ""
+        context_md = body
+        m = re.search(r'(?:\*\*)?Cambio propuesto(?:\*\*)?\s*:?\s*\n+(.+)$', body, re.DOTALL | re.IGNORECASE)
+        if m:
+            context_md = body[:m.start()].rstrip()
+            raw = m.group(1).strip()
+            cb = re.match(r'```\w*\n(.+?)\n?```', raw, re.DOTALL)
+            if cb:
+                suggestion = cb.group(1).strip()
+            else:
+                suggestion = raw.strip()
+
+        items.append({
+            "title":      title_clean,
+            "body_md":    context_md,
+            "suggestion": suggestion,
+            "sev":        sev,
+        })
+    return items
+
+
 @portal_view()
 def portal_reports_detail(request, slug, report_id):
     from django.http import HttpResponse
@@ -5066,10 +5174,102 @@ def portal_reports_detail(request, slug, report_id):
         if len(week_calls) >= 50:
             break
 
+    # Adjacent reports for ‹ Prev / Next › navigation
+    prev_report = (
+        WeeklyReport.objects.filter(restaurant=restaurant, week_start__lt=report.week_start)
+        .order_by("-week_start").first()
+    )
+    next_report = (
+        WeeklyReport.objects.filter(restaurant=restaurant, week_start__gt=report.week_start)
+        .order_by("week_start").first()
+    )
+
+    # Week-over-week deltas (only when prev_report exists and is done)
+    wow = {}
+    if prev_report and prev_report.status == "done" and prev_report.metrics:
+        pm = prev_report.metrics
+        cm = report.metrics or {}
+        for key in ("total_calls", "real_calls", "reservations"):
+            prev_v = pm.get(key, 0) or 0
+            cur_v  = cm.get(key, 0) or 0
+            wow[key] = cur_v - prev_v
+        prev_fail = (pm.get("agent_failures") or {}).get("total", 0) or 0
+        cur_fail  = (cm.get("agent_failures") or {}).get("total", 0) or 0
+        wow["kb_failures"] = cur_fail - prev_fail
+
+    # Avg call length in human form (1:47 mm:ss) from metrics
+    avg_sec = (report.metrics or {}).get("avg_duration_seconds")
+    avg_call_label = None
+    if avg_sec:
+        avg_call_label = f"{int(avg_sec // 60)}:{int(avg_sec % 60):02d}"
+
+    # Transfer success — derived from real_calls minus unnecessary_transfers
+    metrics = report.metrics or {}
+    real_calls    = metrics.get("real_calls", 0) or 0
+    unnecessary_t = metrics.get("unnecessary_transfers", 0) or 0
+    transfer_success = None
+    if real_calls > 0:
+        ok = max(0, real_calls - unnecessary_t)
+        transfer_success = {
+            "ok":   ok,
+            "total": real_calls,
+            "pct":  int(round(ok / real_calls * 100)),
+        }
+
+    # Parsed analysis + KB items
+    owner_parsed = _parse_owner_summary(report.owner_summary or "")
+    kb_items     = _parse_prompt_suggestions(report.prompt_suggestions or "")
+
+    # Critical callers — calls in the report week that still need follow-up
+    critical_callers = list(
+        CallDetail.objects
+        .filter(
+            call_event__restaurant=restaurant,
+            call_event__created_at__date__gte=report.week_start,
+            call_event__created_at__date__lt=report.week_end,
+            is_spam=False,
+            follow_up_needed=True,
+        )
+        .select_related("call_event")
+        .order_by("-call_event__created_at")[:3]
+    )
+
+    # Operational alert (rendered when meaningful issues are detected)
+    fail_total = (metrics.get("agent_failures") or {}).get("total", 0) or 0
+    alert = None
+    if fail_total >= 3:
+        alert = {
+            "tag":   "Knowledge gaps",
+            "title": f"{fail_total} unanswered question{'s' if fail_total != 1 else ''} this week — the agent didn't have the info to answer.",
+            "hint":  "Review the Knowledge base updates section below to close the gaps.",
+        }
+    elif unnecessary_t >= 3:
+        alert = {
+            "tag":   "Routing issue",
+            "title": f"{unnecessary_t} unnecessary transfer{'s' if unnecessary_t != 1 else ''} this week — calls reached a human when they didn't need to.",
+            "hint":  "Tighten the transfer rules in the agent prompt or KB.",
+        }
+    elif (metrics.get("caller_frustration") or 0) >= 3:
+        cf = metrics.get("caller_frustration") or 0
+        alert = {
+            "tag":   "Caller frustration",
+            "title": f"{cf} caller{'s' if cf != 1 else ''} sounded frustrated this week — above the usual range.",
+            "hint":  "Read the analysis below for the likely cause.",
+        }
+
     return render(request, "portal/reports_detail.html", {
-        "restaurant":  restaurant,
-        "report":      report,
-        "week_calls":  week_calls,
+        "restaurant":       restaurant,
+        "report":           report,
+        "week_calls":       week_calls,
+        "prev_report":      prev_report,
+        "next_report":      next_report,
+        "wow":              wow,
+        "avg_call_label":   avg_call_label,
+        "transfer_success": transfer_success,
+        "owner_parsed":     owner_parsed,
+        "kb_items":         kb_items,
+        "critical_callers": critical_callers,
+        "alert":            alert,
     })
 
 
@@ -5376,38 +5576,58 @@ def _client_ip(request) -> str:
     return request.META.get("REMOTE_ADDR", "") or ""
 
 
-def _build_caller_sms(t: "CallActionToken", action: str, note: str, cb_when: str) -> str:
-    """Compose the SMS sent to the caller after owner taps an action button."""
+def _build_caller_sms(t: "CallActionToken", action: str, note: str, cb_when: str, variant: str = "") -> str:
+    """Compose the SMS sent to the caller after owner taps an action button.
+
+    All outbound SMS are English by default — caller-language detection is
+    not wired up yet. Recognised variants: "apology", "comp", "text_reply".
+    """
     r = t.restaurant
     d = t.call_detail
     date  = t.edited_date  or d.reservation_date
     time  = t.edited_time  or d.reservation_time
     party = t.edited_party or d.party_size
     name  = d.caller_name or ""
+    greet_name = (" " + name) if name else ""
 
     date_str  = date.strftime("%a %-d %b")  if date  else ""
     time_str  = time.strftime("%-I:%M %p")  if time  else ""
-    party_str = f"{party} personas"         if party else ""
+    party_str = f"party of {party}"         if party else ""
 
-    when_str = " ".join(p for p in (date_str, time_str, party_str) if p) or "tu solicitud"
+    when_str = " ".join(p for p in (date_str, time_str, party_str) if p) or "your request"
 
-    if action == t.RESP_CONFIRMED:
-        msg = (f"¡Hola{(' ' + name) if name else ''}! Tu reserva en {r.name} "
-               f"para {when_str} está confirmada. ¡Te esperamos!")
+    # Complaint variants — different copy for the apology / compensation paths
+    if variant == "apology":
+        msg = (f"Hi{greet_name}, our apologies for your experience at {r.name}. "
+               f"Your feedback matters and we'd like to make it right. The manager will reach out shortly.")
+    elif variant == "comp":
+        msg = (f"Hi{greet_name}, we're sorry about what happened. As an apology, please accept 20% off "
+               f"your next visit to {r.name}, valid for 30 days. We hope to see you soon.")
+    elif variant == "text_reply":
+        # Operator typed the entire SMS body in the note field
+        msg = note or f"Hi{greet_name}, this is {r.name}."
+        note = ""  # already consumed
+    elif action == t.RESP_CONFIRMED:
+        msg = (f"Hi{greet_name}! Your reservation at {r.name} "
+               f"for {when_str} is confirmed. See you then!")
     elif action == t.RESP_DECLINED:
-        msg = (f"Hola{(' ' + name) if name else ''}, lamentablemente no tenemos "
-               f"disponibilidad en {r.name} para {when_str}. "
-               f"Llámanos para buscar otra opción.")
+        msg = (f"Hi{greet_name}, unfortunately we don't have availability at {r.name} "
+               f"for {when_str}. Please give us a call to find another option.")
     elif action == t.RESP_CALLBACK:
-        when = CALLBACK_WHEN_LABELS.get(cb_when, "en breve")
-        msg = (f"Hola{(' ' + name) if name else ''}, te llamamos {when} "
-               f"desde {r.name} para confirmar tu solicitud.")
+        when_map = {
+            "15min":        "in about 15 minutes",
+            "1h":           "within the hour",
+            "tomorrow_am":  "tomorrow morning",
+        }
+        when = when_map.get(cb_when, "shortly")
+        msg = (f"Hi{greet_name}, we'll call you {when} "
+               f"from {r.name} to follow up on your request.")
     else:
         return ""
 
     if note:
         msg += f"\n\n— {note}"
-    msg += "\n\n(Mensaje automatizado. Por favor no responder por SMS.)"
+    msg += "\n\n(Automated message. Please don't reply by SMS.)"
     return msg
 
 
@@ -5429,11 +5649,29 @@ def call_action_page(request, slug, token):
     except Exception:
         pass
 
+    # Returning-guest signal (CallerMemory keyed by phone)
+    memory = None
+    if t.call_detail and t.call_detail.caller_phone:
+        memory = (
+            CallerMemory.objects
+            .filter(restaurant=t.restaurant, phone=t.call_detail.caller_phone)
+            .first()
+        )
+
+    # Hours remaining until token expiry — used in the footnote
+    hours_remaining = max(0, int((t.expires_at - timezone.now()).total_seconds() // 3600))
+
+    # Format the agent quality signal — drives the "sentiment" detail row
+    sentiment = (t.call_detail.caller_sentiment or "neutral") if t.call_detail else "neutral"
+
     return render(request, "portal/call_action.html", {
-        "t":          t,
-        "call":       t.call_detail,
-        "restaurant": t.restaurant,
-        "transcript": transcript,
+        "t":               t,
+        "call":            t.call_detail,
+        "restaurant":      t.restaurant,
+        "transcript":      transcript,
+        "memory":          memory,
+        "hours_remaining": hours_remaining,
+        "sentiment":       sentiment,
     })
 
 
@@ -5454,8 +5692,9 @@ def call_action_respond(request, slug, token):
     action  = request.POST.get("action", "").strip()
     note    = request.POST.get("note", "")[:500]
     cb_when = request.POST.get("callback_when", "").strip()
+    variant = request.POST.get("variant", "").strip()  # "apology" / "comp" / "text_reply"
 
-    if action not in (t.RESP_CONFIRMED, t.RESP_DECLINED, t.RESP_CALLBACK):
+    if action not in (t.RESP_CONFIRMED, t.RESP_DECLINED, t.RESP_CALLBACK, t.RESP_RESOLVED):
         return JsonResponse({"ok": False, "error": "bad_action"}, status=400)
 
     # Optional inline-edited reservation details
@@ -5484,7 +5723,8 @@ def call_action_respond(request, slug, token):
             pass
 
     t.response      = action
-    t.response_note = note
+    # Persist variant alongside the free-form note so downstream analytics keeps both
+    t.response_note = (f"[{variant}] " if variant else "") + note
     t.used_at       = timezone.now()
     t.used_by       = request.user if request.user.is_authenticated else None
     t.used_from_ip  = _client_ip(request) or None
@@ -5503,8 +5743,12 @@ def call_action_respond(request, slug, token):
                 t.call_detail.reservation_confirmed_at = timezone.now()
             t.call_detail.save(update_fields=["reservation_status", "reservation_confirmed_at"])
 
+    # "Call now" → operator dials directly, no SMS needed
+    if action == t.RESP_RESOLVED:
+        return JsonResponse({"ok": True, "response": action})
+
     # Dispatch caller SMS in background — same pattern as email sends
-    msg = _build_caller_sms(t, action, note, cb_when)
+    msg = _build_caller_sms(t, action, note, cb_when, variant)
     caller_phone = t.call_detail.caller_phone or ""
     if msg and caller_phone:
         threading.Thread(

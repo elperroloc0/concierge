@@ -1,181 +1,331 @@
-{% extends "portal/base.html" %}
+{% extends "portal/base_v2.html" %}
+{% load static %}
 
-{% block title %}Account Settings{% endblock %}
-{% block page_title %}Account Settings{% endblock %}
+{% block title %}Account{% endblock %}
 {% block nav_account %}active{% endblock %}
 
 {% block content %}
 
+{# ── Page head ─────────────────────────────────────────────────── #}
+<div class="v2-page-head">
+  <div class="v2-page-head-title">
+    <div class="label-tiny v2-page-head-eyebrow">Settings · Account</div>
+    <h1>Account</h1>
+  </div>
+  <span class="v2-agent-chip {% if agent_status == 'active' %}{% elif agent_status == 'no_credits' %}danger{% elif agent_status == 'past_due' %}warn{% else %}idle{% endif %}">
+    <span class="dot"></span>
+    {% if agent_status == 'active' %}Agent live
+    {% elif agent_status == 'no_credits' %}No credits
+    {% elif agent_status == 'past_due' %}Payment due
+    {% else %}Agent inactive{% endif %}
+  </span>
+</div>
+
+{# Welcome banner (first visit) #}
 {% if show_welcome %}
-<div class="alert alert-primary d-flex gap-2 align-items-start mb-4" role="alert">
-  <i class="bi bi-stars fs-5 mt-1 flex-shrink-0"></i>
-  <div>
-    {% if is_owner %}
-      <strong>Welcome to Concierge AI!</strong> This is your portal for {{ restaurant.name }}. Start by filling out your <a href="{% url 'portal_kb' restaurant.slug %}">Knowledge Base</a> so your AI agent knows how to answer calls.
-    {% else %}
-      <strong>Welcome!</strong> You've been added as an operator for <strong>{{ restaurant.name }}</strong>. From here you can manage calls and guests. We recommend changing your password below.
+  <div class="v2-account-info" style="margin-bottom: 14px;">
+    <span class="ico">✦</span>
+    <span style="flex:1;">
+      {% if is_owner %}
+        <strong>Welcome to Concierge AI!</strong> This is your portal for {{ restaurant.name }}.
+        Start by filling out your
+        <a href="{% url 'portal_kb' restaurant.slug %}" style="color: var(--accent); font-weight: 600;">Knowledge Base</a>
+        so the AI agent knows how to answer calls.
+      {% else %}
+        <strong>Welcome!</strong> You've been added as an operator for <strong>{{ restaurant.name }}</strong>.
+        From here you can manage calls and guests. We recommend changing your password below.
+      {% endif %}
+    </span>
+    <form method="post" style="display:inline; margin-left:auto;">
+      {% csrf_token %}
+      <input type="hidden" name="dismiss_welcome" value="1">
+      <button type="submit" class="btn btn-sm btn-ghost"
+              style="padding: 4px 8px; color: var(--accent-deep);">Got it</button>
+    </form>
+  </div>
+{% endif %}
+
+{# Pending email change banner #}
+{% if pending_changes %}
+  <div class="v2-account-info" style="margin-bottom: 14px;">
+    <span class="ico">✉</span>
+    <span style="flex:1;">
+      Change to <strong>{{ pending_changes.0.new_email }}</strong> is pending.
+      Check your inbox (and spam folder) for the confirmation link.
+    </span>
+  </div>
+{% endif %}
+
+{# Saved-flag via messages framework (base_v2 already renders messages) — nothing to do here #}
+
+{# ── Identity strip ─────────────────────────────────────────── #}
+<div class="v2-account-identity glass-deep">
+  <div class="v2-avatar avatar-accent" style="width:56px; height:56px; font-size:20px;">
+    {% if user.first_name %}{{ user.first_name|slice:":1"|upper }}{% else %}{{ user.email|slice:":1"|upper }}{% endif %}
+  </div>
+  <div class="v2-account-identity-main">
+    <div class="v2-account-identity-name">
+      {{ user.get_full_name|default:user.email }}
+    </div>
+    <div class="v2-account-identity-sub">
+      {{ user.email }} · {% if is_owner %}Owner{% else %}Operator{% endif %}
+    </div>
+  </div>
+  <div class="v2-account-identity-chips">
+    {% if user.date_joined %}
+      <span class="v2-chip v2-chip-soft" style="font-size:11px;">
+        <span class="v2-chip-dot" style="background: var(--muted-strong);"></span>
+        Member since {{ user.date_joined|date:"M Y" }}
+      </span>
     {% endif %}
   </div>
-  <form method="POST" class="ms-auto flex-shrink-0">
-    {% csrf_token %}
-    <input type="hidden" name="dismiss_welcome" value="1">
-    <button type="submit" class="btn-close" aria-label="Dismiss"></button>
-  </form>
 </div>
-{% endif %}
 
-<p class="text-muted mb-5">Manage your login credentials for {{ restaurant.name }}.</p>
+{# ── Email + Password two-card row ──────────────────────────── #}
+<div class="v2-account-row">
 
-<div class="row g-4">
-
-  <!-- Update Email -->
-  <div class="col-lg-6">
-    <div class="card hover-lift p-5 h-100 d-flex flex-column">
-      <div class="mb-5">
-        <h5 class="mb-2">Update Email Address</h5>
-        <p class="text-muted mb-0">
-          Current email: <strong class="text-dark">{{ user.email }}</strong>.
-          A confirmation link will be sent — the change takes effect only after clicking it.
-        </p>
+  {# Email card #}
+  <div class="v2-account-card glass">
+    <div class="v2-account-card-head">
+      <div class="v2-account-card-icon email"><i class="bi bi-envelope-fill"></i></div>
+      <div class="v2-account-card-title" style="flex:1;">
+        <h3>Email address</h3>
+        <div class="v2-account-card-title-sub">Used to sign in and receive alerts.</div>
       </div>
-
-      {% if pending_changes %}
-        <div class="alert alert-warning mb-4">
-          Change to <strong>{{ pending_changes.0.new_email }}</strong> is pending.
-          Check your inbox and spam folder.
-        </div>
-      {% endif %}
-
-      <form method="POST" action="{% url 'portal_account' restaurant.slug %}" class="d-flex flex-column flex-grow-1">
-        {% csrf_token %}
-        <input type="hidden" name="update_email" value="1">
-
-        <div class="mb-4">
-          {{ email_form.new_email.label_tag }}
-          {{ email_form.new_email }}
-          {% if email_form.new_email.errors %}
-            <div class="text-danger text-xs mt-1">{{ email_form.new_email.errors }}</div>
-          {% endif %}
-        </div>
-
-        <div class="mb-5">
-          {{ email_form.current_password.label_tag }}
-          {{ email_form.current_password }}
-          {% if email_form.current_password.errors %}
-            <div class="text-danger text-xs mt-1">{{ email_form.current_password.errors }}</div>
-          {% endif %}
-          <div class="form-text">Required to verify your identity.</div>
-        </div>
-
-        <div class="mt-auto">
-          <button type="submit" class="btn btn-primary">
-            Request Email Change
-          </button>
-        </div>
-      </form>
+      <span class="v2-chip v2-chip-mint" style="font-size:10.5px;">Verified</span>
     </div>
-  </div>
 
-  <!-- Change Password -->
-  <div class="col-lg-6">
-    <div class="card hover-lift p-5 h-100 d-flex flex-column">
-      <div class="mb-5">
-        <h5 class="mb-2">Change Password</h5>
-        <p class="text-muted mb-0">
-          Use a long, unique password to keep your account secure.
-        </p>
-      </div>
+    <div class="v2-account-current">
+      <span class="label-tiny">Current</span>
+      <span class="mono">{{ user.email }}</span>
+    </div>
 
-      <form method="POST" action="{% url 'portal_account' restaurant.slug %}" class="d-flex flex-column flex-grow-1">
-        {% csrf_token %}
-        <input type="hidden" name="update_password" value="1">
+    <form method="post" action="{% url 'portal_account' restaurant.slug %}"
+          style="display:flex; flex-direction:column; gap:14px; flex:1;">
+      {% csrf_token %}
+      <input type="hidden" name="update_email" value="1">
 
-        {% for field in password_form %}
-          <div class="mb-4">
-            {{ field.label_tag }}
-            {{ field }}
-            {% if field.errors %}
-              <div class="text-danger text-xs mt-1">{{ field.errors }}</div>
-            {% endif %}
-            {% if field.help_text %}
-              <div class="form-text">{{ field.help_text|safe }}</div>
-            {% endif %}
-          </div>
+      <div class="v2-account-field">
+        <label class="label-tiny" for="id_new_email">New email</label>
+        <input id="id_new_email" type="email" name="new_email" class="mono"
+               placeholder="you@example.com"
+               value="{{ email_form.new_email.value|default:'' }}" required>
+        {% for err in email_form.new_email.errors %}
+          <div class="field-error">{{ err }}</div>
         {% endfor %}
+      </div>
 
-        <div class="mt-auto">
-          <button type="submit" class="btn btn-primary">
-            Update Password
-          </button>
-        </div>
-      </form>
-    </div>
+      <div class="v2-account-field">
+        <label class="label-tiny" for="id_email_current_password">Current password</label>
+        <input id="id_email_current_password" type="password" name="current_password"
+               placeholder="••••••••••" required>
+        <div class="help">Required to confirm it's you.</div>
+        {% for err in email_form.current_password.errors %}
+          <div class="field-error">{{ err }}</div>
+        {% endfor %}
+      </div>
+
+      <div class="v2-account-info">
+        <span class="ico">ⓘ</span>
+        <span>We'll send a confirmation link to your new address. The change applies only after you click it.</span>
+      </div>
+
+      <button type="submit" class="btn btn-accent v2-account-card-submit">Request email change</button>
+    </form>
   </div>
 
+  {# Password card #}
+  <div class="v2-account-card glass">
+    <div class="v2-account-card-head">
+      <div class="v2-account-card-icon lock"><i class="bi bi-shield-lock-fill"></i></div>
+      <div class="v2-account-card-title" style="flex:1;">
+        <h3>Password</h3>
+        <div class="v2-account-card-title-sub">
+          {% if user.last_login %}
+            Last sign-in <span class="mono">{{ user.last_login|date:"M j, Y" }}</span>
+          {% else %}
+            Set a long, unique password to keep your account secure.
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <form method="post" action="{% url 'portal_account' restaurant.slug %}"
+          style="display:flex; flex-direction:column; gap:14px; flex:1;">
+      {% csrf_token %}
+      <input type="hidden" name="update_password" value="1">
+
+      <div class="v2-account-field">
+        <label class="label-tiny" for="id_old_password">Current password</label>
+        <input id="id_old_password" type="password" name="old_password"
+               placeholder="••••••••••" required>
+        {% for err in password_form.old_password.errors %}
+          <div class="field-error">{{ err }}</div>
+        {% endfor %}
+      </div>
+
+      <div class="v2-account-field">
+        <label class="label-tiny" for="id_new_password1">New password</label>
+        <input id="id_new_password1" type="password" name="new_password1"
+               placeholder="At least 12 characters" required>
+        <div style="margin-top: 4px;">
+          <div class="v2-pw-meter" id="pwMeter" data-score="0">
+            <div class="seg"></div><div class="seg"></div>
+            <div class="seg"></div><div class="seg"></div>
+          </div>
+          <div class="v2-pw-meter-row">
+            <span class="label">Strength</span>
+            <span class="score" id="pwScore">Empty</span>
+          </div>
+        </div>
+        {% for err in password_form.new_password1.errors %}
+          <div class="field-error">{{ err }}</div>
+        {% endfor %}
+      </div>
+
+      <div class="v2-account-field">
+        <label class="label-tiny" for="id_new_password2">Confirm new password</label>
+        <input id="id_new_password2" type="password" name="new_password2"
+               placeholder="Re-enter the same password" required>
+        {% for err in password_form.new_password2.errors %}
+          <div class="field-error">{{ err }}</div>
+        {% endfor %}
+      </div>
+
+      <div class="v2-pw-reqs" id="pwReqs">
+        <div class="v2-pw-req" data-rule="length">
+          <span class="dot">✓</span> At least 12 characters
+        </div>
+        <div class="v2-pw-req" data-rule="case">
+          <span class="dot">✓</span> Upper &amp; lower case
+        </div>
+        <div class="v2-pw-req" data-rule="number">
+          <span class="dot">✓</span> One number
+        </div>
+        <div class="v2-pw-req" data-rule="symbol">
+          <span class="dot">✓</span> One symbol
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-accent v2-account-card-submit">Update password</button>
+    </form>
+  </div>
 </div>
 
+{# ── Team (owner only) ──────────────────────────────────────── #}
 {% if is_owner %}
-<!-- Team Management -->
-<h5 class="mt-5 mb-3">Team</h5>
-<div class="row g-4">
-  <div class="col-lg-8">
-    <div class="card hover-lift p-5">
+  <div class="v2-account-team glass">
+    <div class="v2-account-team-head">
+      <h2>Team</h2>
       {% if operator %}
-        <!-- Active operator -->
-        <div class="d-flex align-items-start justify-content-between mb-4">
-          <div>
-            {% if operator.user.get_full_name %}
-              <h6 class="mb-1">{{ operator.user.get_full_name }}</h6>
-              <span class="text-muted">{{ operator.user.email }}</span><br>
-            {% else %}
-              <h6 class="mb-1">{{ operator.user.email }}</h6>
-            {% endif %}
-            <small class="text-muted">Operator &middot; Added {{ operator.created_at|date:"M j, Y" }}</small>
-          </div>
-        </div>
-
-        <form method="POST" action="{% url 'portal_update_operator' restaurant.slug %}" class="mb-3">
-          {% csrf_token %}
-          <div class="form-check mb-3">
-            <input class="form-check-input" type="checkbox" name="can_edit_kb" id="can_edit_kb" {% if operator.can_edit_kb %}checked{% endif %}>
-            <label class="form-check-label" for="can_edit_kb">Allow operator to edit Knowledge Base</label>
-          </div>
-          <button type="submit" class="btn btn-sm btn-primary">Save Permissions</button>
-        </form>
-
-        <hr>
-        <form method="POST" action="{% url 'portal_remove_operator' restaurant.slug %}" onsubmit="return confirm('Remove this operator? They will lose access immediately.')">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-sm btn-outline-danger">Remove Operator</button>
-        </form>
-
+        <span class="v2-chip v2-chip-soft" style="font-size:11px;">1 operator</span>
       {% else %}
-        <!-- Add operator form -->
-        <div class="mb-4">
-          <h6 class="mb-1">Add an Operator</h6>
-          <p class="text-muted mb-0">Give a team member their own login to manage calls and guests.</p>
-        </div>
-
-        <form method="POST" action="{% url 'portal_add_operator' restaurant.slug %}">
-          {% csrf_token %}
-          <div class="mb-3">
-            <label class="form-label">Email</label>
-            <input type="email" name="operator_email" class="form-control" required placeholder="operator@example.com">
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Name</label>
-            <input type="text" name="operator_name" class="form-control" placeholder="First Last">
-          </div>
-          <div class="form-check mb-4">
-            <input class="form-check-input" type="checkbox" name="can_edit_kb" id="new_can_edit_kb">
-            <label class="form-check-label" for="new_can_edit_kb">Allow operator to edit Knowledge Base</label>
-          </div>
-          <button type="submit" class="btn btn-primary">Add Operator</button>
-        </form>
+        <span class="v2-chip v2-chip-soft" style="font-size:11px;">No operator yet</span>
       {% endif %}
     </div>
+
+    {% if operator %}
+      <div class="v2-account-operator">
+        <div class="v2-account-operator-main">
+          <div class="v2-avatar" style="width:44px; height:44px; font-size:16px;">
+            {% if operator.user.first_name %}{{ operator.user.first_name|slice:":1"|upper }}
+            {% else %}{{ operator.user.email|slice:":1"|upper }}{% endif %}
+          </div>
+          <div style="min-width:0;">
+            <div class="v2-account-operator-name">
+              <span>{{ operator.user.get_full_name|default:operator.user.email }}</span>
+              <span class="v2-chip v2-chip-soft" style="font-size:10.5px; padding:1px 7px;">Operator</span>
+            </div>
+            <div class="v2-account-operator-meta">
+              {{ operator.user.email }} · Added {{ operator.created_at|date:"M j, Y" }}
+            </div>
+          </div>
+        </div>
+
+        <div class="v2-account-operator-actions">
+          <form method="post" action="{% url 'portal_update_operator' restaurant.slug %}"
+                style="display:inline-flex; gap:10px; align-items:center;">
+            {% csrf_token %}
+            <label class="v2-account-perm-toggle">
+              <input type="checkbox" name="can_edit_kb" {% if operator.can_edit_kb %}checked{% endif %}>
+              <span class="cbx">✓</span>
+              <span>Can edit Knowledge Base</span>
+            </label>
+            <button type="submit" class="btn btn-sm">Save</button>
+          </form>
+          <form method="post" action="{% url 'portal_remove_operator' restaurant.slug %}"
+                style="display:inline;"
+                onsubmit="return confirm('Remove this operator? They will lose access immediately.')">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-danger">Remove</button>
+          </form>
+        </div>
+      </div>
+    {% else %}
+      <form method="post" action="{% url 'portal_add_operator' restaurant.slug %}" class="v2-account-add-op">
+        {% csrf_token %}
+        <div>
+          <label class="label-tiny" for="op_email">Email <span style="color:#991b1b;">*</span></label>
+          <input id="op_email" type="email" name="operator_email" placeholder="operator@example.com" required>
+        </div>
+        <div>
+          <label class="label-tiny" for="op_name">Name</label>
+          <input id="op_name" type="text" name="operator_name" placeholder="First Last">
+        </div>
+        <div class="full">
+          <label class="v2-account-perm-toggle" style="margin-top: 4px;">
+            <input type="checkbox" name="can_edit_kb">
+            <span class="cbx">✓</span>
+            <span>Allow operator to edit Knowledge Base</span>
+          </label>
+        </div>
+        <div class="full" style="display:flex; justify-content:flex-end;">
+          <button type="submit" class="btn btn-accent">+ Invite operator</button>
+        </div>
+      </form>
+    {% endif %}
   </div>
-</div>
 {% endif %}
 
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Password strength + requirements (live)
+  const pwInput  = document.getElementById('id_new_password1');
+  const pwMeter  = document.getElementById('pwMeter');
+  const pwScore  = document.getElementById('pwScore');
+  const pwReqs   = document.getElementById('pwReqs');
+  if (pwInput && pwMeter && pwScore && pwReqs) {
+    const labels = ['Empty', 'Weak', 'Fair', 'Good', 'Strong'];
+    const reqEls = {
+      length: pwReqs.querySelector('[data-rule="length"]'),
+      case:   pwReqs.querySelector('[data-rule="case"]'),
+      number: pwReqs.querySelector('[data-rule="number"]'),
+      symbol: pwReqs.querySelector('[data-rule="symbol"]'),
+    };
+    function score(pw) {
+      if (!pw) return 0;
+      let s = 0;
+      if (pw.length >= 8) s++;
+      if (pw.length >= 12) s++;
+      if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) s++;
+      if (/\d/.test(pw) && /[^A-Za-z0-9]/.test(pw)) s++;
+      return Math.min(s, 4);
+    }
+    function update() {
+      const v = pwInput.value;
+      const s = score(v);
+      pwMeter.dataset.score = s;
+      pwScore.textContent = labels[s];
+      pwScore.className = 'score s' + s;
+      reqEls.length.classList.toggle('met', v.length >= 12);
+      reqEls.case.classList.toggle('met', /[A-Z]/.test(v) && /[a-z]/.test(v));
+      reqEls.number.classList.toggle('met', /\d/.test(v));
+      reqEls.symbol.classList.toggle('met', /[^A-Za-z0-9]/.test(v));
+    }
+    pwInput.addEventListener('input', update);
+    update();
+  }
+</script>
 {% endblock %}

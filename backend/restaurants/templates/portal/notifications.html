@@ -1,272 +1,298 @@
-{% extends "portal/base.html" %}
+{% extends "portal/base_v2.html" %}
+{% load static %}
+
 {% block title %}Notifications{% endblock %}
-{% block page_title %}Notification Settings{% endblock %}
 {% block nav_notifications %}active{% endblock %}
 
 {% block content %}
-<div class="mb-4">
-  <h4 class="fw-bold">Notification Settings</h4>
-  <p class="text-muted">Choose which email alerts you receive after calls.</p>
+
+{# ── Page head ─────────────────────────────────────────────────── #}
+<div class="v2-page-head">
+  <div class="v2-page-head-title">
+    <div class="label-tiny v2-page-head-eyebrow">Settings · Notifications</div>
+    <h1>Notifications</h1>
+  </div>
+  <span class="v2-agent-chip {% if agent_status == 'active' %}{% elif agent_status == 'no_credits' %}danger{% elif agent_status == 'past_due' %}warn{% else %}idle{% endif %}">
+    <span class="dot"></span>
+    {% if agent_status == 'active' %}Agent live
+    {% elif agent_status == 'no_credits' %}No credits
+    {% elif agent_status == 'past_due' %}Payment due
+    {% else %}Agent inactive{% endif %}
+  </span>
 </div>
 
 {% if saved %}
-<div class="alert alert-success alert-dismissible fade show" role="alert">
-  <i class="bi bi-check-circle me-1"></i> Notification preferences saved.
-  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
+  <div class="v2-alert" style="margin-bottom:14px; background:#e4f5e6; color:#2e6f3e; border-color:rgba(46,111,62,0.18);">
+    Preferences saved.
+  </div>
 {% endif %}
 
-<form method="post">
+<form method="post" id="notifForm">
   {% csrf_token %}
 
-  <!-- Master switch — Email -->
-  <div class="card mb-4">
-    <div class="card-body d-flex align-items-center justify-content-between">
-      <div>
-        <h6 class="mb-1"><i class="bi bi-envelope-fill text-primary me-2"></i>Email Notifications</h6>
-        <p class="text-muted small mb-0">Master switch — disable to stop all email alerts.</p>
+  {# ── Channel hero: Email + Push ──────────────────────────────── #}
+  <div class="v2-notif-channels">
+
+    {# Email channel #}
+    <div class="v2-notif-channel {% if restaurant.notify_via_email %}active{% endif %}" id="emailCard">
+      <div class="v2-notif-channel-head">
+        <div class="v2-notif-channel-icon"><i class="bi bi-envelope-fill"></i></div>
+        <div style="flex:1;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span class="v2-notif-channel-title">Email</span>
+            <input type="checkbox" class="v2-toggle" name="notify_via_email" id="emailMaster"
+                   {% if restaurant.notify_via_email %}checked{% endif %}>
+          </div>
+          <div class="v2-notif-channel-sub">
+            {% if restaurant.notify_via_email %}
+              All enabled alerts sent to your inbox
+            {% else %}
+              Disabled — no email alerts will be sent
+            {% endif %}
+          </div>
+        </div>
       </div>
-      <div class="form-check form-switch">
-        <input class="form-check-input" type="checkbox" name="notify_via_email" id="masterSwitch"
-               {% if restaurant.notify_via_email %}checked{% endif %}
-               style="width:3em;height:1.5em;">
+      <div class="v2-notif-channel-row">
+        <span class="pre">@</span>
+        <input type="email" name="notify_email" value="{{ restaurant.notify_email }}"
+               placeholder="owner@restaurant.com">
+        {% if restaurant.notify_email %}
+          <span class="badge">verified ✓</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Push channel #}
+    <div class="v2-notif-channel">
+      <div class="v2-notif-channel-head">
+        <div class="v2-notif-channel-icon"
+             style="background: rgba(31, 63, 195, 0.10); color: var(--accent-deep); border-color: rgba(31, 63, 195, 0.15);">
+          <i class="bi bi-phone-fill"></i>
+        </div>
+        <div style="flex:1;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span class="v2-notif-channel-title">Push notifications</span>
+            <input type="checkbox" class="v2-toggle" name="my_notify_via_push"
+                   {% if my_membership.notify_via_push %}checked{% endif %}>
+          </div>
+          <div class="v2-notif-channel-sub">
+            Receive alerts for <strong style="color: var(--ink);">{{ restaurant.name }}</strong> on this device.
+          </div>
+        </div>
+      </div>
+      <div id="pushStatus" class="v2-notif-channel-status" style="display:none;">
+        <span class="dot"></span>
+        <span class="msg">Checking device status…</span>
+        <span class="meta"></span>
+      </div>
+      <div class="v2-notif-channel-actions">
+        <button type="button" class="btn btn-sm" id="pushEnableBtn" style="display:none;">
+          <i class="bi bi-bell-fill"></i> Enable on this device
+        </button>
+        <button type="button" class="btn btn-sm" id="pushTestBtn" style="display:none;">
+          <i class="bi bi-arrow-repeat"></i> Send test push
+        </button>
+        <button type="button" class="btn btn-sm btn-ghost" id="pushDisableThisBtn" style="display:none;">
+          Disable
+        </button>
       </div>
     </div>
   </div>
 
-  <!-- Push: per-user account-level toggle + this-device enable/disable (unified card) -->
-  <div class="card mb-4">
-    <div class="card-body">
-      <div class="d-flex align-items-center justify-content-between mb-3">
-        <div>
-          <h6 class="mb-1"><i class="bi bi-phone-fill text-primary me-2"></i>Push Notifications</h6>
-          <p class="text-muted small mb-0">
-            Receive push alerts for <strong>{{ restaurant.name }}</strong> on this device.
-          </p>
-        </div>
-        <div class="form-check form-switch">
-          <input class="form-check-input" type="checkbox" name="my_notify_via_push"
-                 {% if my_membership.notify_via_push %}checked{% endif %}
-                 style="width:3em;height:1.5em;">
-        </div>
-      </div>
-
-      <div id="pushStatus" class="alert alert-info small mb-3 d-none"></div>
-
-      <button type="button" class="btn btn-primary" id="pushEnableBtn">
-        <i class="bi bi-bell-fill me-1"></i> Enable on this device
-      </button>
-      <button type="button" class="btn btn-outline-secondary d-none" id="pushDisableThisBtn">
-        <i class="bi bi-bell-slash"></i> Disable on this device
-      </button>
+  {# ── Alert types list ───────────────────────────────────────── #}
+  <div class="v2-notif-alerts glass">
+    <div class="v2-notif-alerts-head">
+      <h2>Alert types</h2>
+      <span class="v2-chip v2-chip-soft" id="alertsOnCount" style="font-size:11px;">— of 5 on</span>
     </div>
-  </div>
-
-  <!-- Email address -->
-  <div class="card mb-4">
-    <div class="card-body">
-      <label for="notify_email" class="form-label fw-semibold">
-        <i class="bi bi-at me-1"></i>Notification Email
+    <div class="v2-notif-alerts-sub">
+      Applied to all channels you have enabled above.
+    </div>
+    <div class="v2-notif-alert-list" id="alertList">
+      <label class="v2-notif-alert-row {% if not restaurant.notify_on_reservation %}off{% endif %}">
+        <div class="v2-notif-alert-swatch res"><i class="bi bi-calendar-event"></i></div>
+        <div class="v2-notif-alert-meta">
+          <div class="v2-notif-alert-name">Reservation requests</div>
+          <div class="v2-notif-alert-desc">Caller wants to book a table.</div>
+        </div>
+        <input type="checkbox" class="v2-toggle alert-toggle" name="notify_on_reservation"
+               {% if restaurant.notify_on_reservation %}checked{% endif %}>
       </label>
-      <input type="email" class="form-control" id="notify_email" name="notify_email"
-             value="{{ restaurant.notify_email }}" placeholder="owner@restaurant.com">
-      <div class="form-text">All alerts are sent to this address.</div>
+
+      <label class="v2-notif-alert-row urgent {% if not restaurant.notify_on_complaint %}off{% endif %}">
+        <div class="v2-notif-alert-swatch comp"><i class="bi bi-exclamation-triangle-fill"></i></div>
+        <div class="v2-notif-alert-meta">
+          <div class="v2-notif-alert-name">
+            Complaints
+            <span class="v2-chip v2-chip-danger" style="font-size:10px; padding:1px 7px;">Urgent</span>
+          </div>
+          <div class="v2-notif-alert-desc">Urgent alert when the AI detects a customer complaint.</div>
+        </div>
+        <input type="checkbox" class="v2-toggle alert-toggle" name="notify_on_complaint"
+               {% if restaurant.notify_on_complaint %}checked{% endif %}>
+      </label>
+
+      <label class="v2-notif-alert-row {% if not restaurant.notify_on_followup %}off{% endif %}">
+        <div class="v2-notif-alert-swatch follow"><i class="bi bi-reply-fill"></i></div>
+        <div class="v2-notif-alert-meta">
+          <div class="v2-notif-alert-name">Follow-up needed</div>
+          <div class="v2-notif-alert-desc">Caller asked to be called back or needs a human.</div>
+        </div>
+        <input type="checkbox" class="v2-toggle alert-toggle" name="notify_on_followup"
+               {% if restaurant.notify_on_followup %}checked{% endif %}>
+      </label>
+
+      <label class="v2-notif-alert-row {% if not restaurant.notify_on_non_customer %}off{% endif %}">
+        <div class="v2-notif-alert-swatch biz"><i class="bi bi-briefcase-fill"></i></div>
+        <div class="v2-notif-alert-meta">
+          <div class="v2-notif-alert-name">Business calls</div>
+          <div class="v2-notif-alert-desc">Vendor, press, sales, or service provider.</div>
+        </div>
+        <input type="checkbox" class="v2-toggle alert-toggle" name="notify_on_non_customer"
+               {% if restaurant.notify_on_non_customer %}checked{% endif %}>
+      </label>
+
+      <label class="v2-notif-alert-row {% if not restaurant.notify_daily_digest %}off{% endif %}">
+        <div class="v2-notif-alert-swatch digest"><i class="bi bi-journal-text"></i></div>
+        <div class="v2-notif-alert-meta">
+          <div class="v2-notif-alert-name">Daily call digest</div>
+          <div class="v2-notif-alert-desc">Morning summary of yesterday's calls.</div>
+        </div>
+        <input type="checkbox" class="v2-toggle alert-toggle" name="notify_daily_digest"
+               {% if restaurant.notify_daily_digest %}checked{% endif %}>
+      </label>
     </div>
   </div>
 
-  <!-- Per-event toggles -->
-  <div class="card mb-4">
-    <div class="card-header bg-white border-bottom py-3 px-4">
-      <span class="fw-semibold">Alert Types</span>
-    </div>
-    <ul class="list-group list-group-flush">
-
-      <!-- Reservations -->
-      <li class="list-group-item d-flex align-items-center justify-content-between py-3">
-        <div>
-          <span class="fw-semibold"><i class="bi bi-calendar-event text-primary me-2"></i>Reservation Requests</span>
-          <p class="text-muted small mb-0">Get notified when a caller wants to make a reservation.</p>
+  {# ── Operator section (collapsible) ─────────────────────────── #}
+  {% if is_owner %}
+    <details class="v2-notif-op glass" {% if operator %}open{% endif %}>
+      <summary class="v2-notif-op-head" style="list-style:none; cursor:pointer;">
+        <div class="v2-notif-channel-icon" style="background: rgba(0,0,0,0.04);">
+          <i class="bi bi-person-badge"></i>
         </div>
-        <div class="form-check form-switch">
-          <input class="form-check-input pref-toggle" type="checkbox" name="notify_on_reservation"
-                 {% if restaurant.notify_on_reservation %}checked{% endif %}
-                 style="width:2.5em;height:1.3em;">
-        </div>
-      </li>
-
-      <!-- Complaints -->
-      <li class="list-group-item d-flex align-items-center justify-content-between py-3">
-        <div>
-          <span class="fw-semibold"><i class="bi bi-exclamation-triangle text-danger me-2"></i>Complaints</span>
-          <p class="text-muted small mb-0">Urgent alert when the AI detects a customer complaint.</p>
-        </div>
-        <div class="form-check form-switch">
-          <input class="form-check-input pref-toggle" type="checkbox" name="notify_on_complaint"
-                 {% if restaurant.notify_on_complaint %}checked{% endif %}
-                 style="width:2.5em;height:1.3em;">
-        </div>
-      </li>
-
-      <!-- Follow-ups -->
-      <li class="list-group-item d-flex align-items-center justify-content-between py-3">
-        <div>
-          <span class="fw-semibold"><i class="bi bi-reply-fill text-warning me-2"></i>Follow-up Needed</span>
-          <p class="text-muted small mb-0">Alert when a caller asks to be called back or needs a human.</p>
-        </div>
-        <div class="form-check form-switch">
-          <input class="form-check-input pref-toggle" type="checkbox" name="notify_on_followup"
-                 {% if restaurant.notify_on_followup %}checked{% endif %}
-                 style="width:2.5em;height:1.3em;">
-        </div>
-      </li>
-
-      <!-- Non-customer / Business calls -->
-      <li class="list-group-item d-flex align-items-center justify-content-between py-3">
-        <div>
-          <span class="fw-semibold"><i class="bi bi-telephone-x text-secondary me-2"></i>Business Calls</span>
-          <p class="text-muted small mb-0">Alert when the AI identifies a non-customer call — vendor, press, sales, service provider, etc.</p>
-        </div>
-        <div class="form-check form-switch">
-          <input class="form-check-input pref-toggle" type="checkbox" name="notify_on_non_customer"
-                 {% if restaurant.notify_on_non_customer %}checked{% endif %}
-                 style="width:2.5em;height:1.3em;">
-        </div>
-      </li>
-
-      <!-- Daily digest -->
-      <li class="list-group-item d-flex align-items-center justify-content-between py-3">
-        <div>
-          <span class="fw-semibold"><i class="bi bi-journal-text text-info me-2"></i>Daily Call Digest</span>
-          <p class="text-muted small mb-0">Morning summary of all calls from the previous day.</p>
-        </div>
-        <div class="form-check form-switch">
-          <input class="form-check-input pref-toggle" type="checkbox" name="notify_daily_digest"
-                 {% if restaurant.notify_daily_digest %}checked{% endif %}
-                 style="width:2.5em;height:1.3em;">
-        </div>
-      </li>
-
-    </ul>
-  </div>
-
-  {% if operator %}
-  <!-- Operator Notifications -->
-  <div class="card mb-4">
-    <div class="card-header bg-white border-bottom py-3 px-4 d-flex align-items-center gap-2">
-      <i class="bi bi-person-badge text-secondary"></i>
-      <span class="fw-semibold">Operator Notifications</span>
-      <span class="text-muted small ms-1">— {{ operator.user.get_full_name|default:operator.user.email }}</span>
-    </div>
-    <div class="card-body pb-1">
-      <div class="mb-3">
-        <label for="op_notify_email" class="form-label fw-semibold small">
-          <i class="bi bi-at me-1"></i>Notification Email
-        </label>
-        <input type="email" class="form-control form-control-sm" id="op_notify_email" name="op_notify_email"
-               value="{{ operator.notify_email }}"
-               placeholder="{{ operator.user.email }}">
-        <div class="form-text">Leave blank to use account email ({{ operator.user.email }}).</div>
-      </div>
-      <ul class="list-group list-group-flush">
-
-        <li class="list-group-item d-flex align-items-center justify-content-between py-3 px-0">
-          <div>
-            <span class="fw-semibold"><i class="bi bi-calendar-event text-primary me-2"></i>Reservation Requests</span>
+        <div style="flex:1;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font: 600 15px 'Geist',sans-serif; letter-spacing:-.015em;">Send to operator</span>
+            {% if not operator %}
+              <span class="v2-chip v2-chip-soft" style="font-size:10.5px; padding:1px 7px;">Optional</span>
+            {% endif %}
           </div>
-          <div class="form-check form-switch">
-            <input class="form-check-input op-toggle" type="checkbox" name="op_notify_on_reservation"
-                   {% if operator.notify_on_reservation %}checked{% endif %}
-                   style="width:2.5em;height:1.3em;">
+          <div class="v2-notif-channel-sub">
+            {% if operator %}
+              Cc <strong style="color:var(--ink);">{{ operator.user.email }}</strong> on selected alert types.
+            {% else %}
+              Cc someone else — front-of-house, GM, owner — on certain alert types.
+            {% endif %}
           </div>
-        </li>
+        </div>
+        <i class="bi bi-chevron-down" style="color: var(--muted); font-size:14px;"></i>
+      </summary>
 
-        <li class="list-group-item d-flex align-items-center justify-content-between py-3 px-0">
-          <div>
-            <span class="fw-semibold"><i class="bi bi-exclamation-triangle text-danger me-2"></i>Complaints</span>
+      {% if operator %}
+        <div class="v2-notif-op-body">
+          <div class="v2-notif-op-emailrow">
+            <div>
+              <div class="label-tiny" style="margin-bottom:6px; display:block;">Operator notification email</div>
+              <input type="email" name="op_notify_email" value="{{ operator.notify_email }}"
+                     placeholder="{{ operator.user.email }}">
+              <div style="font: 300 11px 'Geist',sans-serif; color: var(--muted-strong); margin-top:4px;">
+                Leave blank to use account email ({{ operator.user.email }}).
+              </div>
+            </div>
+            <label class="v2-notif-op-chip {% if operator.notify_via_push %}on{% endif %}" style="height:fit-content; align-self:start; margin-top:22px;">
+              <input type="checkbox" name="op_notify_via_push" {% if operator.notify_via_push %}checked{% endif %}>
+              <i class="bi bi-phone"></i> Push to operator's device
+            </label>
           </div>
-          <div class="form-check form-switch">
-            <input class="form-check-input op-toggle" type="checkbox" name="op_notify_on_complaint"
-                   {% if operator.notify_on_complaint %}checked{% endif %}
-                   style="width:2.5em;height:1.3em;">
-          </div>
-        </li>
 
-        <li class="list-group-item d-flex align-items-center justify-content-between py-3 px-0">
-          <div>
-            <span class="fw-semibold"><i class="bi bi-reply-fill text-warning me-2"></i>Follow-up Needed</span>
+          <div class="label-tiny" style="margin-bottom:8px; display:block;">Cc operator on…</div>
+          <div class="v2-notif-op-chiprow">
+            <label class="v2-notif-op-chip {% if operator.notify_on_reservation %}on{% endif %}">
+              <input type="checkbox" name="op_notify_on_reservation" {% if operator.notify_on_reservation %}checked{% endif %}>
+              <span class="glyph"><i class="bi bi-calendar-event"></i></span> Reservation requests
+            </label>
+            <label class="v2-notif-op-chip {% if operator.notify_on_complaint %}on{% endif %}">
+              <input type="checkbox" name="op_notify_on_complaint" {% if operator.notify_on_complaint %}checked{% endif %}>
+              <span class="glyph"><i class="bi bi-exclamation-triangle-fill"></i></span> Complaints
+            </label>
+            <label class="v2-notif-op-chip {% if operator.notify_on_followup %}on{% endif %}">
+              <input type="checkbox" name="op_notify_on_followup" {% if operator.notify_on_followup %}checked{% endif %}>
+              <span class="glyph"><i class="bi bi-reply-fill"></i></span> Follow-up needed
+            </label>
+            <label class="v2-notif-op-chip {% if operator.notify_on_non_customer %}on{% endif %}">
+              <input type="checkbox" name="op_notify_on_non_customer" {% if operator.notify_on_non_customer %}checked{% endif %}>
+              <span class="glyph"><i class="bi bi-briefcase-fill"></i></span> Business calls
+            </label>
           </div>
-          <div class="form-check form-switch">
-            <input class="form-check-input op-toggle" type="checkbox" name="op_notify_on_followup"
-                   {% if operator.notify_on_followup %}checked{% endif %}
-                   style="width:2.5em;height:1.3em;">
-          </div>
-        </li>
-
-        <li class="list-group-item d-flex align-items-center justify-content-between py-3 px-0">
-          <div>
-            <span class="fw-semibold"><i class="bi bi-telephone-x text-secondary me-2"></i>Business Calls</span>
-          </div>
-          <div class="form-check form-switch">
-            <input class="form-check-input op-toggle" type="checkbox" name="op_notify_on_non_customer"
-                   {% if operator.notify_on_non_customer %}checked{% endif %}
-                   style="width:2.5em;height:1.3em;">
-          </div>
-        </li>
-
-      </ul>
-    </div>
-  </div>
+        </div>
+      {% else %}
+        <div class="v2-notif-op-body" style="font: 300 13px 'Geist',sans-serif; color: var(--muted-strong);">
+          No operator added yet. Add one in <a href="{% url 'portal_account' restaurant.slug %}"
+              style="color: var(--accent); text-decoration:none;">Account → Team</a>
+            to enable per-alert cc routing.
+        </div>
+      {% endif %}
+    </details>
   {% endif %}
 
-  <button type="submit" class="btn btn-primary">
-    Save Preferences
-  </button>
+  {# ── Sticky save footer ──────────────────────────────────────── #}
+  <div class="v2-notif-footer">
+    <div class="info">
+      <strong>Changes apply from your next call onward.</strong>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn btn-sm btn-ghost" onclick="location.reload()">Discard</button>
+      <button type="submit" class="btn btn-sm btn-accent">Save preferences</button>
+    </div>
+  </div>
 </form>
 
-<!-- ── Dialogs (used by push.js) ────────────────────────────────────────────── -->
-
-<dialog id="pushPrePermissionDlg" class="border-0 rounded-3 p-0" style="max-width:420px;">
-  <div class="p-4">
-    <div class="text-center mb-3" style="font-size:48px;">🔔</div>
-    <h5 class="fw-bold text-center mb-3">Enable push notifications?</h5>
-    <p class="mb-2">You'll get an alert on this device when:</p>
-    <ul class="mb-3">
+{# ── Push dialogs (used by push.js) ─────────────────────────────── #}
+<dialog id="pushPrePermissionDlg" style="border:none; padding:0; border-radius:20px; max-width:420px;">
+  <div style="padding:24px;">
+    <div style="text-align:center; font-size:48px; margin-bottom:12px;">🔔</div>
+    <h3 style="font-size:18px; text-align:center; margin-bottom:14px;">Enable push notifications?</h3>
+    <p style="font: 300 13px 'Geist',sans-serif; color:var(--ink-soft);">You'll get an alert on this device when:</p>
+    <ul style="font: 300 13px 'Geist',sans-serif; color:var(--ink-soft); padding-left: 22px; margin: 8px 0 14px;">
       <li>📅 A caller requests a reservation</li>
       <li>⚠️ A complaint comes in</li>
       <li>📞 Someone wants a callback</li>
     </ul>
-    <p class="text-muted small mb-3">You can disable any of these later in Settings.</p>
-    <div class="d-flex gap-2 justify-content-end">
-      <button data-choice="no"  class="btn btn-light">Not now</button>
-      <button data-choice="yes" class="btn btn-primary">Yes, enable</button>
+    <p style="font: 300 12px 'Geist',sans-serif; color:var(--muted-strong); margin-bottom:14px;">
+      You can disable any of these later in Settings.
+    </p>
+    <div style="display:flex; gap:8px; justify-content:flex-end;">
+      <button data-choice="no" class="btn btn-sm">Not now</button>
+      <button data-choice="yes" class="btn btn-sm btn-accent">Yes, enable</button>
     </div>
   </div>
 </dialog>
 
-<dialog id="pushIosInstallDlg" class="border-0 rounded-3 p-0" style="max-width:420px;">
-  <div class="p-4">
-    <h5 class="fw-bold mb-3"><i class="bi bi-phone"></i> Install Concierge first</h5>
-    <p>On iPhone, push notifications work only when Concierge is installed as an app:</p>
-    <ol>
+<dialog id="pushIosInstallDlg" style="border:none; padding:0; border-radius:20px; max-width:420px;">
+  <div style="padding:24px;">
+    <h3 style="font-size:17px; margin-bottom:12px;"><i class="bi bi-phone"></i> Install Concierge first</h3>
+    <p style="font: 300 13px 'Geist',sans-serif;">On iPhone, push notifications work only when Concierge is installed as an app:</p>
+    <ol style="font: 300 13px 'Geist',sans-serif; padding-left: 22px; margin: 8px 0;">
       <li>Tap <i class="bi bi-box-arrow-up"></i> <b>Share</b> at the bottom of Safari</li>
       <li>Scroll down → <b>Add to Home Screen</b></li>
       <li>Open Concierge from the home-screen icon</li>
       <li>Come back here and tap <b>Enable on this device</b></li>
     </ol>
-    <p class="text-muted small">Requires iOS 16.4 or later.</p>
-    <div class="d-flex justify-content-end">
-      <button data-choice="ok" class="btn btn-primary">Got it</button>
+    <p style="font: 300 11.5px 'Geist',sans-serif; color: var(--muted-strong);">Requires iOS 16.4 or later.</p>
+    <div style="display:flex; justify-content:flex-end;">
+      <button data-choice="ok" class="btn btn-sm btn-accent">Got it</button>
     </div>
   </div>
 </dialog>
 
-<dialog id="pushDeniedDlg" class="border-0 rounded-3 p-0" style="max-width:420px;">
-  <div class="p-4">
-    <h5 class="fw-bold mb-3"><i class="bi bi-bell-slash text-danger"></i> Notifications blocked</h5>
-    <p>This browser is currently blocking notifications from Concierge.</p>
-    <p class="small text-muted" id="pushDeniedHelp"></p>
-    <div class="d-flex justify-content-end">
-      <button data-choice="ok" class="btn btn-primary">OK</button>
+<dialog id="pushDeniedDlg" style="border:none; padding:0; border-radius:20px; max-width:420px;">
+  <div style="padding:24px;">
+    <h3 style="font-size:17px; margin-bottom:12px;"><i class="bi bi-bell-slash"></i> Notifications blocked</h3>
+    <p style="font: 300 13px 'Geist',sans-serif;">This browser is currently blocking notifications from Concierge.</p>
+    <p style="font: 300 12px 'Geist',sans-serif; color: var(--muted-strong);" id="pushDeniedHelp"></p>
+    <div style="display:flex; justify-content:flex-end;">
+      <button data-choice="ok" class="btn btn-sm btn-accent">OK</button>
     </div>
   </div>
 </dialog>
@@ -274,36 +300,54 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="{% static 'portal/push.js' %}"></script>
 <script>
-  // Disable per-event toggles when master switch is off, but ensure they submit
-  const master = document.getElementById('masterSwitch');
-  const prefs  = document.querySelectorAll('.pref-toggle, .op-toggle');
+  // ── Email card toggles its active gradient + sub-line live ──
+  const emailCard   = document.getElementById('emailCard');
+  const emailMaster = document.getElementById('emailMaster');
+  const emailSub    = emailCard.querySelector('.v2-notif-channel-sub');
+  emailMaster.addEventListener('change', () => {
+    emailCard.classList.toggle('active', emailMaster.checked);
+    emailSub.textContent = emailMaster.checked
+      ? 'All enabled alerts sent to your inbox'
+      : 'Disabled — no email alerts will be sent';
+    syncAlertsDisabled();
+  });
 
-  function syncToggles() {
-    prefs.forEach(p => {
-        if (!master.checked) {
-            p.classList.add('opacity-50');
-            p.style.pointerEvents = 'none';
-        } else {
-            p.classList.remove('opacity-50');
-            p.style.pointerEvents = 'auto';
-        }
+  // ── Alert rows: toggle "off" visual when unchecked ──
+  const alertList = document.getElementById('alertList');
+  const onCount   = document.getElementById('alertsOnCount');
+  function syncAlertsDisabled() {
+    let onN = 0;
+    alertList.querySelectorAll('.v2-notif-alert-row').forEach(row => {
+      const tog = row.querySelector('.alert-toggle');
+      row.classList.toggle('off', !tog.checked);
+      if (tog.checked) onN += 1;
     });
+    onCount.textContent = `${onN} of 5 on`;
   }
+  alertList.querySelectorAll('.alert-toggle').forEach(t => t.addEventListener('change', syncAlertsDisabled));
+  syncAlertsDisabled();
 
-  master.addEventListener('change', syncToggles);
-  syncToggles();
+  // ── Operator chip toggles ──
+  document.querySelectorAll('.v2-notif-op-chip').forEach(chip => {
+    const inp = chip.querySelector('input');
+    if (!inp) return;
+    inp.addEventListener('change', () => chip.classList.toggle('on', inp.checked));
+  });
 
-  // ─── Push: enable/disable on this device ────────────────────────────────
+  // ── Push: enable / disable / test on this device ──
   const pushEnableBtn      = document.getElementById('pushEnableBtn');
   const pushDisableThisBtn = document.getElementById('pushDisableThisBtn');
-  const pushStatusEl       = document.getElementById('pushStatus');
+  const pushTestBtn        = document.getElementById('pushTestBtn');
+  const pushStatus         = document.getElementById('pushStatus');
   const pushDeniedHelp     = document.getElementById('pushDeniedHelp');
 
-  function showStatus(msg, kind = 'info') {
-    pushStatusEl.className = `alert alert-${kind} small mb-3`;
-    pushStatusEl.textContent = msg;
-    pushStatusEl.classList.remove('d-none');
+  function setStatus(msg, kind, meta) {
+    pushStatus.style.display = '';
+    pushStatus.className = 'v2-notif-channel-status' + (kind ? ' ' + kind : '');
+    pushStatus.querySelector('.msg').textContent = msg;
+    pushStatus.querySelector('.meta').textContent = meta || '';
   }
 
   if (window.Push) {
@@ -318,26 +362,27 @@
     if (!window.Push) return;
     const state = window.Push.permission();
     const reg   = await navigator.serviceWorker.ready.catch(() => null);
-    const localSub = reg ? await reg.pushManager.getSubscription() : null;
+    const sub   = reg ? await reg.pushManager.getSubscription() : null;
+
+    pushEnableBtn.style.display = 'none';
+    pushDisableThisBtn.style.display = 'none';
+    pushTestBtn.style.display = 'none';
 
     if (state === 'unsupported') {
-      pushEnableBtn.disabled = true;
-      pushEnableBtn.textContent = 'Not supported on this browser';
+      setStatus('Not supported on this browser', 'danger');
     } else if (state === 'needs_install') {
-      pushEnableBtn.classList.remove('d-none');
-      pushDisableThisBtn.classList.add('d-none');
-      showStatus('On iPhone: install Concierge to your Home Screen first.', 'warning');
+      setStatus('On iPhone: install Concierge to your Home Screen first.', 'warn');
+      pushEnableBtn.style.display = '';
     } else if (state === 'denied') {
-      pushEnableBtn.classList.remove('d-none');
-      pushDisableThisBtn.classList.add('d-none');
-      showStatus('Notifications are blocked in this browser.', 'warning');
-    } else if (state === 'granted' && localSub) {
-      pushEnableBtn.classList.add('d-none');
-      pushDisableThisBtn.classList.remove('d-none');
-      showStatus('Enabled on this device.', 'success');
+      setStatus('Notifications are blocked in this browser.', 'danger');
+      pushEnableBtn.style.display = '';
+    } else if (state === 'granted' && sub) {
+      setStatus('Enabled on this device.', '', navigator.userAgent.includes('iPhone') ? 'iPhone' : 'this browser');
+      pushTestBtn.style.display = '';
+      pushDisableThisBtn.style.display = '';
     } else {
-      pushEnableBtn.classList.remove('d-none');
-      pushDisableThisBtn.classList.add('d-none');
+      pushStatus.style.display = 'none';
+      pushEnableBtn.style.display = '';
     }
   }
 
@@ -345,10 +390,7 @@
     pushEnableBtn.disabled = true;
     try {
       const r = await window.Push.subscribe();
-      if (r) {
-        showStatus('Push enabled on this device.', 'success');
-        setTimeout(() => location.reload(), 800);
-      }
+      if (r) setTimeout(() => location.reload(), 600);
     } finally {
       pushEnableBtn.disabled = false;
       refreshPushUI();
@@ -362,6 +404,16 @@
       await window.Push.unsubscribe(sub.endpoint);
       location.reload();
     }
+  });
+
+  pushTestBtn?.addEventListener('click', async () => {
+    pushTestBtn.disabled = true;
+    try {
+      await fetch("{% url 'portal_push_test' restaurant.slug %}", {
+        method: 'POST',
+        headers: { 'X-CSRFToken': (document.cookie.split('; ').find(r => r.startsWith('csrftoken='))?.split('=')[1] || '') },
+      });
+    } finally { pushTestBtn.disabled = false; }
   });
 
   if (window.Push) {

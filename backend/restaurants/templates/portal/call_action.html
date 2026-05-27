@@ -1,170 +1,656 @@
 {% load static %}
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="referrer" content="no-referrer">
-  <meta name="theme-color" content="#4361ee">
-  <title>{{ restaurant.name }} — Acción requerida</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-        rel="stylesheet"
-        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
-        crossorigin="anonymous">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
-        rel="stylesheet"
-        integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+"
-        crossorigin="anonymous">
+  <meta name="theme-color" content="#1f3fc3">
+  <title>{{ restaurant.name }} — Action required</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link href="{% static 'css/portal-v2.css' %}" rel="stylesheet">
   <style>
-    body { background:#f8fafc; padding-bottom:140px; }
-    .ca-action-bar {
-      position:fixed; bottom:0; left:0; right:0;
-      background:#fff; border-top:1px solid #e2e8f0;
-      padding:12px; padding-bottom: calc(12px + env(safe-area-inset-bottom));
-      display:flex; gap:8px;
+    {# ── Page-level overrides for the standalone mobile action page ── #}
+    html, body { height: auto; }
+    body {
+      background: var(--cream-200);
+      padding-bottom: 220px;
+      padding-top: calc(12px + env(safe-area-inset-top));
     }
-    .ca-btn { flex:1; min-height:56px; border:0; border-radius:12px;
-              color:#fff; font-size:15px; font-weight:600; }
-    .ca-btn:disabled { opacity:.6; }
-    .ca-btn.confirm { background:#16a34a; }
-    .ca-btn.decline { background:#dc2626; }
-    .ca-btn.callback { background:#ea580c; }
+    .ca-wrap {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 12px 16px 18px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+
+    /* Header */
+    .ca-hdr {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 4px 4px 8px;
+    }
+    .ca-hdr-brand {
+      display: inline-flex; align-items: center; gap: 8px;
+      font: 700 16px 'Geist', sans-serif; letter-spacing: -.02em;
+      color: var(--ink);
+    }
+    .ca-hdr-brand .sparkle { color: var(--accent); font-size: 18px; line-height: 1; }
+    .ca-hdr-token {
+      display: inline-flex; align-items: center; gap: 6px;
+      font: 500 11px 'Geist Mono', monospace;
+      color: var(--muted-strong);
+    }
+    .ca-token-dot {
+      width: 7px; height: 7px; border-radius: 99px;
+      background: #d97706;
+      box-shadow: 0 0 0 4px rgba(217, 119, 6, 0.18);
+      animation: caPulse 2.2s infinite;
+    }
+    @keyframes caPulse {
+      0%, 100% { box-shadow: 0 0 0 4px rgba(217, 119, 6, 0.18); }
+      50%       { box-shadow: 0 0 0 8px rgba(217, 119, 6, 0.06); }
+    }
+
+    /* Card primitive (lighter glass for mobile) */
+    .ca-card {
+      position: relative;
+      background: rgba(255, 252, 248, 0.92);
+      border: 1px solid var(--warm-line);
+      border-radius: 20px;
+      padding: 16px 18px;
+      box-shadow: 0 6px 22px -12px rgba(56, 36, 12, 0.18);
+    }
+
+    /* Type banner */
+    .ca-type {
+      padding: 16px 18px 12px;
+      overflow: hidden;
+    }
+    .ca-type-stripe {
+      position: absolute; top: 0; left: 0; bottom: 0;
+      width: 4px;
+      border-radius: 20px 0 0 20px;
+    }
+    .ca-type[data-tone="rose"]   .ca-type-stripe { background: linear-gradient(180deg, #b91c1c, #dc2626); }
+    .ca-type[data-tone="mint"]   .ca-type-stripe { background: linear-gradient(180deg, #2e7d3a, #166534); }
+    .ca-type[data-tone="cobalt"] .ca-type-stripe { background: linear-gradient(180deg, var(--accent), var(--accent-deep)); }
+    .ca-type-row { display: flex; align-items: flex-start; gap: 12px; }
+    .ca-type-ico {
+      width: 40px; height: 40px;
+      border-radius: 12px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .ca-type[data-tone="rose"]   .ca-type-ico { background: rgba(220, 38, 38, 0.10);  color: #b91c1c; }
+    .ca-type[data-tone="mint"]   .ca-type-ico { background: rgba(46, 125, 58, 0.10);  color: #2e7d3a; }
+    .ca-type[data-tone="cobalt"] .ca-type-ico { background: rgba(31, 63, 195, 0.10);  color: var(--accent-deep); }
+    .ca-type-meta { flex: 1; min-width: 0; }
+    .ca-type-label-row {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .ca-type-label {
+      font: 700 16px 'Geist', sans-serif; letter-spacing: -.02em;
+    }
+    .ca-sev {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 2px 9px;
+      border-radius: 99px;
+      font: 600 10.5px 'Geist', sans-serif; letter-spacing: 0.02em;
+    }
+    .ca-sev .dot { width: 5px; height: 5px; border-radius: 99px; background: currentColor; }
+    .ca-sev.rose   { background: rgba(220, 38, 38, 0.12); color: #991b1b; }
+    .ca-sev.mint   { background: rgba(46, 125, 58, 0.10); color: #2e7d3a; }
+    .ca-sev.cobalt { background: rgba(31, 63, 195, 0.10); color: var(--accent-deep); }
+    .ca-sev.amber  { background: rgba(217, 119, 6, 0.12); color: #92400e; }
+
+    .ca-caller {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      font: 500 13px 'Geist', sans-serif;
+      color: var(--muted-strong);
+      margin-top: 4px;
+    }
+    .ca-caller strong { color: var(--ink); font-weight: 700; }
+    .ca-caller a { color: var(--accent); text-decoration: none; font-family: 'Geist Mono', monospace; font-size: 12.5px; }
+
+    .ca-detail {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--warm-line);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .ca-kv {
+      display: grid; grid-template-columns: 90px 1fr; gap: 12px;
+      align-items: baseline;
+    }
+    .ca-kv-k {
+      font: 600 10.5px 'Geist', sans-serif;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--muted);
+    }
+    .ca-kv-v {
+      font: 500 13px 'Geist', sans-serif;
+      color: var(--ink);
+    }
+    .ca-kv-v .ca-sev { font-size: 10px; padding: 1px 7px; }
+
+    /* AI summary */
+    .ca-ai-head {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 10px;
+    }
+    .ca-ai-mark {
+      width: 26px; height: 26px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, rgba(199, 210, 255, 0.6), rgba(31, 63, 195, 0.18));
+      border: 1px solid rgba(31, 63, 195, 0.25);
+      color: var(--accent-deep);
+      display: inline-flex; align-items: center; justify-content: center;
+      font: 700 13px 'Geist', sans-serif;
+    }
+    .ca-ai-title {
+      font: 700 13px 'Geist', sans-serif;
+      letter-spacing: -.01em;
+    }
+    .ca-ai-mini {
+      margin-left: auto;
+      font: 500 10.5px 'Geist Mono', monospace;
+      color: var(--muted);
+    }
+    .ca-ai-body {
+      font: 400 14px 'Geist', sans-serif;
+      line-height: 1.55;
+      color: var(--ink-soft);
+    }
+    .ca-ai-body em { font-style: normal; background: rgba(31, 63, 195, 0.10); color: var(--ink); padding: 0 3px; border-radius: 3px; }
+
+    /* Note textarea */
+    .ca-note-label {
+      display: flex; align-items: center; gap: 6px;
+      font: 600 12px 'Geist', sans-serif; letter-spacing: -.005em;
+      color: var(--ink); margin-bottom: 8px;
+    }
+    .ca-note-label .opt { font-weight: 400; color: var(--muted); }
+    .ca-note {
+      width: 100%;
+      min-height: 60px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: white;
+      border: 1px solid var(--warm-line);
+      font: 400 13.5px 'Geist', sans-serif;
+      color: var(--ink);
+      outline: none;
+      resize: vertical;
+    }
+    .ca-note:focus {
+      border-color: rgba(31, 63, 195, 0.45);
+      box-shadow: 0 0 0 3px rgba(31, 63, 195, 0.10);
+    }
+
+    /* Recording */
+    .ca-audio { display: flex; align-items: center; gap: 12px; }
+    .ca-audio audio { flex: 1; height: 36px; }
+
+    /* Transcript */
+    .ca-tx summary {
+      list-style: none;
+      cursor: pointer; user-select: none;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .ca-tx summary::-webkit-details-marker { display: none; }
+    .ca-tx-caret {
+      width: 14px; text-align: center;
+      font-size: 10px; color: var(--muted-strong);
+      transition: transform .15s;
+    }
+    .ca-tx[open] .ca-tx-caret { transform: rotate(90deg); }
+    .ca-tx-body {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--warm-line);
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .ca-tx-line { display: grid; grid-template-columns: 64px 1fr; gap: 10px; }
+    .ca-tx-who {
+      font: 600 10px 'Geist', sans-serif;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 99px;
+      background: rgba(0, 0, 0, 0.06);
+      color: var(--muted-strong);
+      align-self: start;
+      text-align: center;
+    }
+    .ca-tx-who.agent { background: rgba(31, 63, 195, 0.10); color: var(--accent-deep); }
+    .ca-tx-text {
+      font: 400 13px 'Geist', sans-serif;
+      color: var(--ink-soft);
+      line-height: 1.5;
+    }
+    .ca-tx-plain {
+      white-space: pre-wrap;
+      font: 400 13px 'Geist', sans-serif;
+      color: var(--ink-soft);
+      line-height: 1.55;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--warm-line);
+    }
+
+    /* Outside / footnote */
+    .ca-external {
+      align-self: center;
+      background: transparent;
+      border: none;
+      color: var(--muted-strong);
+      font: 500 12.5px 'Geist', sans-serif;
+      text-decoration: underline;
+      cursor: pointer;
+      padding: 8px;
+    }
+    .ca-external:hover { color: var(--accent-deep); }
+    .ca-footnote {
+      text-align: center;
+      font: 500 10.5px 'Geist Mono', monospace;
+      color: var(--muted);
+      padding: 4px 0 18px;
+    }
+    .ca-footnote .dot { display: inline-block; margin: 0 6px; opacity: .5; }
+
+    /* Sticky bottom actions */
+    .ca-actions {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      padding: 14px 16px;
+      padding-bottom: calc(14px + env(safe-area-inset-bottom));
+      background: linear-gradient(180deg, rgba(235, 226, 210, 0) 0%, rgba(229, 229, 214, 0.95) 35%, rgba(229, 229, 214, 1) 100%);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--warm-line);
+      display: flex; flex-direction: column; gap: 8px;
+      z-index: 20;
+    }
+    .ca-actions-inner {
+      max-width: 480px; margin: 0 auto; width: 100%;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .ca-hint {
+      min-height: 16px;
+      font: 500 11.5px 'Geist', sans-serif;
+      color: var(--muted-strong);
+      text-align: center;
+      transition: color .15s;
+    }
+    .ca-hint strong { color: var(--ink); font-weight: 600; font-family: 'Geist Mono', monospace; }
+    .ca-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      border: none;
+      border-radius: 14px;
+      font: 700 15px 'Geist', sans-serif;
+      letter-spacing: -.01em;
+      cursor: pointer;
+      transition: background .15s, transform .12s, box-shadow .15s;
+      min-height: 52px;
+      padding: 0 18px;
+    }
+    .ca-btn:disabled { opacity: .55; pointer-events: none; }
+    .ca-btn:active { transform: translateY(1px); }
+    .ca-btn-primary { min-height: 56px; font-size: 16px; }
+    .ca-btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+    .ca-btn.green {
+      background: linear-gradient(135deg, #2e7d3a, #166534);
+      color: white;
+      box-shadow: 0 8px 20px -8px rgba(22, 101, 52, 0.50);
+    }
+    .ca-btn.green:hover { background: linear-gradient(135deg, #2e7d3a, #14532d); }
+    .ca-btn.warm {
+      background: linear-gradient(135deg, #d97706, #92400e);
+      color: white;
+      box-shadow: 0 8px 20px -8px rgba(146, 64, 14, 0.50);
+    }
+    .ca-btn.danger {
+      background: linear-gradient(135deg, #dc2626, #991b1b);
+      color: white;
+      box-shadow: 0 8px 20px -8px rgba(153, 27, 27, 0.45);
+    }
+    .ca-btn.cobalt {
+      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+      color: white;
+      box-shadow: 0 8px 20px -8px rgba(31, 63, 195, 0.50);
+    }
+    .ca-btn.neutral {
+      background: white;
+      color: var(--ink);
+      border: 1px solid var(--warm-line-strong);
+      box-shadow: 0 2px 8px rgba(56, 36, 12, 0.06);
+    }
+    .ca-btn .ico { font-size: 16px; line-height: 1; }
   </style>
 </head>
 <body>
 
-<div class="container py-4" style="max-width:560px;">
+{# ── Resolve action_type → tone + severity + actions ────────────── #}
+{% if t.action_type == "complaint" %}
+  {% with tone="rose" sev_class="rose" sev_text="Urgent" type_icon="bi-exclamation-triangle-fill" type_label="Complaint" %}{% endwith %}
+{% elif t.action_type == "reservation" %}
+  {% with tone="mint" sev_class="mint" sev_text="Awaiting you" type_icon="bi-calendar-event-fill" type_label="Reservation request" %}{% endwith %}
+{% elif t.action_type == "followup" %}
+  {% with tone="cobalt" sev_class="cobalt" sev_text="Callback" type_icon="bi-telephone-fill" type_label="Callback requested" %}{% endwith %}
+{% else %}
+  {% with tone="cobalt" sev_class="cobalt" sev_text="Business" type_icon="bi-briefcase-fill" type_label="Business call" %}{% endwith %}
+{% endif %}
 
-  <!-- Header -->
-  <header class="d-flex justify-content-between align-items-center mb-3">
-    <div class="fw-bold"><i class="bi bi-building text-primary"></i> {{ restaurant.name }}</div>
-    <small class="text-muted">Token expira <span id="expiresAt">{{ t.expires_at|date:"d M, H:i" }}</span></small>
-  </header>
+<div class="ca-wrap">
 
-  <!-- Caller contact -->
-  <div class="card mb-3">
-    <div class="card-body">
-      <h5 class="fw-bold mb-1">
-        {% if t.action_type == "reservation" %}📅 Reserva
-        {% elif t.action_type == "complaint" %}🚨 Reclamación
-        {% elif t.action_type == "followup" %}📞 Devolver llamada
-        {% else %}💼 Llamada{% endif %}
-      </h5>
-      <div class="text-muted">
-        <strong>{{ call.caller_name|default:"Desconocido" }}</strong>
-        {% if call.caller_phone %}
-          · <a href="tel:{{ call.caller_phone }}">{{ call.caller_phone }}</a>
-        {% endif %}
+  {# Header #}
+  <div class="ca-hdr">
+    <div class="ca-hdr-brand">
+      <span class="sparkle">✦</span>
+      <span>{{ restaurant.name }}</span>
+    </div>
+    <div class="ca-hdr-token">
+      <span class="ca-token-dot"></span>
+      <span>Expires {{ t.expires_at|date:"M j, g:i A" }}</span>
+    </div>
+  </div>
+
+  {# Type banner #}
+  <div class="ca-card ca-type"
+       data-tone="{% if t.action_type == 'complaint' %}rose{% elif t.action_type == 'reservation' %}mint{% else %}cobalt{% endif %}">
+    <div class="ca-type-stripe"></div>
+    <div class="ca-type-row">
+      <div class="ca-type-ico">
+        <i class="bi
+           {% if t.action_type == 'complaint' %}bi-exclamation-triangle-fill
+           {% elif t.action_type == 'reservation' %}bi-calendar-event-fill
+           {% elif t.action_type == 'followup' %}bi-telephone-fill
+           {% else %}bi-briefcase-fill{% endif %}"></i>
+      </div>
+      <div class="ca-type-meta">
+        <div class="ca-type-label-row">
+          <div class="ca-type-label">
+            {% if t.action_type == "complaint" %}Complaint
+            {% elif t.action_type == "reservation" %}Reservation request
+            {% elif t.action_type == "followup" %}Callback requested
+            {% else %}Business call{% endif %}
+          </div>
+          <span class="ca-sev
+                       {% if t.action_type == 'complaint' %}rose
+                       {% elif t.action_type == 'reservation' %}mint
+                       {% else %}cobalt{% endif %}">
+            <span class="dot"></span>
+            {% if t.action_type == "complaint" %}Urgent
+            {% elif t.action_type == "reservation" %}Awaiting you
+            {% elif t.action_type == "followup" %}Callback
+            {% else %}Business{% endif %}
+          </span>
+        </div>
+        <div class="ca-caller">
+          {% if call.caller_name %}
+            <strong>{{ call.caller_name }}</strong>
+            <span style="color: var(--muted);">·</span>
+          {% else %}
+            <span style="color: var(--muted-strong);">Unknown caller</span>
+            <span style="color: var(--muted);">·</span>
+          {% endif %}
+          {% if call.caller_phone %}
+            <a href="tel:{{ call.caller_phone }}">{{ call.caller_phone }}</a>
+          {% endif %}
+          {% if memory and memory.call_count > 1 %}
+            <span class="ca-sev mint" style="font-size: 9.5px;">
+              {{ memory.call_count }} visit{{ memory.call_count|pluralize }}
+            </span>
+          {% endif %}
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- AI summary -->
-  {% if call.call_summary %}
-  <div class="card mb-3">
-    <div class="card-body">
-      <h6 class="fw-bold"><i class="bi bi-stars text-warning"></i> Resumen</h6>
-      <p class="mb-0 small">{{ call.call_summary }}</p>
+    {# Type-specific detail rows #}
+    <div class="ca-detail">
+      {% if t.action_type == "reservation" %}
+        <div class="ca-kv">
+          <div class="ca-kv-k">For</div>
+          <div class="ca-kv-v">
+            {% if call.reservation_date %}{{ call.reservation_date|date:"D M j" }}{% endif %}
+            {% if call.reservation_time %} · {{ call.reservation_time|time:"g:i A" }}{% endif %}
+            {% if call.party_size %} · party of {{ call.party_size }}{% endif %}
+            {% if not call.reservation_date and not call.reservation_time and not call.party_size %}
+              <span style="color: var(--muted-strong);">Details to confirm</span>
+            {% endif %}
+          </div>
+        </div>
+        {% if call.special_requests %}
+          <div class="ca-kv">
+            <div class="ca-kv-k">Notes</div>
+            <div class="ca-kv-v">{{ call.special_requests }}</div>
+          </div>
+        {% endif %}
+
+      {% elif t.action_type == "complaint" %}
+        <div class="ca-kv">
+          <div class="ca-kv-k">When</div>
+          <div class="ca-kv-v">
+            {{ call.created_at|date:"D M j, g:i A" }}
+            {% if call.duration_seconds %}
+              · {{ call.duration_seconds }}s call
+            {% endif %}
+          </div>
+        </div>
+        {% if sentiment %}
+          <div class="ca-kv">
+            <div class="ca-kv-k">Sentiment</div>
+            <div class="ca-kv-v">
+              <span class="ca-sev
+                {% if sentiment == 'upset' %}rose
+                {% elif sentiment == 'frustrated' %}amber
+                {% elif sentiment == 'positive' %}mint
+                {% else %}cobalt{% endif %}">
+                <span class="dot"></span>
+                {{ sentiment|capfirst }}
+              </span>
+            </div>
+          </div>
+        {% endif %}
+
+      {% else %}
+        {# followup / non_customer #}
+        <div class="ca-kv">
+          <div class="ca-kv-k">When</div>
+          <div class="ca-kv-v">{{ call.created_at|date:"D M j, g:i A" }}</div>
+        </div>
+        {% if call.special_requests %}
+          <div class="ca-kv">
+            <div class="ca-kv-k">Notes</div>
+            <div class="ca-kv-v">{{ call.special_requests }}</div>
+          </div>
+        {% endif %}
+      {% endif %}
     </div>
   </div>
+
+  {# AI Summary #}
+  {% if call.call_summary %}
+    <div class="ca-card">
+      <div class="ca-ai-head">
+        <span class="ca-ai-mark">✦</span>
+        <span class="ca-ai-title">Summary</span>
+        <span class="ca-ai-mini">AI · post-call</span>
+      </div>
+      <div class="ca-ai-body">{{ call.call_summary }}</div>
+    </div>
   {% endif %}
 
-  <!-- Reservation details (editable) -->
+  {# Optional note #}
+  <div class="ca-card">
+    <div class="ca-note-label">
+      <i class="bi bi-pencil"></i>
+      <span>Add a note</span>
+      <span class="opt">— optional, included in your reply</span>
+    </div>
+    <textarea id="noteField" class="ca-note" rows="2" maxlength="500"
+              placeholder="e.g. Birthday — table near the window"></textarea>
+  </div>
+
+  {# Recording #}
+  {% if call.recording_url %}
+    <div class="ca-card">
+      <div class="ca-ai-head">
+        <span class="ca-ai-mark" style="background: linear-gradient(135deg, #f8f8e8, #e2e2c5); border-color: rgba(0,0,0,0.06); color: var(--ink-soft);">♪</span>
+        <span class="ca-ai-title">Recording</span>
+        {% if call.duration_seconds %}<span class="ca-ai-mini">{{ call.duration_seconds }}s</span>{% endif %}
+      </div>
+      <div class="ca-audio">
+        <audio controls src="{{ call.recording_url }}" style="width: 100%;"></audio>
+      </div>
+    </div>
+  {% endif %}
+
+  {# Reservation detail editing #}
   {% if t.action_type == "reservation" %}
-  <div class="card mb-3">
-    <div class="card-body">
-      <h6 class="fw-bold mb-3"><i class="bi bi-pencil-square text-primary"></i> Detalles (editable)</h6>
-      <div class="row g-2">
-        <div class="col-5">
-          <label class="form-label small text-muted mb-1">Fecha</label>
-          <input type="date" id="rDate" class="form-control"
+    <details class="ca-card ca-tx">
+      <summary>
+        <span class="ca-tx-caret">▶</span>
+        <span class="ca-ai-mark" style="background: rgba(46, 125, 58, 0.10); color: #2e7d3a; border-color: rgba(46, 125, 58, 0.20);">
+          <i class="bi bi-pencil-square"></i>
+        </span>
+        <span class="ca-ai-title">Edit reservation details</span>
+        <span class="ca-ai-mini">if needed</span>
+      </summary>
+      <div class="ca-tx-body" style="display: grid; grid-template-columns: 1fr 1fr 80px; gap: 10px; padding-top: 14px;">
+        <div>
+          <div class="ca-kv-k" style="margin-bottom: 4px;">Date</div>
+          <input type="date" id="rDate" class="ca-note" style="min-height: 38px; resize: none;"
                  value="{{ call.reservation_date|date:'Y-m-d' }}">
         </div>
-        <div class="col-4">
-          <label class="form-label small text-muted mb-1">Hora</label>
-          <input type="time" id="rTime" class="form-control"
+        <div>
+          <div class="ca-kv-k" style="margin-bottom: 4px;">Time</div>
+          <input type="time" id="rTime" class="ca-note" style="min-height: 38px; resize: none;"
                  value="{{ call.reservation_time|time:'H:i' }}">
         </div>
-        <div class="col-3">
-          <label class="form-label small text-muted mb-1">Pax</label>
-          <input type="number" id="rParty" class="form-control" min="1"
+        <div>
+          <div class="ca-kv-k" style="margin-bottom: 4px;">Party</div>
+          <input type="number" id="rParty" class="ca-note" min="1" style="min-height: 38px; resize: none;"
                  value="{{ call.party_size|default:'' }}">
         </div>
       </div>
-    </div>
-  </div>
+    </details>
   {% endif %}
 
-  <!-- Custom note -->
-  <div class="card mb-3">
-    <div class="card-body">
-      <label class="form-label fw-semibold" for="noteField">
-        <i class="bi bi-chat-left-text text-secondary"></i> Mensaje adicional (opcional)
-      </label>
-      <textarea id="noteField" rows="2" maxlength="500" class="form-control"
-                placeholder="Ej. Cumpleaños — mesa cerca de la ventana"></textarea>
-    </div>
-  </div>
-
-  <!-- Recording -->
-  {% if call.recording_url %}
-  <div class="card mb-3">
-    <div class="card-body">
-      <h6 class="fw-bold"><i class="bi bi-soundwave text-primary"></i> Grabación</h6>
-      <audio controls src="{{ call.recording_url }}" style="width:100%;"></audio>
-    </div>
-  </div>
-  {% endif %}
-
-  <!-- Transcript (collapsed) -->
+  {# Transcript #}
   {% if transcript %}
-  <details class="card mb-3">
-    <summary class="card-body fw-bold" style="cursor:pointer;">
-      <i class="bi bi-chat-quote text-secondary"></i> Transcripción
-    </summary>
-    <div class="card-body pt-0">
-      <pre class="small text-muted" style="white-space:pre-wrap;">{{ transcript }}</pre>
-    </div>
-  </details>
+    <details class="ca-card ca-tx">
+      <summary>
+        <span class="ca-tx-caret">▶</span>
+        <span class="ca-ai-mark" style="background: rgba(0,0,0,0.06); color: var(--ink-soft); border-color: rgba(0,0,0,0.08);">"</span>
+        <span class="ca-ai-title">Transcript</span>
+        <span class="ca-ai-mini">full call</span>
+      </summary>
+      <div class="ca-tx-plain">{{ transcript }}</div>
+    </details>
   {% endif %}
 
-  <!-- Mark resolved (manual close) -->
-  <div class="text-center mt-3">
-    <button type="button" id="resolveBtn" class="btn btn-sm btn-link text-muted">
-      Ya lo resolví fuera del sistema
-    </button>
+  {# Outside-system link #}
+  <button type="button" class="ca-external" id="resolveBtn">
+    I've already handled this outside Concierge
+  </button>
+
+  {# Footnote #}
+  <div class="ca-footnote">
+    <span>Link expires in {{ hours_remaining }}h</span>
+    <span class="dot">·</span>
+    <span>only you can respond</span>
   </div>
 </div>
 
-<!-- Sticky action bar -->
-<div class="ca-action-bar">
-  <button class="ca-btn confirm"  data-action="confirmed">✅ Confirmar</button>
-  <button class="ca-btn decline"  data-action="declined">❌ Sin cupo</button>
-  <button class="ca-btn callback" data-action="callback">📞 Te llamamos</button>
+{# ── Sticky bottom actions ────────────────────────────────────── #}
+<div class="ca-actions">
+  <div class="ca-actions-inner">
+    <div class="ca-hint" id="actionHint">&nbsp;</div>
+
+    {% if t.action_type == "complaint" %}
+      <button class="ca-btn ca-btn-primary warm"
+              data-action="confirmed" data-variant="apology"
+              data-hint="Texts an apology to <strong>{{ call.caller_phone|default:'the caller' }}</strong>">
+        <span class="ico"><i class="bi bi-heart-fill"></i></span>
+        Send our apology
+      </button>
+      <div class="ca-btn-row">
+        <button class="ca-btn warm"
+                data-action="confirmed" data-variant="comp"
+                data-hint="Texts a 20% off comp · valid 30 days">
+          <span class="ico"><i class="bi bi-gift-fill"></i></span>
+          Offer a comp
+        </button>
+        <button class="ca-btn neutral"
+                data-action="callback"
+                data-hint="Texts the caller you'll call back shortly">
+          <span class="ico"><i class="bi bi-telephone"></i></span>
+          I'll call back
+        </button>
+      </div>
+
+    {% elif t.action_type == "reservation" %}
+      <button class="ca-btn ca-btn-primary green"
+              data-action="confirmed"
+              data-hint="Texts confirmation to <strong>{{ call.caller_phone|default:'the caller' }}</strong>">
+        <span class="ico"><i class="bi bi-check-circle-fill"></i></span>
+        Confirm reservation
+      </button>
+      <div class="ca-btn-row">
+        <button class="ca-btn danger"
+                data-action="declined"
+                data-hint="Texts an apology with suggested alternative times">
+          <span class="ico"><i class="bi bi-x-circle-fill"></i></span>
+          Sorry, we're full
+        </button>
+        <button class="ca-btn warm"
+                data-action="callback"
+                data-hint="Texts the caller you'll call within minutes">
+          <span class="ico"><i class="bi bi-telephone"></i></span>
+          We'll call you
+        </button>
+      </div>
+
+    {% else %}
+      {# followup / non_customer — Callback intent #}
+      <a class="ca-btn ca-btn-primary green"
+         href="{% if call.caller_phone %}tel:{{ call.caller_phone }}{% else %}#{% endif %}"
+         id="callNowBtn"
+         data-action="resolved"
+         data-hint="Opens your dialer to <strong>{{ call.caller_phone|default:'the caller' }}</strong>">
+        <span class="ico"><i class="bi bi-telephone-fill"></i></span>
+        Call now
+      </a>
+      <div class="ca-btn-row">
+        <button class="ca-btn warm"
+                data-action="callback"
+                data-hint="Texts the caller you'll call back later">
+          <span class="ico"><i class="bi bi-clock"></i></span>
+          Call back later
+        </button>
+        <button class="ca-btn cobalt"
+                data-action="confirmed" data-variant="text_reply"
+                data-hint="Sends your note above as an SMS reply">
+          <span class="ico"><i class="bi bi-chat-dots-fill"></i></span>
+          Reply by text
+        </button>
+      </div>
+    {% endif %}
+  </div>
 </div>
 
-<!-- Callback time chooser modal -->
-<dialog id="cbDlg" class="border-0 rounded-3 p-0" style="max-width:340px;">
-  <div class="p-4">
-    <h5 class="fw-bold mb-3">¿Cuándo lo llamamos?</h5>
-    <div class="d-grid gap-2">
-      <button class="btn btn-outline-primary" data-when="15min">En 15 minutos</button>
-      <button class="btn btn-outline-primary" data-when="1h">Dentro de una hora</button>
-      <button class="btn btn-outline-primary" data-when="tomorrow_am">Mañana por la mañana</button>
+{# Callback time chooser modal (only for "We'll call you" / "Call back later") #}
+<dialog id="cbDlg" style="border:none; padding:0; border-radius:18px; max-width:340px; background: var(--cream-50);">
+  <div style="padding: 22px;">
+    <h3 style="font: 700 16px 'Geist',sans-serif; margin-bottom: 14px;">When should we call back?</h3>
+    <div style="display: grid; gap: 8px;">
+      <button class="ca-btn neutral" data-when="15min">In 15 minutes</button>
+      <button class="ca-btn neutral" data-when="1h">Within the hour</button>
+      <button class="ca-btn neutral" data-when="tomorrow_am">Tomorrow morning</button>
     </div>
-    <div class="text-end mt-3">
-      <button class="btn btn-light" id="cbCancel">Cancelar</button>
-    </div>
-  </div>
-</dialog>
-
-<!-- Confirm modal -->
-<dialog id="confirmDlg" class="border-0 rounded-3 p-0" style="max-width:340px;">
-  <div class="p-4">
-    <p id="confirmText" class="mb-3"></p>
-    <div class="d-flex gap-2 justify-content-end">
-      <button id="confirmCancel" class="btn btn-light">Cancelar</button>
-      <button id="confirmOk"     class="btn btn-primary">Enviar SMS</button>
+    <div style="text-align: right; margin-top: 14px;">
+      <button class="ca-btn neutral" id="cbCancel" style="min-height: 38px; font-size: 13px;">Cancel</button>
     </div>
   </div>
 </dialog>
@@ -175,78 +661,98 @@
   const respondUrl = "{% url 'call_action_respond' restaurant.slug t.token %}";
   const resolveUrl = "{% url 'call_action_resolve' restaurant.slug t.token %}";
 
-  const cbDlg       = document.getElementById("cbDlg");
-  const confirmDlg  = document.getElementById("confirmDlg");
-  const confirmText = document.getElementById("confirmText");
-  const actionBtns  = document.querySelectorAll(".ca-btn");
+  const hintEl  = document.getElementById('actionHint');
+  const actionBtns = document.querySelectorAll('.ca-btn[data-action]');
+  const cbDlg   = document.getElementById('cbDlg');
+  const cbCancel = document.getElementById('cbCancel');
 
-  const labels = {
-    confirmed: "¿Enviar confirmación por SMS al cliente?",
-    declined:  "¿Enviar SMS de «sin disponibilidad»?",
-    callback:  "¿Enviar SMS de «te llamamos pronto»?",
-  };
+  // Default hint = primary's hint
+  const primary = document.querySelector('.ca-btn-primary');
+  function setHint(html) { hintEl.innerHTML = html || '&nbsp;'; }
+  if (primary && primary.dataset.hint) setHint(primary.dataset.hint);
 
   let pendingAction = null;
-  let pendingWhen   = "";
+  let pendingVariant = '';
+  let pendingWhen = '';
 
+  // Hover / focus → preview hint
   actionBtns.forEach(b => {
-    b.addEventListener("click", () => {
-      pendingAction = b.dataset.action;
-      pendingWhen   = "";
-      if (pendingAction === "callback") {
+    b.addEventListener('mouseenter', () => setHint(b.dataset.hint));
+    b.addEventListener('focus',      () => setHint(b.dataset.hint));
+    b.addEventListener('mouseleave', () => setHint(primary?.dataset.hint || ''));
+    b.addEventListener('blur',       () => setHint(primary?.dataset.hint || ''));
+  });
+
+  // Click — dispatch action
+  actionBtns.forEach(b => {
+    b.addEventListener('click', async (e) => {
+      pendingAction  = b.dataset.action;
+      pendingVariant = b.dataset.variant || '';
+      pendingWhen    = '';
+
+      // "Call now" — let the tel: link fire AND mark resolved server-side
+      if (b.id === 'callNowBtn') {
+        // Don't preventDefault — the <a tel:> opens the dialer
+        try {
+          const fd = new FormData();
+          fd.append('action', 'resolved');
+          fetch(respondUrl, { method: 'POST', body: fd, headers: { 'X-CSRFToken': csrf } });
+        } catch (e) { /* fire and forget */ }
+        return;
+      }
+
+      e.preventDefault();
+
+      // Callback flows want a time chooser
+      if (pendingAction === 'callback') {
         cbDlg.showModal();
         return;
       }
-      askConfirm();
+      await send();
     });
   });
 
-  cbDlg.addEventListener("click", (e) => {
+  cbDlg.addEventListener('click', (e) => {
     const w = e.target.dataset.when;
-    if (w) { pendingWhen = w; cbDlg.close(); askConfirm(); }
+    if (w) { pendingWhen = w; cbDlg.close(); send(); }
   });
-  document.getElementById("cbCancel").onclick = () => cbDlg.close();
+  if (cbCancel) cbCancel.onclick = () => cbDlg.close();
 
-  function askConfirm() {
-    confirmText.textContent = labels[pendingAction] || "Confirmar acción";
-    confirmDlg.showModal();
-  }
-  document.getElementById("confirmCancel").onclick = () => confirmDlg.close();
-  document.getElementById("confirmOk").onclick = async () => {
-    confirmDlg.close();
+  async function send() {
     actionBtns.forEach(b => b.disabled = true);
-
     const fd = new FormData();
-    fd.append("action", pendingAction);
-    fd.append("note", document.getElementById("noteField").value);
-    if (pendingWhen) fd.append("callback_when", pendingWhen);
-    const dateEl  = document.getElementById("rDate");
-    const timeEl  = document.getElementById("rTime");
-    const partyEl = document.getElementById("rParty");
-    if (dateEl && dateEl.value)  fd.append("date",  dateEl.value);
-    if (timeEl && timeEl.value)  fd.append("time",  timeEl.value);
-    if (partyEl && partyEl.value) fd.append("party", partyEl.value);
+    fd.append('action',  pendingAction);
+    fd.append('variant', pendingVariant);
+    fd.append('note',    document.getElementById('noteField').value);
+    if (pendingWhen) fd.append('callback_when', pendingWhen);
+
+    const dateEl  = document.getElementById('rDate');
+    const timeEl  = document.getElementById('rTime');
+    const partyEl = document.getElementById('rParty');
+    if (dateEl  && dateEl.value)  fd.append('date',  dateEl.value);
+    if (timeEl  && timeEl.value)  fd.append('time',  timeEl.value);
+    if (partyEl && partyEl.value) fd.append('party', partyEl.value);
 
     try {
-      const r = await fetch(respondUrl, {
-        method: "POST", body: fd,
-        headers: { "X-CSRFToken": csrf },
-      });
+      const r = await fetch(respondUrl, { method: 'POST', body: fd, headers: { 'X-CSRFToken': csrf } });
       if (r.ok) location.reload();
       else {
-        alert("Error al enviar. Intenta de nuevo.");
+        alert('Could not send. Please try again.');
         actionBtns.forEach(b => b.disabled = false);
       }
     } catch (e) {
-      alert("Error de red: " + e.message);
+      alert('Network error: ' + e.message);
       actionBtns.forEach(b => b.disabled = false);
     }
-  };
+  }
 
-  document.getElementById("resolveBtn").addEventListener("click", async () => {
-    if (!confirm("¿Marcar como resuelto sin enviar SMS al cliente?")) return;
-    const r = await fetch(resolveUrl, { method: "POST", headers: { "X-CSRFToken": csrf } });
-    if (r.ok) location.reload();
+  // "Already handled outside" → mark resolved
+  document.getElementById('resolveBtn').addEventListener('click', async () => {
+    if (!confirm("Mark resolved without texting the caller?")) return;
+    try {
+      const r = await fetch(resolveUrl, { method: 'POST', headers: { 'X-CSRFToken': csrf } });
+      if (r.ok) location.reload();
+    } catch (e) { /* ignore */ }
   });
 })();
 </script>

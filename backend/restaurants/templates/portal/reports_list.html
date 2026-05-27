@@ -1,112 +1,140 @@
-{% extends "portal/base.html" %}
+{% extends "portal/base_v2.html" %}
+{% load static %}
+
 {% block title %}Reports{% endblock %}
-{% block page_title %}Weekly Reports{% endblock %}
 {% block nav_reports %}active{% endblock %}
 
 {% block content %}
-<div class="mb-4 d-flex align-items-center justify-content-between flex-wrap gap-2">
-  <div>
-    <h4 class="fw-bold mb-1">Weekly Reports</h4>
-    <p class="text-muted small mb-0">Generated automatically every Monday at 8am.</p>
+
+{# ── Page head ─────────────────────────────────────────────────── #}
+<div class="v2-page-head">
+  <div class="v2-page-head-title">
+    <div class="label-tiny v2-page-head-eyebrow">Performance · Weekly</div>
+    <h1>Reports</h1>
   </div>
-  <div>
+
+  <span class="v2-chip">Generated every Monday · 8am</span>
+
+  <div class="v2-page-head-actions">
     {% if can_generate %}
-    <form method="post" action="{% url 'portal_generate_report' restaurant.slug %}">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-primary btn-sm">
-        <i class="bi bi-lightning-fill me-1"></i> Generate Now
-      </button>
-    </form>
+      <form method="post" action="{% url 'portal_generate_report' restaurant.slug %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-accent">
+          <i class="bi bi-lightning-fill"></i> Generate now
+        </button>
+      </form>
     {% else %}
-    <button class="btn btn-sm btn-outline-secondary" disabled>
-      <i class="bi bi-clock me-1"></i> Available in <span id="countdown">…</span>
-    </button>
-    <script>
-      (function () {
-        var until = new Date("{{ next_available_at|date:'c' }}");
-        var el = document.getElementById("countdown");
-        function tick() {
-          var diff = Math.max(0, until - Date.now());
-          var h = Math.floor(diff / 3600000);
-          var m = Math.floor((diff % 3600000) / 60000);
-          el.textContent = h > 0 ? h + "h " + m + "m" : m + "m";
-          if (diff > 0) setTimeout(tick, 30000);
-          else location.reload();
-        }
-        tick();
-      })();
-    </script>
+      <button class="btn" disabled style="opacity:.55;">
+        <i class="bi bi-clock"></i> Available in <span id="countdown">…</span>
+      </button>
+      <script>
+        (function () {
+          var until = new Date("{{ next_available_at|date:'c' }}");
+          var el = document.getElementById("countdown");
+          function tick() {
+            var diff = Math.max(0, until - Date.now());
+            var h = Math.floor(diff / 3600000);
+            var m = Math.floor((diff % 3600000) / 60000);
+            el.textContent = h > 0 ? h + "h " + m + "m" : m + "m";
+            if (diff > 0) setTimeout(tick, 30000);
+            else location.reload();
+          }
+          tick();
+        })();
+      </script>
     {% endif %}
   </div>
 </div>
 
 {% if reports %}
-<div class="card border-0 shadow-sm">
-  <div class="table-responsive">
-    <table class="table table-hover mb-0 align-middle">
-      <thead class="table-light">
-        <tr>
-          <th class="ps-3">Week</th>
-          <th>Total Calls</th>
-          <th>Real</th>
-          <th>Quality</th>
-          <th>KB Failures</th>
-          <th>Generated</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for report in reports %}
-        <tr>
-          <td class="ps-3 fw-semibold">
-            {{ report.week_start|date:"d M" }} – {{ report.week_end|date:"d M Y" }}
-          </td>
-          <td>{{ report.metrics.total_calls|default:"—" }}</td>
-          <td class="text-muted">{{ report.metrics.real_calls|default:"—" }}</td>
-          <td>
-            {% if report.metrics.call_quality %}
-              {% if report.metrics.call_quality.excellent %}
-                <span class="badge rounded-pill" style="background:#dcfce7;color:#166534;">{{ report.metrics.call_quality.excellent }}✓</span>
-              {% endif %}
-              {% if report.metrics.call_quality.good %}
-                <span class="badge rounded-pill" style="background:#dbeafe;color:#1e40af;">{{ report.metrics.call_quality.good }}~</span>
-              {% endif %}
-              {% if report.metrics.call_quality.poor %}
-                <span class="badge rounded-pill" style="background:#fee2e2;color:#991b1b;">{{ report.metrics.call_quality.poor }}✗</span>
-              {% endif %}
-            {% else %}
-              <span class="text-muted small">—</span>
-            {% endif %}
-          </td>
-          <td>
-            {% with failures=report.metrics.agent_failures %}
-              {% if failures.total %}
-                <span class="text-danger fw-semibold">{{ failures.total }}</span>
+  <div class="v2-reports-list">
+    {% for report in reports %}
+      {% with m=report.metrics %}
+        {% if report.status == "done" %}
+          <a href="{% url 'portal_reports_detail' restaurant.slug report.pk %}" class="v2-report-row">
+            <div class="v2-report-row-date">
+              <div class="range">
+                {{ report.week_start|date:"j M" }} – {{ report.week_end|date:"j M Y" }}
+              </div>
+              <div class="gen">
+                Generated {{ report.generated_at|date:"j M, H:i" }}
+              </div>
+            </div>
+
+            <div class="v2-report-row-stat">
+              <div class="v">{{ m.total_calls|default:0 }}</div>
+              <div class="l">Total</div>
+            </div>
+
+            <div class="v2-report-row-stat">
+              <div class="v">{{ m.real_calls|default:0 }}</div>
+              <div class="l">Real</div>
+            </div>
+
+            <div class="v2-report-row-stat {% if m.agent_failures.total %}danger{% else %}good{% endif %}">
+              <div class="v">{{ m.agent_failures.total|default:0 }}</div>
+              <div class="l">KB fails</div>
+            </div>
+
+            {% with q=m.call_quality %}
+              {% if q %}
+                {% with total=q.excellent|add:q.good|add:q.poor %}
+                  <div class="v2-report-row-quality">
+                    {% if total %}
+                      <div class="v2-qbar">
+                        <div class="seg-good" style="width: {% widthratio q.excellent|add:q.good total 100 %}%;"></div>
+                        <div class="seg-poor" style="width: {% widthratio q.poor total 100 %}%;"></div>
+                      </div>
+                      <div class="legend">
+                        <span class="ok">{{ q.excellent|add:q.good }} good</span>
+                        <span class="bad">{{ q.poor|default:0 }} poor</span>
+                      </div>
+                    {% else %}
+                      <div style="font: 300 11.5px 'Geist',sans-serif; color: var(--muted);">No quality data</div>
+                    {% endif %}
+                  </div>
+                {% endwith %}
               {% else %}
-                <span class="text-muted">0</span>
+                <div></div>
               {% endif %}
             {% endwith %}
-          </td>
-          <td class="text-muted small">{{ report.generated_at|date:"d M Y, H:i" }}</td>
-          <td class="text-end pe-3">
-            <a href="{% url 'portal_reports_detail' restaurant.slug report.pk %}" class="btn btn-sm btn-outline-primary">
-              Ver <i class="bi bi-arrow-right"></i>
-            </a>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
 
+            <div class="v2-report-row-arrow">Open →</div>
+          </a>
+        {% else %}
+          {# pending or failed — render as non-link row #}
+          <div class="v2-report-row" style="opacity: {% if report.status == 'failed' %}.7{% else %}1{% endif %};">
+            <div class="v2-report-row-date">
+              <div class="range">
+                {{ report.week_start|date:"j M" }} – {{ report.week_end|date:"j M Y" }}
+              </div>
+              <div class="gen">
+                {% if report.status == "pending" %}Generating…{% else %}Generation failed{% endif %}
+              </div>
+            </div>
+            <div></div><div></div><div></div>
+            <div></div>
+            <div class="v2-report-row-arrow">
+              {% if report.status == "pending" %}
+                <span class="v2-report-row-status">⏳ Pending</span>
+              {% else %}
+                <span class="v2-report-row-status failed">✕ Failed</span>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+      {% endwith %}
+    {% endfor %}
+  </div>
 {% else %}
-<div class="text-center py-5 text-muted">
-  <i class="bi bi-bar-chart fs-1 d-block mb-3 opacity-25"></i>
-  <p class="mb-1">No weekly reports yet.</p>
-  <p class="small">Reports are generated automatically every Monday at 8am.<br>
-    Or click <strong>Generate Now</strong> above to create one right now.</p>
-</div>
+  <div class="v2-empty" style="padding: 80px 20px;">
+    <i class="bi bi-bar-chart"></i>
+    <p>No weekly reports yet.</p>
+    <p style="font-size:12px;">
+      Reports are generated automatically every Monday at 8am.
+      {% if can_generate %}Or click <strong>Generate now</strong> above to create one right now.{% endif %}
+    </p>
+  </div>
 {% endif %}
 
 {% endblock %}

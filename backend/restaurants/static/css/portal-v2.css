@@ -1563,6 +1563,1200 @@ p  { margin: 0; }
 .v2-breadcrumb .current { color: var(--ink); }
 
 /* ────────────────────────────────────────────────────────────
+   NOTIFICATIONS (notifications.html)
+   Channel-led panel: Email + Push hero cards, alert types list,
+   collapsible Operator card, sticky save footer.
+   ──────────────────────────────────────────────────────────── */
+
+/* Toggle (used on cards and per-alert rows) */
+.v2-toggle {
+  appearance: none; -webkit-appearance: none;
+  display: inline-block;
+  width: 40px; height: 22px;
+  border-radius: 99px;
+  background: rgba(0, 0, 0, 0.14);
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .15s;
+  outline: none;
+  border: none;
+  vertical-align: middle;
+}
+.v2-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 18px; height: 18px;
+  border-radius: 99px;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
+  transition: left .15s;
+}
+.v2-toggle:checked { background: var(--accent); }
+.v2-toggle:checked::after { left: 20px; }
+
+/* Channel hero grid (Email + Push side by side) */
+.v2-notif-channels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+@media (max-width: 900px) { .v2-notif-channels { grid-template-columns: 1fr; } }
+
+.v2-notif-channel {
+  position: relative;
+  padding: 22px;
+  border-radius: 24px;
+  overflow: hidden;
+  border: 1px solid var(--warm-line);
+  background: rgba(255, 252, 248, 0.70);
+  box-shadow: var(--shadow-soft);
+  transition: background .2s, box-shadow .2s, color .2s, border-color .2s;
+}
+.v2-notif-channel.active {
+  background: linear-gradient(135deg, #4361ee 0%, #1f3fc3 70%, #173098 100%);
+  border-color: transparent;
+  color: white;
+  box-shadow: 0 16px 40px -14px rgba(31, 63, 195, 0.45);
+}
+.v2-notif-channel.active::after {
+  content: '';
+  position: absolute; right: -80px; top: -80px;
+  width: 240px; height: 240px;
+  border-radius: 99px;
+  background: rgba(199, 210, 255, 0.40);
+  filter: blur(30px);
+  pointer-events: none;
+}
+.v2-notif-channel > * { position: relative; z-index: 1; }
+.v2-notif-channel-head {
+  display: flex; align-items: flex-start; gap: 14px;
+}
+.v2-notif-channel-icon {
+  width: 42px; height: 42px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--warm-line);
+  color: var(--ink-soft);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.v2-notif-channel.active .v2-notif-channel-icon {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.30);
+  color: white;
+}
+.v2-notif-channel-title {
+  font: 700 17px 'Geist', sans-serif; letter-spacing: -.02em;
+}
+.v2-notif-channel-sub {
+  font: 300 12.5px 'Geist', sans-serif;
+  color: var(--muted-strong);
+  margin-top: 2px;
+}
+.v2-notif-channel.active .v2-notif-channel-sub { color: rgba(255, 255, 255, 0.82); }
+.v2-notif-channel-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 14px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--warm-line);
+}
+.v2-notif-channel.active .v2-notif-channel-row {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.v2-notif-channel-row .pre {
+  font: 500 12px 'Geist Mono', monospace;
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+.v2-notif-channel-row input {
+  flex: 1;
+  border: none; outline: none; background: transparent;
+  font: 500 13px 'Geist Mono', monospace;
+  color: inherit;
+}
+.v2-notif-channel-row .badge {
+  font: 600 10.5px 'Geist', sans-serif;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+.v2-notif-channel-status {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(46, 111, 62, 0.10);
+  border: 1px solid rgba(46, 111, 62, 0.18);
+  font: 500 12.5px 'Geist', sans-serif;
+  color: #2e6f3e;
+  width: 100%;
+}
+.v2-notif-channel-status .dot { width: 8px; height: 8px; border-radius: 99px; background: #2e6f3e; }
+.v2-notif-channel-status.warn   { background: rgba(217, 119, 6, 0.10); border-color: rgba(217, 119, 6, 0.18); color: #92400e; }
+.v2-notif-channel-status.warn .dot   { background: #d97706; }
+.v2-notif-channel-status.danger { background: rgba(220, 38, 38, 0.08); border-color: rgba(220, 38, 38, 0.20); color: #991b1b; }
+.v2-notif-channel-status.danger .dot { background: #b91c1c; }
+.v2-notif-channel-status .meta { margin-left: auto; font: 500 10.5px 'Geist Mono', monospace; color: var(--muted); }
+.v2-notif-channel-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+/* Alert types list card */
+.v2-notif-alerts {
+  padding: 22px;
+  margin-bottom: 18px;
+}
+.v2-notif-alerts h2 { font-size: 18px; }
+.v2-notif-alerts-head {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 4px;
+}
+.v2-notif-alerts-sub {
+  font: 300 13px 'Geist', sans-serif;
+  color: var(--muted-strong);
+  margin-bottom: 14px;
+}
+.v2-notif-alert-list {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.v2-notif-alert-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 13px 16px;
+  border-radius: 16px;
+  background: rgba(255, 252, 248, 0.70);
+  border: 1px solid var(--warm-line);
+  transition: opacity .15s, background .15s;
+}
+.v2-notif-alert-row.off { opacity: 0.55; background: rgba(0, 0, 0, 0.02); }
+.v2-notif-alert-row.urgent {
+  border-color: rgba(220, 38, 38, 0.20);
+}
+.v2-notif-alert-swatch {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.v2-notif-alert-swatch.res     { background: rgba(31, 63, 195, 0.10); color: var(--accent-deep); }
+.v2-notif-alert-swatch.comp    { background: rgba(220, 38, 38, 0.10);  color: #b91c1c; }
+.v2-notif-alert-swatch.follow  { background: rgba(217, 119, 6, 0.12);  color: #92400e; }
+.v2-notif-alert-swatch.biz     { background: rgba(0, 0, 0, 0.06);      color: var(--ink-soft); }
+.v2-notif-alert-swatch.digest  { background: rgba(46, 111, 62, 0.10);  color: #2e6f3e; }
+.v2-notif-alert-meta { flex: 1; min-width: 0; }
+.v2-notif-alert-name {
+  display: flex; align-items: center; gap: 8px;
+  font: 600 14px 'Geist', sans-serif; letter-spacing: -.015em;
+}
+.v2-notif-alert-desc {
+  font: 300 12.5px 'Geist', sans-serif;
+  color: var(--muted-strong);
+  margin-top: 2px;
+}
+
+/* Operator section (collapsible) */
+.v2-notif-op {
+  padding: 20px;
+  margin-bottom: 18px;
+}
+.v2-notif-op-head {
+  display: flex; align-items: center; gap: 14px;
+}
+.v2-notif-op-body {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--warm-line);
+}
+.v2-notif-op-emailrow {
+  display: grid; grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 14px;
+}
+.v2-notif-op-emailrow input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: white;
+  border: 1px solid var(--warm-line-strong);
+  font: 500 13px 'Geist Mono', monospace;
+  color: var(--ink);
+  outline: none;
+}
+.v2-notif-op-emailrow input:focus {
+  border-color: rgba(31, 63, 195, 0.45);
+  box-shadow: 0 0 0 3px rgba(31, 63, 195, 0.10);
+}
+.v2-notif-op-chiprow { display: flex; flex-wrap: wrap; gap: 8px; }
+.v2-notif-op-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 13px;
+  border-radius: 99px;
+  background: white;
+  color: var(--ink-soft);
+  border: 1px solid var(--warm-line-strong);
+  cursor: pointer;
+  font: 500 12.5px 'Geist', sans-serif;
+  user-select: none;
+}
+.v2-notif-op-chip.on {
+  background: var(--ink);
+  color: white;
+  border-color: var(--ink);
+}
+.v2-notif-op-chip input { display: none; }
+.v2-notif-op-chip .glyph { font-size: 12px; opacity: 0.9; }
+
+/* Sticky save footer */
+.v2-notif-footer {
+  position: sticky; bottom: 0;
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px;
+  border-radius: 18px;
+  background: rgba(255, 252, 248, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--warm-line);
+  box-shadow: var(--shadow-soft);
+}
+.v2-notif-footer .info {
+  font: 300 12.5px 'Geist', sans-serif;
+  color: var(--muted-strong);
+}
+.v2-notif-footer .info strong { color: var(--ink); font-weight: 600; }
+.v2-notif-footer .actions { margin-left: auto; display: flex; gap: 8px; }
+
+/* ────────────────────────────────────────────────────────────
+   ACCOUNT (account.html)
+   Direction A · classic split — identity strip + email/password
+   side-by-side cards + team panel below.
+   ──────────────────────────────────────────────────────────── */
+
+/* Identity strip */
+.v2-account-identity {
+  display: flex; align-items: center; gap: 16px;
+  padding: 18px 22px;
+  margin-bottom: 18px;
+}
+.v2-account-identity-main { flex: 1; min-width: 0; }
+.v2-account-identity-name {
+  font: 700 17px 'Geist', sans-serif; letter-spacing: -.02em;
+}
+.v2-account-identity-sub {
+  font: 500 12.5px 'Geist Mono', monospace;
+  color: var(--muted-strong);
+  margin-top: 2px;
+}
+.v2-account-identity-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Two-card row + cards */
+.v2-account-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
+  margin-bottom: 18px;
+}
+@media (max-width: 900px) { .v2-account-row { grid-template-columns: 1fr; } }
+
+.v2-account-card {
+  padding: 24px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.v2-account-card-head {
+  display: flex; align-items: center; gap: 12px;
+}
+.v2-account-card-icon {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 17px;
+  flex-shrink: 0;
+}
+.v2-account-card-icon.email  { background: rgba(31, 63, 195, 0.10);  color: var(--accent-deep); }
+.v2-account-card-icon.lock   { background: rgba(0, 0, 0, 0.06);      color: var(--ink-soft); }
+.v2-account-card-title h3 { font-size: 16px; line-height: 1.2; }
+.v2-account-card-title-sub {
+  font: 300 12.5px 'Geist', sans-serif;
+  color: var(--muted-strong);
+  margin-top: 1px;
+}
+
+.v2-account-current {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.03);
+  display: flex; align-items: center; gap: 10px;
+}
+.v2-account-current .mono {
+  font: 500 13px 'Geist Mono', monospace;
+}
+
+.v2-account-field { display: flex; flex-direction: column; gap: 6px; }
+.v2-account-field label.label-tiny { display: block; }
+.v2-account-field input {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: white;
+  border: 1px solid var(--warm-line-strong);
+  font: 500 13.5px 'Geist', sans-serif;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.v2-account-field input.mono { font-family: 'Geist Mono', monospace; }
+.v2-account-field input:focus {
+  border-color: rgba(31, 63, 195, 0.45);
+  box-shadow: 0 0 0 3px rgba(31, 63, 195, 0.10);
+}
+.v2-account-field .help {
+  font: 300 11.5px 'Geist', sans-serif;
+  color: var(--muted);
+}
+.v2-account-field .field-error {
+  font: 500 11.5px 'Geist', sans-serif;
+  color: #991b1b;
+}
+
+/* Inline informative banner (cobalt-tinted) */
+.v2-account-info {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(31, 63, 195, 0.07);
+  border: 1px solid rgba(31, 63, 195, 0.15);
+  font: 300 12px 'Geist', sans-serif;
+  color: var(--accent-deep);
+  display: flex; gap: 8px; align-items: flex-start;
+}
+.v2-account-info .ico { flex-shrink: 0; font-size: 13px; line-height: 1.3; }
+
+/* Password strength meter */
+.v2-pw-meter { display: flex; gap: 4px; height: 4px; }
+.v2-pw-meter .seg {
+  flex: 1; border-radius: 99px;
+  background: rgba(0, 0, 0, 0.08);
+  transition: background .2s;
+}
+.v2-pw-meter[data-score="1"] .seg:nth-child(-n+1) { background: #b91c1c; }
+.v2-pw-meter[data-score="2"] .seg:nth-child(-n+2) { background: #d97706; }
+.v2-pw-meter[data-score="3"] .seg:nth-child(-n+3) { background: #c79500; }
+.v2-pw-meter[data-score="4"] .seg                  { background: #2e7d3a; }
+
+.v2-pw-meter-row {
+  display: flex; justify-content: space-between; margin-top: 6px;
+}
+.v2-pw-meter-row .label,
+.v2-pw-meter-row .score {
+  font: 500 11px 'Geist Mono', monospace;
+}
+.v2-pw-meter-row .label { color: var(--muted-strong); }
+.v2-pw-meter-row .score { font-weight: 600; }
+.v2-pw-meter-row .score.s1 { color: #b91c1c; }
+.v2-pw-meter-row .score.s2 { color: #d97706; }
+.v2-pw-meter-row .score.s3 { color: #c79500; }
+.v2-pw-meter-row .score.s4 { color: #2e7d3a; }
+
+/* Requirements checklist grid */
+.v2-pw-reqs {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.025);
+  border: 1px solid var(--warm-line);
+}
+.v2-pw-req {
+  display: flex; align-items: center; gap: 8px;
+  font: 500 12px 'Geist', sans-serif;
+  color: var(--muted-strong);
+}
+.v2-pw-req .dot {
+  width: 14px; height: 14px; border-radius: 99px;
+  background: rgba(0, 0, 0, 0.06);
+  color: transparent;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 9px;
+  flex-shrink: 0;
+}
+.v2-pw-req.met { color: var(--ink-soft); }
+.v2-pw-req.met .dot { background: #2e7d3a; color: white; }
+
+.v2-account-card-submit { align-self: flex-start; margin-top: auto; }
+
+/* Team section */
+.v2-account-team {
+  padding: 24px;
+}
+.v2-account-team-head {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 14px;
+}
+.v2-account-team-head h2 { font-size: 18px; }
+.v2-account-operator {
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(255, 252, 248, 0.65);
+  border: 1px solid var(--warm-line);
+  display: grid; grid-template-columns: 1fr auto;
+  gap: 16px; align-items: center;
+}
+@media (max-width: 700px) {
+  .v2-account-operator { grid-template-columns: 1fr; }
+}
+.v2-account-operator-main {
+  display: flex; align-items: center; gap: 14px; min-width: 0;
+}
+.v2-account-operator-name {
+  display: flex; align-items: center; gap: 8px;
+  font: 600 14.5px 'Geist', sans-serif;
+}
+.v2-account-operator-meta {
+  font: 500 12px 'Geist Mono', monospace;
+  color: var(--muted-strong); margin-top: 2px;
+}
+.v2-account-operator-actions {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.v2-account-perm-toggle {
+  display: inline-flex; align-items: center; gap: 8px;
+  cursor: pointer;
+  font: 500 12.5px 'Geist', sans-serif;
+  color: var(--ink-soft);
+}
+.v2-account-perm-toggle input { display: none; }
+.v2-account-perm-toggle .cbx {
+  width: 18px; height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid rgba(0, 0, 0, 0.18);
+  background: white;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  color: transparent;
+}
+.v2-account-perm-toggle input:checked + .cbx {
+  background: var(--accent); border-color: var(--accent); color: white;
+}
+
+/* Add-operator inline form (when no operator yet) */
+.v2-account-add-op {
+  padding: 18px;
+  border-radius: 16px;
+  background: var(--cream-50);
+  border: 1px solid var(--warm-line);
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+.v2-account-add-op .full { grid-column: 1 / -1; }
+.v2-account-add-op label.label-tiny { display: block; margin-bottom: 5px; }
+.v2-account-add-op input {
+  width: 100%;
+  padding: 9px 14px;
+  border-radius: 12px;
+  background: white;
+  border: 1px solid var(--warm-line);
+  font: 500 13px 'Geist', sans-serif; letter-spacing: -.005em;
+  color: var(--ink);
+  outline: none;
+}
+.v2-account-add-op input:focus {
+  border-color: rgba(31, 63, 195, 0.45);
+  box-shadow: 0 0 0 3px rgba(31, 63, 195, 0.10);
+}
+
+/* ────────────────────────────────────────────────────────────
+   WEEKLY REPORT (reports_detail.html)
+   Direction B · issue-first, mixed with A's stat tiles
+   ──────────────────────────────────────────────────────────── */
+
+/* Page eyebrow + h1 (date range) + generation meta */
+.v2-report-head {
+  margin-bottom: 22px;
+}
+.v2-report-crumbs {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 8px;
+  font: 600 11px 'Geist', sans-serif;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted-strong);
+}
+.v2-report-crumbs a { color: var(--muted-strong); text-decoration: none; }
+.v2-report-crumbs a:hover { color: var(--accent); }
+.v2-report-crumbs .sep { color: var(--muted); }
+.v2-report-head h1 { font-size: 30px; }
+.v2-report-meta {
+  font: 500 12px 'Geist Mono', monospace;
+  color: var(--muted-strong);
+  margin-top: 6px;
+}
+.v2-report-head-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* 4-tile stat row (Total / Real / Reservations / KB failures) */
+.v2-report-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+  margin-bottom: 14px;
+}
+@media (max-width: 900px) { .v2-report-stats { grid-template-columns: repeat(2, 1fr); } }
+
+.v2-report-stat {
+  padding: 18px;
+  border-radius: 20px;
+  position: relative;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-soft);
+}
+.v2-report-stat.accent {
+  background: linear-gradient(135deg, rgba(31, 63, 195, 0.10), rgba(199, 210, 255, 0.45));
+  border-color: rgba(31, 63, 195, 0.20);
+}
+.v2-report-stat-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.v2-report-stat .label { font: 600 10.5px 'Geist', sans-serif; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.v2-report-stat.accent .label { color: var(--accent-deep); }
+.v2-report-stat .delta { font: 500 10.5px 'Geist Mono', monospace; }
+.v2-report-stat .delta.up   { color: #2e7d3a; }
+.v2-report-stat .delta.down { color: #b91c1c; }
+.v2-report-stat .delta.flat { color: var(--muted); }
+.v2-report-stat .value {
+  font: 900 36px 'Geist', sans-serif; letter-spacing: -.04em; line-height: 1;
+  color: var(--ink);
+}
+.v2-report-stat.accent .value { color: var(--accent-deep); }
+.v2-report-stat .sub {
+  font: 300 11.5px 'Geist', sans-serif; color: var(--muted-strong); margin-top: 6px;
+}
+
+/* Quality bar + avg call + extras row */
+.v2-report-quality {
+  display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 28px;
+  align-items: center;
+  padding: 20px 22px;
+  margin-bottom: 18px;
+}
+@media (max-width: 900px) { .v2-report-quality { grid-template-columns: 1fr; } }
+
+.v2-qbar {
+  height: 8px; border-radius: 99px;
+  background: rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  display: flex;
+}
+.v2-qbar .seg-good { background: #2e7d3a; }
+.v2-qbar .seg-poor { background: #b91c1c; }
+.v2-qbar-legend {
+  display: flex; gap: 16px; margin-top: 10px;
+  font: 500 12px 'Geist', sans-serif;
+}
+.v2-qbar-legend .dot { width: 8px; height: 8px; border-radius: 99px; display: inline-block; }
+
+.v2-report-quality .stat-col { border-left: 1px solid var(--warm-line); padding-left: 28px; }
+.v2-report-quality .stat-col .label { font: 600 10.5px 'Geist',sans-serif; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.v2-report-quality .stat-col .v {
+  display: flex; align-items: baseline; gap: 8px; margin-top: 6px;
+  font: 900 30px 'Geist',sans-serif; letter-spacing: -.035em; line-height: 1;
+}
+.v2-report-quality .stat-col .v .unit { font: 500 12px 'Geist Mono',monospace; color: var(--muted-strong); }
+.v2-report-quality .stat-col .hint { font: 500 11.5px 'Geist',sans-serif; margin-top: 4px; }
+.v2-report-quality .stat-col .hint.good { color: #2e7d3a; }
+.v2-report-quality .stat-col .hint.bad  { color: #b91c1c; }
+
+/* Two-column analysis grid */
+.v2-report-grid {
+  display: grid; grid-template-columns: 1.1fr 1fr; gap: 18px;
+  margin-bottom: 22px;
+}
+@media (max-width: 1100px) { .v2-report-grid { grid-template-columns: 1fr; } }
+
+.v2-report-card {
+  padding: 22px;
+}
+.v2-report-card-head {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+}
+.v2-report-card-head h2 { font-size: 18px; }
+.v2-report-card-head .iconbox {
+  width: 28px; height: 28px; border-radius: 8px;
+  background: rgba(31, 63, 195, 0.10); color: var(--accent-deep);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 14px;
+}
+
+/* Markdown narrative styling */
+.v2-report-md {
+  font: 400 14px 'Geist', sans-serif; color: var(--ink-soft);
+  line-height: 1.65;
+}
+.v2-report-md h1, .v2-report-md h2, .v2-report-md h3 {
+  color: var(--ink);
+  margin: 1.2em 0 .4em;
+  letter-spacing: -.02em;
+  line-height: 1.2;
+}
+.v2-report-md h1 { font-size: 18px; font-weight: 700; }
+.v2-report-md h2 {
+  font-size: 15px; font-weight: 700;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--warm-line);
+}
+.v2-report-md h3 { font-size: 13.5px; font-weight: 600; color: var(--accent-deep); }
+.v2-report-md p { margin: 0 0 .8em; }
+.v2-report-md ul, .v2-report-md ol { padding-left: 1.25em; margin: 0 0 .8em; }
+.v2-report-md li { margin-bottom: .25em; }
+.v2-report-md strong { color: var(--ink); font-weight: 600; }
+.v2-report-md em { color: var(--ink); }
+.v2-report-md code {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font: 500 12px 'Geist Mono', monospace;
+}
+.v2-report-md blockquote {
+  margin: .8em 0;
+  padding: 8px 14px;
+  border-left: 3px solid var(--accent);
+  background: rgba(31, 63, 195, 0.04);
+  color: var(--ink);
+  font-style: normal;
+}
+.v2-report-md hr {
+  border: none; border-top: 1px solid var(--warm-line);
+  margin: 1.2em 0;
+}
+
+/* Calls table (week_calls) */
+.v2-report-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font: 400 13px 'Geist', sans-serif;
+}
+.v2-report-table thead th {
+  text-align: left;
+  font: 600 10.5px 'Geist',sans-serif; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted);
+  padding: 14px 18px;
+  background: rgba(255, 255, 252, 0.5);
+  border-bottom: 1px solid var(--warm-line);
+}
+.v2-report-table tbody td {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--warm-line);
+  color: var(--ink-soft);
+  vertical-align: top;
+}
+.v2-report-table tbody tr:last-child td { border-bottom: none; }
+.v2-report-table .mono { font: 500 12px 'Geist Mono', monospace; color: var(--muted-strong); }
+.v2-report-table .caller-unknown { color: var(--muted); }
+.v2-report-table .reason {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font: 500 11px 'Geist Mono', monospace;
+}
+.v2-report-table .reason.reservation   { background: rgba(46, 125, 58, 0.10); color: #2e7d3a; }
+.v2-report-table .reason.private_event { background: rgba(199, 149, 0, 0.13); color: #806000; }
+.v2-report-table .reason.complaint     { background: rgba(220, 38, 38, 0.10);  color: #b91c1c; }
+.v2-report-table .reason.hours,
+.v2-report-table .reason.parking       { background: rgba(0, 0, 0, 0.05); color: var(--ink-soft); }
+.v2-report-table .reason.non_customer  { background: rgba(0, 0, 0, 0.04); color: var(--muted-strong); }
+.v2-report-table .reason.other         { background: rgba(31, 63, 195, 0.08); color: var(--accent-deep); }
+.v2-report-table .qpill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: 99px;
+  font: 600 10.5px 'Geist',sans-serif;
+}
+.v2-report-table .qpill .dot { width: 6px; height: 6px; border-radius: 99px; }
+.v2-report-table .qpill.good     { background: rgba(46, 125, 58, 0.10); color: #2e7d3a; }
+.v2-report-table .qpill.good .dot { background: #2e7d3a; }
+.v2-report-table .qpill.poor     { background: rgba(220, 38, 38, 0.10); color: #b91c1c; }
+.v2-report-table .qpill.poor .dot { background: #b91c1c; }
+.v2-report-table .qpill.flat     { background: rgba(0, 0, 0, 0.05); color: var(--muted); }
+.v2-report-table .qpill.flat .dot { background: var(--muted); }
+.v2-report-table .question { font-style: italic; color: #b91c1c; max-width: 360px; }
+
+/* Operational alert banner (red-tinted) */
+.v2-report-alert {
+  display: flex; align-items: center; gap: 18px;
+  padding: 18px 22px;
+  margin-bottom: 18px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.08), rgba(220, 38, 38, 0.03));
+  border: 1px solid rgba(220, 38, 38, 0.18);
+}
+.v2-report-alert .ico {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  background: rgba(220, 38, 38, 0.12);
+  color: #b91c1c;
+  display: inline-flex; align-items: center; justify-content: center;
+  font: 700 22px 'Geist',sans-serif;
+  flex-shrink: 0;
+}
+.v2-report-alert .body { flex: 1; min-width: 0; }
+.v2-report-alert .meta-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 4px;
+}
+.v2-report-alert .tag {
+  font: 600 10px 'Geist',sans-serif;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: rgba(220, 38, 38, 0.12);
+  color: #991b1b;
+}
+.v2-report-alert .title {
+  font: 600 16px 'Geist', sans-serif; letter-spacing: -.015em;
+  color: var(--ink);
+}
+.v2-report-alert .hint {
+  font: 300 12.5px 'Geist', sans-serif;
+  color: var(--muted-strong); margin-top: 4px;
+}
+
+/* Pull-quote (TL;DR at top of weekly analysis) */
+.v2-report-quote {
+  font: 500 15px 'Geist', sans-serif; letter-spacing: -.012em;
+  line-height: 1.5;
+  color: var(--ink);
+  padding-left: 14px;
+  border-left: 3px solid var(--accent);
+  margin-bottom: 18px;
+}
+
+/* Numbered analysis sections (01 02 03 04) */
+.v2-report-sections { display: flex; flex-direction: column; gap: 16px; }
+.v2-report-section {
+  display: grid; grid-template-columns: 32px 1fr;
+  gap: 12px;
+}
+.v2-report-section .num {
+  font: 700 10.5px 'Geist Mono', monospace;
+  color: var(--accent-deep);
+  padding-top: 3px;
+}
+.v2-report-section .heading {
+  font: 600 13.5px 'Geist', sans-serif;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.v2-report-section .body.v2-report-md {
+  font-size: 12.75px;
+  line-height: 1.6;
+  color: var(--muted-strong);
+}
+.v2-report-section .body.v2-report-md p { margin-bottom: .5em; }
+.v2-report-section .body.v2-report-md strong { color: var(--ink); }
+.v2-report-section .body.v2-report-md ul,
+.v2-report-section .body.v2-report-md ol { margin: .25em 0 .5em; padding-left: 1.1em; }
+
+/* KB gap card (severity + title + body + suggestion block) */
+.v2-kb-gap {
+  padding: 14px;
+  margin-bottom: 10px;
+}
+.v2-kb-gap:last-child { margin-bottom: 0; }
+.v2-kb-gap-head {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 6px;
+}
+.v2-kb-gap-sev {
+  width: 8px; height: 8px; border-radius: 99px;
+  flex-shrink: 0;
+  display: inline-block;
+}
+.v2-kb-gap-sev.high { background: #b91c1c; }
+.v2-kb-gap-sev.med  { background: #d97706; }
+.v2-kb-gap-sev.low  { background: var(--muted); }
+.v2-kb-gap-title {
+  font: 600 13.5px 'Geist', sans-serif; letter-spacing: -.015em;
+  color: var(--ink);
+  flex: 1; min-width: 0;
+}
+.v2-kb-gap-body.v2-report-md {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--muted-strong);
+}
+.v2-kb-gap-body.v2-report-md code,
+.v2-kb-gap-body.v2-report-md pre {
+  display: block;
+  background: rgba(46, 125, 58, 0.06);
+  border: 1px solid rgba(46, 125, 58, 0.18);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 6px 0;
+  font: 500 12px 'Geist Mono', monospace;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.v2-kb-gap-body.v2-report-md pre code {
+  background: transparent;
+  border: none;
+  padding: 0; margin: 0;
+  display: inline;
+}
+.v2-kb-gap-body.v2-report-md strong { color: var(--ink); }
+
+/* Green "Sugerencia del agente" block inside KB-gap cards */
+.v2-kb-suggestion {
+  background: rgba(46, 125, 58, 0.06);
+  border: 1px solid rgba(46, 125, 58, 0.18);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-top: 10px;
+}
+.v2-kb-suggestion .label {
+  font: 600 10px 'Geist', sans-serif;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: #2e7d3a;
+  display: block;
+  margin-bottom: 4px;
+}
+.v2-kb-suggestion .text {
+  font: 400 12.5px 'Geist', sans-serif;
+  font-style: italic;
+  color: var(--ink-soft);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+/* ────────────────────────────────────────────────────────────
+   BILLING (billing.html) — Direction C · side-by-side refined
+   ──────────────────────────────────────────────────────────── */
+
+.v2-bill-cards {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
+  margin-bottom: 18px;
+}
+@media (max-width: 900px) { .v2-bill-cards { grid-template-columns: 1fr; } }
+
+.v2-bill-card {
+  padding: 26px;
+  display: flex; flex-direction: column;
+}
+
+.v2-bill-head {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 6px;
+}
+.v2-bill-head h3 { font-size: 16px; }
+.v2-bill-head .status {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 11px;
+  border-radius: 99px;
+  font: 600 11px 'Geist', sans-serif; letter-spacing: -.005em;
+}
+.v2-bill-head .status .dot { width: 6px; height: 6px; border-radius: 99px; }
+.v2-bill-head .status.mint  { background: rgba(46,125,58,0.10); color: #2e7d3a; }
+.v2-bill-head .status.mint .dot  { background: #2e7d3a; }
+.v2-bill-head .status.amber { background: rgba(217,119,6,0.12); color: #92400e; }
+.v2-bill-head .status.amber .dot { background: #d97706; }
+.v2-bill-head .status.danger{ background: rgba(220,38,38,0.10); color: #991b1b; }
+.v2-bill-head .status.danger .dot{ background: #b91c1c; }
+.v2-bill-head .status.soft  { background: rgba(0,0,0,0.05); color: var(--muted-strong); }
+.v2-bill-head .status.soft .dot  { background: var(--muted-strong); }
+
+.v2-bill-desc {
+  font: 300 13px 'Geist', sans-serif;
+  color: var(--muted-strong);
+}
+
+.v2-bill-hero {
+  display: flex; align-items: baseline; gap: 10px;
+  margin-top: 14px;
+}
+.v2-bill-hero .v {
+  font: 900 48px 'Geist', sans-serif; letter-spacing: -.04em; line-height: 1;
+}
+.v2-bill-hero .v.danger { color: #b91c1c; }
+.v2-bill-hero .sub {
+  font: 300 13.5px 'Geist', sans-serif;
+  color: var(--muted-strong);
+}
+.v2-bill-hero .sub strong { color: var(--ink); font-weight: 600; }
+
+/* Inner panel inside cards (benefits list / sparkline) */
+.v2-bill-inner {
+  margin-top: 18px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.50);
+  border: 1px solid var(--warm-line);
+}
+.v2-bill-inner .label-tiny { display: block; margin-bottom: 10px; }
+.v2-bill-benefits {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+}
+.v2-bill-benefit {
+  display: flex; align-items: center; gap: 8px;
+  font: 400 12.5px 'Geist', sans-serif;
+  color: var(--ink-soft);
+}
+.v2-bill-benefit .tick {
+  width: 14px; height: 14px; border-radius: 99px;
+  background: rgba(46,125,58,0.12); color: #2e7d3a;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700;
+  flex-shrink: 0;
+}
+
+.v2-bill-spark {
+  width: 100%;
+  height: 70px;
+  display: block;
+}
+.v2-bill-spark .area { fill: rgba(31,63,195,0.12); stroke: none; }
+.v2-bill-spark .line {
+  fill: none; stroke: var(--accent); stroke-width: 1.5;
+  stroke-linecap: round; stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.v2-bill-spark .dot { fill: var(--accent-deep); }
+
+.v2-bill-spark-meta {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 4px;
+}
+.v2-bill-spark-meta .label-tiny { margin: 0; }
+.v2-bill-spark-meta .stats {
+  font: 500 11px 'Geist Mono', monospace;
+  color: var(--muted-strong);
+}
+
+/* Status band (mint / amber tinted, bottom of card) */
+.v2-bill-band {
+  margin-top: auto;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font: 400 12.5px 'Geist', sans-serif;
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 12px;
+}
+.v2-bill-band.mint {
+  background: rgba(46,125,58,0.07); border: 1px solid rgba(46,125,58,0.18); color: #2e7d3a;
+}
+.v2-bill-band.amber {
+  background: rgba(217,119,6,0.10); border: 1px solid rgba(217,119,6,0.22); color: #92400e;
+}
+.v2-bill-band.danger {
+  background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.20); color: #991b1b;
+}
+.v2-bill-band strong { color: var(--ink); font-weight: 600; }
+
+/* Footer actions row inside cards */
+.v2-bill-actions { display: flex; gap: 8px; }
+.v2-bill-actions .btn { flex: 1; justify-content: center; }
+.v2-bill-actions .btn.shrink { flex: 0 0 auto; }
+
+/* Top-up preset buttons + custom input + Top up */
+.v2-bill-topup { display: flex; gap: 8px; align-items: stretch; }
+.v2-bill-preset {
+  flex: 0.65;
+  padding: 10px 0;
+  border-radius: 99px;
+  border: 1px solid var(--warm-line-strong);
+  background: white;
+  color: var(--ink);
+  font: 600 13px 'Geist', sans-serif;
+  cursor: pointer;
+  transition: background .15s;
+}
+.v2-bill-preset:hover { background: rgba(0, 0, 0, 0.03); }
+.v2-bill-preset.on {
+  background: var(--ink); color: white; border-color: var(--ink);
+}
+.v2-bill-amount-wrap { position: relative; flex: 1; }
+.v2-bill-amount-wrap .pre {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  font: 500 13px 'Geist Mono', monospace; color: var(--muted);
+}
+.v2-bill-amount {
+  width: 100%; height: 40px;
+  padding-left: 26px; padding-right: 14px;
+  border-radius: 99px;
+  border: 1px solid var(--warm-line-strong);
+  background: white;
+  font: 500 13px 'Geist Mono', monospace; color: var(--ink);
+  outline: none;
+}
+.v2-bill-amount:focus {
+  border-color: rgba(31, 63, 195, 0.45);
+  box-shadow: 0 0 0 3px rgba(31, 63, 195, 0.10);
+}
+
+/* Expenses table */
+.v2-bill-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font: 400 13px 'Geist', sans-serif;
+}
+.v2-bill-table thead th {
+  text-align: left;
+  font: 600 10.5px 'Geist',sans-serif; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted);
+  padding: 12px 22px;
+  background: rgba(255, 255, 252, 0.5);
+  border-bottom: 1px solid var(--warm-line);
+}
+.v2-bill-table tbody td {
+  padding: 10px 22px;
+  border-bottom: 1px solid var(--warm-line);
+  color: var(--ink-soft);
+  font: 500 13px 'Geist Mono', monospace;
+}
+.v2-bill-table tbody tr:last-child td { border-bottom: none; }
+.v2-bill-table td.num { text-align: right; }
+.v2-bill-table td.cost { font-weight: 600; color: var(--ink); }
+.v2-bill-table .voice-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 9px;
+  border-radius: 99px;
+  font: 500 10.5px 'Geist',sans-serif;
+  background: rgba(0,0,0,0.04); color: var(--muted-strong);
+}
+
+/* Weekly reports list — glass-row layout (one row per report) */
+.v2-reports-list {
+  display: flex; flex-direction: column;
+  gap: 10px;
+}
+.v2-report-row {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(3, 80px) 160px 80px;
+  align-items: center;
+  gap: 18px;
+  padding: 16px 20px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid var(--warm-line);
+  text-decoration: none;
+  color: var(--ink);
+  transition: background .15s, box-shadow .15s, transform .15s;
+}
+.v2-report-row:hover {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 4px 14px -6px rgba(56, 36, 12, 0.12);
+}
+@media (max-width: 900px) {
+  .v2-report-row { grid-template-columns: 1fr; }
+  .v2-report-row .v2-report-row-stat { display: flex; justify-content: space-between; }
+}
+.v2-report-row-date {
+  display: flex; flex-direction: column; gap: 3px;
+  min-width: 0;
+}
+.v2-report-row-date .range {
+  font: 600 14.5px 'Geist', sans-serif; letter-spacing: -.015em;
+}
+.v2-report-row-date .gen {
+  font: 500 11px 'Geist Mono', monospace;
+  color: var(--muted);
+}
+.v2-report-row-stat {
+  text-align: right;
+}
+.v2-report-row-stat .v {
+  font: 900 22px 'Geist', sans-serif;
+  letter-spacing: -.03em;
+  line-height: 1;
+  color: var(--ink);
+}
+.v2-report-row-stat .l {
+  font: 600 10px 'Geist', sans-serif;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted-strong);
+  margin-top: 4px;
+}
+.v2-report-row-stat.danger .v { color: #b91c1c; }
+.v2-report-row-stat.good   .v { color: #2e7d3a; }
+
+.v2-report-row-quality {
+  display: flex; flex-direction: column; gap: 5px;
+}
+.v2-report-row-quality .v2-qbar { height: 6px; }
+.v2-report-row-quality .legend {
+  display: flex; gap: 8px;
+  font: 500 10.5px 'Geist Mono', monospace;
+  color: var(--muted);
+}
+.v2-report-row-quality .legend .ok { color: #2e7d3a; }
+.v2-report-row-quality .legend .bad { color: #b91c1c; }
+
+.v2-report-row-arrow {
+  text-align: right;
+  font: 600 14px 'Geist', sans-serif;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.v2-report-row:hover .v2-report-row-arrow { color: var(--accent-deep); }
+
+.v2-report-row-status {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 10px;
+  border-radius: 99px;
+  font: 600 10.5px 'Geist', sans-serif;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  background: rgba(217, 119, 6, 0.10);
+  color: #92400e;
+}
+.v2-report-row-status.failed { background: rgba(220, 38, 38, 0.10); color: #991b1b; }
+
+/* Red critical-callers strip at the bottom of the analysis card */
+.v2-critical-strip {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 18px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(220, 38, 38, 0.05);
+  border: 1px solid rgba(220, 38, 38, 0.18);
+}
+.v2-critical-strip .sev {
+  width: 8px; height: 8px; border-radius: 99px;
+  background: #b91c1c;
+  flex-shrink: 0;
+}
+.v2-critical-strip .text {
+  flex: 1; min-width: 0;
+  font: 400 12.5px 'Geist', sans-serif; line-height: 1.4;
+  color: var(--ink-soft);
+}
+.v2-critical-strip .text strong { color: var(--ink); font-weight: 600; }
+
+/* Loading / failed states */
+.v2-report-state {
+  padding: 60px 20px;
+  text-align: center;
+}
+.v2-report-state .spinner {
+  width: 32px; height: 32px;
+  border: 3px solid rgba(31, 63, 195, 0.15);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  margin: 0 auto 16px;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Danger button variant */
+.btn-danger {
+  background: #fee2e2;
+  border-color: rgba(153, 27, 27, 0.20);
+  color: #991b1b;
+}
+.btn-danger:hover {
+  background: #fecaca;
+  color: #7f1d1d;
+}
+
+/* ────────────────────────────────────────────────────────────
    DASHBOARD (dashboard.html)
    Hero banner, KPI cards with sparklines, heatmap, ROI,
    bars / topic table / recent reservations

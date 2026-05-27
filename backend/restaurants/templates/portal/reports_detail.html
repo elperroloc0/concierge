@@ -1,212 +1,423 @@
-{% extends "portal/base.html" %}
-{% block title %}Report {{ report.week_start|date:"d M Y" }}{% endblock %}
-{% block page_title %}Weekly Report{% endblock %}
-{% block nav_reports %}active{% endblock %}
+{% extends "portal/base_v2.html" %}
+{% load static %}
 
-{% block extra_head %}
-<style>
-.report-narrative h2 {
-  font-size: 1rem; font-weight: 700;
-  margin: 1.4rem 0 0.4rem; color: #111827;
-  padding-bottom: 0.25rem; border-bottom: 1px solid #f3f4f6;
-}
-.report-narrative h3 {
-  font-size: 0.92rem; font-weight: 700;
-  margin: 1.1rem 0 0.3rem; color: #374151;
-}
-.report-narrative p { margin-bottom: 0.6rem; font-size: 0.93rem; line-height: 1.65; color: #374151; }
-.report-narrative ul, .report-narrative ol { padding-left: 1.3rem; margin-bottom: 0.75rem; }
-.report-narrative li { font-size: 0.93rem; line-height: 1.6; color: #374151; margin-bottom: 0.15rem; }
-.report-narrative strong { color: #111827; }
-.report-narrative hr { margin: 1rem 0; border-color: #e5e7eb; }
-.report-narrative blockquote {
-  margin: 0.5rem 0; padding: 0.5rem 1rem;
-  border-left: 3px solid #e5e7eb; color: #6b7280;
-  font-size: 0.9rem;
-}
-</style>
-{% endblock %}
+{% block title %}Report {{ report.week_start|date:"d M Y" }}{% endblock %}
+{% block nav_reports %}active{% endblock %}
 
 {% block content %}
 
-<!-- Breadcrumb + actions -->
-<div class="mb-4 d-flex align-items-center justify-content-between flex-wrap gap-2">
-  <div>
-    <a href="{% url 'portal_reports_list' restaurant.slug %}" class="text-muted small text-decoration-none">
-      <i class="bi bi-arrow-left me-1"></i> Reports
-    </a>
-    <h4 class="fw-bold mb-0 mt-1">
-      {{ report.week_start|date:"d M" }} – {{ report.week_end|date:"d M Y" }}
-    </h4>
-    <p class="text-muted small mb-0">
-      Generated {{ report.generated_at|date:"d M Y, H:i" }}
+{# ── Page head ─────────────────────────────────────────────────── #}
+<div class="v2-page-head v2-report-head">
+  <div style="flex:1;">
+    <div class="v2-report-crumbs">
+      <a href="{% url 'portal_reports_list' restaurant.slug %}">← Reports</a>
+      <span class="sep">·</span>
+      <span>Weekly · {{ restaurant.name }}</span>
+    </div>
+    <h1>{{ report.week_start|date:"j M" }} — {{ report.week_end|date:"j M Y" }}</h1>
+    {% if report.status == "done" %}
+      <div class="v2-report-meta">
+        Generated {{ report.generated_at|date:"D j M, H:i" }}
+        {% if report.model_used %} · {{ report.model_used }}{% endif %}
+        {% if report.generation_cost %} · ${{ report.generation_cost|floatformat:4 }}{% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="v2-report-head-actions">
+    {% if prev_report %}
+      <a href="{% url 'portal_reports_detail' restaurant.slug prev_report.pk %}" class="btn btn-sm">‹ Prev</a>
+    {% else %}
+      <button class="btn btn-sm" disabled style="opacity:.45;">‹ Prev</button>
+    {% endif %}
+    {% if next_report %}
+      <a href="{% url 'portal_reports_detail' restaurant.slug next_report.pk %}" class="btn btn-sm">Next ›</a>
+    {% else %}
+      <button class="btn btn-sm" disabled style="opacity:.45;">Next ›</button>
+    {% endif %}
+    {% if report.status == "done" %}
+      <a href="?export=csv" class="btn btn-sm">↓ Export CSV</a>
+    {% endif %}
+  </div>
+</div>
+
+{# ── States ───────────────────────────────────────────────────── #}
+{% if report.status == "pending" %}
+  <div class="v2-report-state glass">
+    <div class="spinner"></div>
+    <h2 style="font-size:16px;">Generating report…</h2>
+    <p style="font: 300 12.5px 'Geist',sans-serif; color:var(--muted-strong); margin-top:4px;">
+      This usually takes 30–60 seconds. The page will refresh automatically.
     </p>
   </div>
-  {% if report.status == "done" %}
-  <a href="?export=csv" class="btn btn-sm btn-outline-secondary">
-    <i class="bi bi-download me-1"></i> Export CSV
-  </a>
-  {% endif %}
-</div>
+  <script>
+    (function poll() {
+      fetch("{% url 'portal_report_status' restaurant.slug report.pk %}")
+        .then(r => r.json())
+        .then(d => d.status === "pending" ? setTimeout(poll, 4000) : location.reload())
+        .catch(() => setTimeout(poll, 6000));
+    })();
+  </script>
 
-{% if report.status == "pending" %}
-<div class="text-center py-5">
-  <div class="spinner-border text-primary mb-3" role="status" style="width:2.5rem;height:2.5rem;">
-    <span class="visually-hidden">Loading...</span>
-  </div>
-  <p class="fw-semibold mb-1">Generating report…</p>
-  <p class="text-muted small">This usually takes 30–60 seconds. The page will refresh automatically.</p>
-</div>
-<script>
-  (function poll() {
-    fetch("{% url 'portal_report_status' restaurant.slug report.pk %}")
-      .then(r => r.json())
-      .then(data => {
-        if (data.status === "pending") {
-          setTimeout(poll, 4000);
-        } else {
-          location.reload();
-        }
-      })
-      .catch(() => setTimeout(poll, 6000));
-  })();
-</script>
 {% elif report.status == "failed" %}
-<div class="alert alert-danger">
-  <i class="bi bi-exclamation-triangle me-2"></i>
-  La generación del reporte falló. Por favor, intenta de nuevo desde la lista de reportes.
-</div>
+  <div class="v2-alert" style="margin-bottom:14px;">
+    Report generation failed. You can retry from the
+    <a href="{% url 'portal_reports_list' restaurant.slug %}" style="color: var(--accent);">reports list</a>.
+  </div>
+
 {% else %}
 
-<!-- Stat cards -->
-<div class="row g-3 mb-4">
-  <div class="col-6 col-md-3">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-body text-center">
-        <p class="display-6 fw-bold mb-0">{{ report.metrics.total_calls|default:"0" }}</p>
-        <p class="text-muted small mb-0 text-uppercase">Total Calls</p>
+{# ── Operational alert (when issues detected) ──────────────── #}
+{% if alert %}
+  <div class="v2-report-alert">
+    <div class="ico">!</div>
+    <div class="body">
+      <div class="meta-row">
+        <span class="tag">{{ alert.tag }}</span>
+        <span style="font: 500 11px 'Geist Mono',monospace; color: var(--muted-strong);">
+          {{ report.week_start|date:"j M" }} – {{ report.week_end|date:"j M" }}
+        </span>
       </div>
+      <div class="title">{{ alert.title }}</div>
+      <div class="hint">{{ alert.hint }}</div>
     </div>
   </div>
-  <div class="col-6 col-md-3">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-body text-center">
-        <p class="display-6 fw-bold mb-0 text-primary">{{ report.metrics.real_calls|default:"0" }}</p>
-        <p class="text-muted small mb-0 text-uppercase">Real Calls</p>
-      </div>
-    </div>
-  </div>
-  <div class="col-6 col-md-3">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-body text-center">
-        <p class="display-6 fw-bold mb-0 text-info">{{ report.metrics.reservations|default:"0" }}</p>
-        <p class="text-muted small mb-0 text-uppercase">Reservations</p>
-      </div>
-    </div>
-  </div>
-  <div class="col-6 col-md-3">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-body text-center">
-        <p class="display-6 fw-bold mb-0 text-danger">{{ report.metrics.agent_failures.total|default:"0" }}</p>
-        <p class="text-muted small mb-0 text-uppercase">KB Failures</p>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Quality breakdown pills -->
-{% if report.metrics.call_quality %}
-<div class="mb-4">
-  <p class="text-uppercase small fw-semibold text-muted mb-2">Agent Quality</p>
-  <div class="d-flex flex-wrap gap-2">
-    {% if report.metrics.call_quality.excellent %}
-    <span class="badge rounded-pill px-3 py-2 fs-6" style="background:#dcfce7;color:#166534;">
-      {{ report.metrics.call_quality.excellent }} excellent
-    </span>
-    {% endif %}
-    {% if report.metrics.call_quality.good %}
-    <span class="badge rounded-pill px-3 py-2 fs-6" style="background:#dbeafe;color:#1e40af;">
-      {{ report.metrics.call_quality.good }} good
-    </span>
-    {% endif %}
-    {% if report.metrics.call_quality.poor %}
-    <span class="badge rounded-pill px-3 py-2 fs-6" style="background:#fee2e2;color:#991b1b;">
-      {{ report.metrics.call_quality.poor }} poor
-    </span>
-    {% endif %}
-  </div>
-</div>
 {% endif %}
 
-<!-- Owner summary — rendered as markdown -->
-{% if report.owner_summary %}
-<div class="card border-0 shadow-sm mb-4">
-  <div class="card-body">
-    <p class="text-uppercase small fw-semibold text-muted mb-3">Weekly Analysis</p>
-    <div id="owner-summary-md" class="report-narrative"></div>
+{# ── 4-tile stats row ───────────────────────────────────────── #}
+<div class="v2-report-stats">
+  {# Total calls #}
+  <div class="v2-report-stat">
+    <div class="v2-report-stat-head">
+      <span class="label">Total calls</span>
+      {% if wow.total_calls is not None %}
+        <span class="delta {% if wow.total_calls > 0 %}up{% elif wow.total_calls < 0 %}down{% else %}flat{% endif %}">
+          {% if wow.total_calls > 0 %}+{% endif %}{{ wow.total_calls }} wow
+        </span>
+      {% endif %}
+    </div>
+    <div class="value">{{ report.metrics.total_calls|default:0 }}</div>
+    <div class="sub">incl. spam/test</div>
+  </div>
+
+  {# Real calls — accent #}
+  <div class="v2-report-stat accent">
+    <div class="v2-report-stat-head">
+      <span class="label">Real calls</span>
+      {% if wow.real_calls is not None %}
+        <span class="delta {% if wow.real_calls > 0 %}up{% elif wow.real_calls < 0 %}down{% else %}flat{% endif %}">
+          {% if wow.real_calls > 0 %}+{% endif %}{{ wow.real_calls }} wow
+        </span>
+      {% endif %}
+    </div>
+    <div class="value">{{ report.metrics.real_calls|default:0 }}</div>
+    <div class="sub">answered by agent</div>
+  </div>
+
+  {# Reservations #}
+  <div class="v2-report-stat">
+    <div class="v2-report-stat-head">
+      <span class="label">Reservations</span>
+      {% if wow.reservations is not None %}
+        <span class="delta {% if wow.reservations > 0 %}up{% elif wow.reservations < 0 %}down{% else %}flat{% endif %}">
+          {% if wow.reservations > 0 %}+{% endif %}{{ wow.reservations }} wow
+        </span>
+      {% endif %}
+    </div>
+    <div class="value">{{ report.metrics.reservations|default:0 }}</div>
+    <div class="sub">confirmed via agent</div>
+  </div>
+
+  {# KB failures #}
+  <div class="v2-report-stat">
+    <div class="v2-report-stat-head">
+      <span class="label">KB failures</span>
+      {% if wow.kb_failures is not None %}
+        <span class="delta {% if wow.kb_failures < 0 %}up{% elif wow.kb_failures > 0 %}down{% else %}flat{% endif %}">
+          {% if wow.kb_failures > 0 %}+{% endif %}{{ wow.kb_failures }} wow
+        </span>
+      {% endif %}
+    </div>
+    <div class="value">{{ report.metrics.agent_failures.total|default:0 }}</div>
+    <div class="sub">unanswered questions</div>
   </div>
 </div>
-{{ report.owner_summary|json_script:"owner-md-raw" }}
-<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
-<script>
-  document.getElementById("owner-summary-md").innerHTML =
-    marked.parse(JSON.parse(document.getElementById("owner-md-raw").textContent));
-</script>
-{% endif %}
 
-<!-- Call quality table -->
+{# ── Quality + Avg call + Sentiment row ──────────────────────── #}
+{% with q=report.metrics.call_quality %}
+{% if q.excellent or q.good or q.poor or avg_call_label %}
+  <div class="v2-report-quality glass">
+    <div>
+      <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+        <span class="label" style="font: 600 10.5px 'Geist',sans-serif; letter-spacing:0.08em; text-transform:uppercase; color: var(--muted);">
+          Agent quality this week
+        </span>
+        <span class="mono" style="font: 500 11px 'Geist Mono',monospace; color: var(--muted);">
+          {{ q.excellent|add:q.good|add:q.poor }} rated
+        </span>
+      </div>
+      {% with total=q.excellent|add:q.good|add:q.poor %}
+        {% if total %}
+          <div class="v2-qbar">
+            <div class="seg-good" style="width: {% widthratio q.excellent|add:q.good total 100 %}%;"></div>
+            <div class="seg-poor" style="width: {% widthratio q.poor total 100 %}%;"></div>
+          </div>
+        {% endif %}
+        <div class="v2-qbar-legend">
+          <span style="display:inline-flex; align-items:center; gap:6px;">
+            <span class="dot" style="background:#2e7d3a;"></span>
+            <strong style="color:#2e7d3a;">{{ q.excellent|add:q.good|default:0 }}</strong>
+            <span style="color:var(--muted-strong);">excellent / good</span>
+          </span>
+          <span style="display:inline-flex; align-items:center; gap:6px;">
+            <span class="dot" style="background:#b91c1c;"></span>
+            <strong style="color:#b91c1c;">{{ q.poor|default:0 }}</strong>
+            <span style="color:var(--muted-strong);">poor</span>
+          </span>
+        </div>
+      {% endwith %}
+    </div>
+
+    {% if transfer_success %}
+      <div class="stat-col">
+        <div class="label">Transfer success</div>
+        <div class="v"
+             style="color: {% if transfer_success.pct >= 80 %}#2e7d3a{% elif transfer_success.pct >= 60 %}#92400e{% else %}#b91c1c{% endif %};">
+          {{ transfer_success.pct }}%<span class="unit">{{ transfer_success.ok }} of {{ transfer_success.total }}</span>
+        </div>
+        <div class="hint {% if transfer_success.pct >= 80 %}good{% else %}bad{% endif %}">
+          {% if transfer_success.pct >= 80 %}Healthy{% else %}{{ report.metrics.unnecessary_transfers|default:0 }} unnecessary{% endif %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if avg_call_label %}
+      <div class="stat-col">
+        <div class="label">Avg call length</div>
+        <div class="v">{{ avg_call_label }}<span class="unit">min</span></div>
+        <div class="hint good">Healthy range</div>
+      </div>
+    {% endif %}
+  </div>
+{% endif %}
+{% endwith %}
+
+{# ── Two-column: Weekly analysis + KB updates ─────────────── #}
+<div class="v2-report-grid">
+
+  {# Weekly analysis — structured intro + numbered sections #}
+  <div class="v2-report-card glass-deep">
+    <div class="v2-report-card-head">
+      <span class="iconbox">✦</span>
+      <h2>Weekly analysis</h2>
+      <span class="v2-chip v2-chip-soft" style="font-size:10px;">Generated by AI</span>
+    </div>
+
+    {% if owner_parsed.intro %}
+      <div class="v2-report-quote" id="ownerIntroMd"></div>
+    {% endif %}
+
+    {% if owner_parsed.sections %}
+      <div class="v2-report-sections" id="ownerSections">
+        {% for s in owner_parsed.sections %}
+          <div class="v2-report-section" data-md-idx="{{ forloop.counter0 }}">
+            <div class="num">{{ s.n }}</div>
+            <div>
+              <div class="heading">{{ s.heading }}</div>
+              <div class="body v2-report-md"></div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% elif not owner_parsed.intro %}
+      <div style="font: 300 13px 'Geist',sans-serif; color: var(--muted-strong);">
+        No narrative analysis was generated for this report.
+      </div>
+    {% endif %}
+
+    {# Critical-callers strip — calls still flagged for follow-up this week #}
+    {% if critical_callers %}
+      <div class="v2-critical-strip">
+        <span class="sev"></span>
+        <span class="text">
+          <strong>{{ critical_callers|length }} caller{{ critical_callers|length|pluralize }} critical{{ critical_callers|length|pluralize:",es" }}</strong>
+          {{ critical_callers|length|pluralize:"is,are" }} still waiting for a follow-up —
+          {% for c in critical_callers %}{% spaceless %}
+            {% if c.caller_name %}{{ c.caller_name }}{% elif c.caller_phone %}{{ c.caller_phone }}{% else %}Unknown{% endif %}
+            {% if c.call_reason %}({{ c.call_reason }}){% endif %}
+          {% endspaceless %}{% if not forloop.last %}, {% endif %}{% endfor %}.
+        </span>
+        <a href="{% url 'portal_calls' restaurant.slug %}?tab=needs_action" class="btn btn-sm btn-accent">View calls</a>
+      </div>
+    {% endif %}
+
+    {# JSON blobs consumed by the marked.js renderer in extra_scripts #}
+    {{ owner_parsed.intro|json_script:"ownerIntroRaw" }}
+    {{ owner_parsed.sections|json_script:"ownerSectionsRaw" }}
+  </div>
+
+  {# Knowledge Base updates — structured cards per issue #}
+  <div class="v2-report-card glass-deep">
+    <div class="v2-report-card-head">
+      <span class="iconbox" style="background: rgba(217, 119, 6, 0.12); color: #92400e;">✎</span>
+      <h2>Knowledge base updates</h2>
+      {% if kb_items %}
+        <span class="v2-chip v2-chip-warn" style="font-size:10px;">{{ kb_items|length }} gap{{ kb_items|length|pluralize }}</span>
+      {% endif %}
+    </div>
+
+    {% if kb_items %}
+      <div id="kbItems">
+        {% for it in kb_items %}
+          <div class="v2-kb-gap paper" data-md-idx="{{ forloop.counter0 }}">
+            <div class="v2-kb-gap-head">
+              <span class="v2-kb-gap-sev {{ it.sev }}"></span>
+              <span class="v2-kb-gap-title">{{ it.title }}</span>
+              <a href="{% url 'portal_kb' restaurant.slug %}"
+                 class="btn btn-sm" style="font-size:11px; padding:4px 10px;">
+                Open KB →
+              </a>
+            </div>
+            <div class="v2-kb-gap-body v2-report-md"></div>
+            {% if it.suggestion %}
+              <div class="v2-kb-suggestion">
+                <span class="label">Sugerencia del agente</span>
+                <div class="text">"{{ it.suggestion }}"</div>
+              </div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      {{ kb_items|json_script:"kbItemsRaw" }}
+    {% elif report.metrics.unanswered_questions %}
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        {% for q in report.metrics.unanswered_questions %}
+          <div class="v2-kb-gap paper">
+            <div class="v2-kb-gap-head">
+              <span class="v2-kb-gap-sev med"></span>
+              <span class="v2-kb-gap-title">Unanswered question</span>
+            </div>
+            <div class="v2-kb-gap-body" style="font-style: italic;">"{{ q }}"</div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div style="font: 300 13px 'Geist',sans-serif; color: var(--muted-strong);">
+        No knowledge-base gaps detected for this week.
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ── All calls table ─────────────────────────────────────────── #}
 {% if week_calls %}
-<div class="card border-0 shadow-sm mb-4">
-  <div class="card-header bg-white border-bottom">
-    <p class="mb-0 fw-semibold small text-uppercase text-muted">Calls This Week</p>
-  </div>
-  <div class="table-responsive">
-    <table class="table table-hover table-sm mb-0 align-middle">
-      <thead class="table-light">
+  <div class="glass" style="padding:0; overflow:hidden; margin-bottom: 18px;">
+    <div style="padding: 16px 22px; display:flex; align-items:center; gap:10px; border-bottom: 1px solid var(--warm-line);">
+      <h3 style="font-size:16px;">All calls</h3>
+      <span class="v2-chip v2-chip-soft">{{ week_calls|length }} this week</span>
+    </div>
+    <table class="v2-report-table">
+      <thead>
         <tr>
-          <th class="ps-3">Time</th>
-          <th>Caller</th>
-          <th>Reason</th>
-          <th>Quality</th>
-          <th>Unanswered Question</th>
+          <th style="width:130px;">Time</th>
+          <th style="width:170px;">Caller</th>
+          <th style="width:130px;">Reason</th>
+          <th style="width:100px;">Quality</th>
+          <th>Unanswered question</th>
         </tr>
       </thead>
       <tbody>
-        {% for detail in week_calls %}
-        <tr>
-          <td class="ps-3 text-muted small text-nowrap">
-            {{ detail.call_event.created_at|date:"d M, H:i" }}
-          </td>
-          <td class="small">
-            {% if detail.caller_name %}{{ detail.caller_name }}{% else %}<span class="text-muted">Unknown</span>{% endif %}
-          </td>
-          <td class="small text-muted">{{ detail.call_reason|default:"—" }}</td>
-          <td>
-            {% with q=detail.call_signals.call_quality %}
-              {% if q == "excellent" %}
-                <span class="badge" style="background:#dcfce7;color:#166534;">excellent</span>
-              {% elif q == "good" %}
-                <span class="badge" style="background:#dbeafe;color:#1e40af;">good</span>
-              {% elif q == "poor" %}
-                <span class="badge" style="background:#fee2e2;color:#991b1b;">poor</span>
+        {% for d in week_calls %}
+          <tr>
+            <td class="mono">{{ d.call_event.created_at|date:"j M · H:i" }}</td>
+            <td>
+              {% if d.caller_name %}
+                {{ d.caller_name }}
               {% else %}
-                <span class="text-muted">—</span>
+                <span class="caller-unknown">Unknown</span>
               {% endif %}
-            {% endwith %}
-          </td>
-          <td class="small text-muted" style="max-width:260px;">
-            {% with uq=detail.call_signals.unanswered_question %}
-              {% if uq %}<span class="text-danger fst-italic">"{{ uq|truncatechars:80 }}"</span>{% else %}—{% endif %}
-            {% endwith %}
-          </td>
-        </tr>
+            </td>
+            <td>
+              {% if d.call_reason %}
+                <span class="reason {{ d.call_reason }}">{{ d.call_reason }}</span>
+              {% else %}
+                <span class="caller-unknown">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% with q=d.call_signals.call_quality %}
+                {% if q == "excellent" or q == "good" %}
+                  <span class="qpill good"><span class="dot"></span>{{ q }}</span>
+                {% elif q == "poor" %}
+                  <span class="qpill poor"><span class="dot"></span>poor</span>
+                {% else %}
+                  <span class="qpill flat"><span class="dot"></span>—</span>
+                {% endif %}
+              {% endwith %}
+            </td>
+            <td>
+              {% with uq=d.call_signals.unanswered_question %}
+                {% if uq %}
+                  <span class="question">"{{ uq|truncatechars:120 }}"</span>
+                {% else %}
+                  <span class="caller-unknown">—</span>
+                {% endif %}
+              {% endwith %}
+            </td>
+          </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-</div>
 {% endif %}
 
 {% endif %}{# end status == "done" #}
+{% endblock %}
 
+{% block extra_scripts %}
+{% if report.status == "done" %}
+<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+<script>
+  // Inline-only renderer for the intro pull-quote (strips outer <p>)
+  function renderInline(md) {
+    if (!md || !window.marked) return md || '';
+    const html = window.marked.parse(md);
+    return html.replace(/^<p>/, '').replace(/<\/p>\s*$/, '');
+  }
+
+  // Intro pull-quote — render the AI's lead-in as inline text
+  (function () {
+    const introEl  = document.getElementById('ownerIntroMd');
+    const introRaw = document.getElementById('ownerIntroRaw');
+    if (introEl && introRaw) {
+      const md = JSON.parse(introRaw.textContent);
+      introEl.innerHTML = renderInline(md);
+    }
+  })();
+
+  // Numbered analysis sections — each section's body renders from the JSON blob
+  (function () {
+    const rawEl = document.getElementById('ownerSectionsRaw');
+    if (!rawEl || !window.marked) return;
+    const sections = JSON.parse(rawEl.textContent) || [];
+    document.querySelectorAll('#ownerSections .v2-report-section').forEach((el) => {
+      const idx = parseInt(el.dataset.mdIdx, 10);
+      const body = el.querySelector('.body');
+      if (body && sections[idx]) body.innerHTML = window.marked.parse(sections[idx].body_md || '');
+    });
+  })();
+
+  // KB gap cards — render each card body from JSON blob
+  (function () {
+    const rawEl = document.getElementById('kbItemsRaw');
+    if (!rawEl || !window.marked) return;
+    const items = JSON.parse(rawEl.textContent) || [];
+    document.querySelectorAll('#kbItems .v2-kb-gap').forEach((el) => {
+      const idx = parseInt(el.dataset.mdIdx, 10);
+      const body = el.querySelector('.v2-kb-gap-body');
+      if (body && items[idx]) body.innerHTML = window.marked.parse(items[idx].body_md || '');
+    });
+  })();
+</script>
+{% endif %}
 {% endblock %}

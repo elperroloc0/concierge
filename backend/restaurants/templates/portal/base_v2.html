@@ -58,6 +58,10 @@
         {% elif balance_status == "warning" %}<span class="v2-sidebar-dot dot-warn"></span>
         {% endif %}
       </a>
+      <a class="v2-sidebar-item {% block nav_notifications %}{% endblock %}" href="{% url 'portal_notifications' restaurant.slug %}">
+        <span class="v2-sidebar-icon"><i class="bi bi-bell-fill"></i></span>
+        <span>Notifications</span>
+      </a>
       {% endif %}
       <a class="v2-sidebar-item {% block nav_account %}{% endblock %}" href="{% url 'portal_account' restaurant.slug %}">
         <span class="v2-sidebar-icon"><i class="bi bi-person-fill"></i></span>
