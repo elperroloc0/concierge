@@ -2220,13 +2220,29 @@ def _format_kb_topic(kb, topic: str, restaurant=None, lang: str = "en") -> str:
     return "\n".join(lines) if lines else "No information available for this topic."
 
 
+def _verify_retell_signature(raw: str, sig: str, restaurant) -> bool:
+    """Verify the x-retell-signature header against a restaurant's Retell API key."""
+    if not sig or not restaurant or not restaurant.retell_api_key:
+        return False
+    try:
+        return Retell(api_key=restaurant.retell_api_key).verify(
+            raw, restaurant.retell_api_key, sig
+        )
+    except Exception:
+        logger.exception("retell signature verify error")
+        return False
+
+
 @csrf_exempt
 def retell_tool_get_info(request):
     """Retell custom tool — fetches a specific KB section on demand."""
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
+
+    raw = request.body.decode("utf-8")
+    sig = request.headers.get("x-retell-signature", "")
     try:
-        data = json.loads(request.body)
+        data = json.loads(raw)
     except json.JSONDecodeError:
         return JsonResponse({"result": "error: invalid json"}, status=400)
 
@@ -2238,6 +2254,10 @@ def retell_tool_get_info(request):
     if not restaurant:
         logger.warning("retell_tool_get_info | Unknown number: %r", to_number)
         return JsonResponse({"result": "Restaurant info not available."})
+
+    if not _verify_retell_signature(raw, sig, restaurant):
+        logger.warning("retell_tool_get_info | Invalid signature | restaurant=%s", restaurant.slug)
+        return JsonResponse({"detail": "invalid signature"}, status=401)
 
     kb = getattr(restaurant, "knowledge_base", None)
     if not kb:
@@ -2259,8 +2279,11 @@ def retell_tool_get_caller_profile(request):
     """
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
+
+    raw = request.body.decode("utf-8")
+    sig = request.headers.get("x-retell-signature", "")
     try:
-        data = json.loads(request.body)
+        data = json.loads(raw)
     except json.JSONDecodeError:
         return JsonResponse({"result": "error: invalid json"}, status=400)
 
@@ -2274,6 +2297,10 @@ def retell_tool_get_caller_profile(request):
     restaurant = Restaurant.objects.filter(retell_phone_number=to_number, is_active=True).first()
     if not restaurant:
         return JsonResponse({"result": "Restaurant not found."})
+
+    if not _verify_retell_signature(raw, sig, restaurant):
+        logger.warning("retell_tool_get_caller_profile | Invalid signature | restaurant=%s", restaurant.slug)
+        return JsonResponse({"detail": "invalid signature"}, status=401)
 
     try:
         mem = CallerMemory.objects.get(phone=from_number, restaurant=restaurant)
@@ -2463,8 +2490,10 @@ def retell_tool_send_sms(request):
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
 
+    raw = request.body.decode("utf-8")
+    sig = request.headers.get("x-retell-signature", "")
     try:
-        data = json.loads(request.body)
+        data = json.loads(raw)
     except json.JSONDecodeError:
         return JsonResponse({"result": "error: invalid json"}, status=400)
 
@@ -2480,6 +2509,13 @@ def retell_tool_send_sms(request):
     restaurant = Restaurant.objects.select_related("knowledge_base").filter(
         retell_phone_number=to_retell, is_active=True
     ).first()
+    if not restaurant:
+        return JsonResponse({"result": "error: unknown restaurant"}, status=404)
+
+    if not _verify_retell_signature(raw, sig, restaurant):
+        logger.warning("retell_tool_send_sms | Invalid signature | restaurant=%s", restaurant.slug)
+        return JsonResponse({"detail": "invalid signature"}, status=401)
+
     kb         = getattr(restaurant, "knowledge_base", None)
     call_id    = call.get("call_id")
     call_event = (
@@ -2645,8 +2681,11 @@ def retell_tool_resolve_date(request):
     """Retell custom tool — resolves a relative date phrase to an actual calendar date."""
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
+
+    raw = request.body.decode("utf-8")
+    sig = request.headers.get("x-retell-signature", "")
     try:
-        data = json.loads(request.body)
+        data = json.loads(raw)
     except json.JSONDecodeError:
         logger.error("Retell tool resolve_date | Invalid JSON payload")
         return JsonResponse({"error": "invalid json"}, status=400)
@@ -2661,6 +2700,10 @@ def retell_tool_resolve_date(request):
                              "is_past": False, "ambiguity": "No date text provided."})
 
     restaurant = Restaurant.objects.filter(retell_phone_number=to_number, is_active=True).first()
+    if restaurant and not _verify_retell_signature(raw, sig, restaurant):
+        logger.warning("retell_tool_resolve_date | Invalid signature | restaurant=%s", restaurant.slug)
+        return JsonResponse({"detail": "invalid signature"}, status=401)
+
     tz_name = restaurant.timezone if restaurant else "UTC"
     try:
         tz = ZoneInfo(tz_name)
