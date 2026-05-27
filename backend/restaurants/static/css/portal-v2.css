@@ -653,6 +653,92 @@ p  { margin: 0; }
 }
 .v2-filter-more[open] .v2-filter-more-chevron { transform: rotate(180deg); }
 
+/* ── Filter toggle button ──────────────────────────────────────── */
+.v2-filter-toggle-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.v2-filter-toggle-btn.has-filters {
+  background: rgba(31, 63, 195, 0.08);
+  color: var(--accent-deep);
+  border-color: rgba(31, 63, 195, 0.2);
+}
+.v2-filter-active-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.v2-filter-toggle-btn .v2-filter-more-chevron {
+  opacity: 0.6;
+  font-size: 11px;
+  transition: transform .15s;
+}
+.v2-filter-toggle-btn.is-open .v2-filter-more-chevron {
+  transform: rotate(180deg);
+}
+
+/* Collapsible filter panel */
+.v2-filter-panel {
+  display: none;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  padding: 12px 14px;
+  margin: -4px 0 10px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--warm-line);
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+.v2-filter-panel.is-open {
+  display: flex;
+}
+.v2-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.v2-filter-label {
+  font: 600 10px 'Geist', sans-serif;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.v2-filter-panel select,
+.v2-filter-panel input[type=date] {
+  padding: 6px 11px;
+  border-radius: 8px;
+  background: white;
+  border: 1px solid var(--warm-line);
+  font: 500 13px 'Geist', sans-serif;
+  color: var(--ink-soft);
+  outline: none;
+  cursor: pointer;
+}
+.v2-filter-panel select:focus,
+.v2-filter-panel input[type=date]:focus {
+  border-color: rgba(31, 63, 195, 0.45);
+  box-shadow: 0 0 0 3px rgba(31, 63, 195, 0.10);
+}
+.v2-clear-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 600 12px 'Geist', sans-serif;
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .15s;
+}
+.v2-clear-filters:hover {
+  color: var(--accent-deep);
+  text-decoration: underline;
+}
+.v2-clear-filters i {
+  font-size: 14px;
+}
+
 /* Secondary filters (reason + date range), below the tab pills */
 .v2-calls-subfilters {
   display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
@@ -998,10 +1084,69 @@ p  { margin: 0; }
 }
 .v2-empty i { font-size: 36px; opacity: .35; display: block; margin-bottom: 12px; }
 
+/* Mobile back button (only shown on small screens) */
+.v2-mobile-back {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 11px;
+  background: transparent;
+  border: none;
+  font: 600 13px 'Geist', sans-serif;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color .15s;
+  margin-right: 12px;
+}
+.v2-mobile-back:hover {
+  color: var(--accent-deep);
+}
+.v2-mobile-back i {
+  font-size: 18px;
+}
+
+/* Tablet breakpoint (1100px): two-column layout, but more generous heights */
 @media (max-width: 1100px) {
   .v2-calls-layout { flex-direction: column; }
-  .v2-calls-list { width: 100%; max-height: 540px; }
+  .v2-calls-list { width: 100%; max-height: 50vh; }
   .v2-calls-detail { width: 100%; max-height: none; }
+}
+
+/* Mobile breakpoint (768px): full stack, horizontal filter scroll, small list height */
+@media (max-width: 768px) {
+  .v2-calls-layout { flex-direction: column; gap: 12px; }
+  .v2-calls-list { width: 100%; max-height: 44vh; }
+  .v2-calls-detail { width: 100%; max-height: none; }
+
+  /* Show mobile back button */
+  .v2-mobile-back { display: flex !important; }
+
+  /* Horizontal scroll for filter pills (no wrapping) */
+  .v2-calls-filters {
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap;
+    padding-right: 8px;
+    margin-right: -8px;
+  }
+  .v2-filter-pill {
+    flex-shrink: 0;
+  }
+
+  /* Collapse filter panel to single column on small phones */
+  .v2-filter-panel {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .v2-filter-field {
+    width: 100%;
+  }
+  .v2-filter-panel select,
+  .v2-filter-panel input[type=date] {
+    width: 100%;
+  }
 }
 
 /* ── Login screen layout ──────────────────────────────────── */
@@ -2892,6 +3037,42 @@ p  { margin: 0; }
 }
 @media (max-width: 1100px) { .v2-dash-kpis { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 600px)  { .v2-dash-kpis { grid-template-columns: 1fr; } }
+
+/* Main two-column grid (left: heatmap+charts, right: KB+recent) */
+.v2-dash-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: flex-start;
+}
+@media (max-width: 900px) {
+  .v2-dash-main-grid { grid-template-columns: 1fr; }
+}
+
+/* Inner charts row (calls/day + topic×outcome) */
+.v2-dash-charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 600px) {
+  .v2-dash-charts-row { grid-template-columns: 1fr; }
+}
+
+/* Heatmap: horizontal scroll on small screens */
+@media (max-width: 600px) {
+  .v2-dash-heatmap-wrap { overflow-x: auto; }
+  .v2-dash-heatmap { min-width: 480px; }
+}
+
+/* Hero: reduce greeting size on small phones */
+@media (max-width: 480px) {
+  .v2-dash-hero { padding: 20px 18px; }
+  .v2-dash-hero-greeting { font-size: 24px; }
+  .v2-dash-hero-stats { flex-wrap: wrap; gap: 8px; }
+  .v2-dash-hero-stat { width: 80px; min-height: 76px; }
+}
+
 .v2-dash-kpi.accent {
   background: linear-gradient(135deg, rgba(31, 63, 195, 0.10), rgba(199, 210, 255, 0.45));
   border: 1px solid rgba(31, 63, 195, 0.20);

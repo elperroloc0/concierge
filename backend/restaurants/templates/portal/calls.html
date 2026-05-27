@@ -56,6 +56,9 @@
   <div class="v2-page-head-actions">
     <form method="get" style="display:inline-flex; align-items:center;">
       {% if tab %}<input type="hidden" name="tab" value="{{ tab }}">{% endif %}
+      {% if reason_filter %}<input type="hidden" name="reason" value="{{ reason_filter }}">{% endif %}
+      {% if date_from %}<input type="hidden" name="date_from" value="{{ date_from }}">{% endif %}
+      {% if date_to %}<input type="hidden" name="date_to" value="{{ date_to }}">{% endif %}
       <input type="search" name="phone" class="input" value="{{ phone_filter }}"
              placeholder="Search calls, guests…"
              style="padding: 8px 16px; font-size:13px; width: 240px;">
@@ -94,52 +97,48 @@
         Deep archive <span class="count">{{ deep_count }}</span>
       </a>
 
-      {# Reason pills hidden inside a dropdown #}
-      {% if reason_counts %}
-        <details class="v2-filter-more">
-          <summary class="v2-filter-pill {% if reason_filter %}active{% endif %}">
-            {% if reason_filter %}
-              {% for r in reason_counts %}{% if r.value == reason_filter %}{{ r.label }} <span class="count">{{ r.count }}</span>{% endif %}{% endfor %}
-            {% else %}
-              By reason
-            {% endif %}
-            <i class="bi bi-chevron-down v2-filter-more-chevron"></i>
-          </summary>
-          <div class="v2-filter-more-menu">
-            {% if reason_filter %}
-              <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}tab=inbox"
-                 class="v2-filter-pill">
-                Clear reason
-              </a>
-            {% endif %}
-            {% for r in reason_counts %}
-              <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}reason={{ r.value }}"
-                 class="v2-filter-pill {% if reason_filter == r.value %}active{% endif %}">
-                {{ r.label }} <span class="count">{{ r.count }}</span>
-              </a>
-            {% endfor %}
-          </div>
-        </details>
-      {% endif %}
+      {# Filters toggle button #}
+      <button type="button" id="filterToggleBtn" class="v2-filter-pill v2-filter-toggle-btn{% if reason_filter or date_from or date_to %} has-filters{% endif %}"
+              onclick="document.getElementById('filterPanel').classList.toggle('is-open'); this.classList.toggle('is-open');">
+        <span>Filters</span>
+        {% if reason_filter or date_from or date_to %}<span class="v2-filter-active-dot"></span>{% endif %}
+        <i class="bi bi-chevron-down v2-filter-more-chevron"></i>
+      </button>
     </div>
 
-    {% if date_from or date_to or reason_filter %}
-      <form method="get" class="v2-calls-subfilters">
-        {% if phone_filter %}<input type="hidden" name="phone" value="{{ phone_filter }}">{% endif %}
-        {% if reason_filter %}<input type="hidden" name="reason" value="{{ reason_filter }}">{% endif %}
-        {% if tab and tab != 'all' and not reason_filter %}<input type="hidden" name="tab" value="{{ tab }}">{% endif %}
-        <input type="date" name="date_from" value="{{ date_from }}" title="From" onchange="this.form.submit()">
-        <input type="date" name="date_to"   value="{{ date_to }}"   title="To"   onchange="this.form.submit()">
-        <a href="?{% if phone_filter %}phone={{ phone_filter }}{% endif %}" class="clear-link">Clear all</a>
-      </form>
-    {% else %}
-      <form method="get" class="v2-calls-subfilters">
-        {% if phone_filter %}<input type="hidden" name="phone" value="{{ phone_filter }}">{% endif %}
-        {% if tab and tab != 'all' %}<input type="hidden" name="tab" value="{{ tab }}">{% endif %}
-        <input type="date" name="date_from" value="" title="From" onchange="this.form.submit()">
-        <input type="date" name="date_to"   value="" title="To"   onchange="this.form.submit()">
-      </form>
-    {% endif %}
+    {# Collapsible filter panel #}
+    <form method="get" id="filterPanel" class="v2-filter-panel{% if reason_filter or date_from or date_to %} is-open{% endif %}">
+      {% if phone_filter %}<input type="hidden" name="phone" value="{{ phone_filter }}">{% endif %}
+      {% if tab and tab != 'all' %}<input type="hidden" name="tab" value="{{ tab }}">{% endif %}
+
+      {% if reason_counts %}
+      <div class="v2-filter-field">
+        <label for="reasonSelect" class="v2-filter-label">Reason</label>
+        <select id="reasonSelect" name="reason" onchange="this.form.submit()">
+          <option value="">All reasons</option>
+          {% for r in reason_counts %}
+            <option value="{{ r.value }}" {% if reason_filter == r.value %}selected{% endif %}>{{ r.label }} ({{ r.count }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
+      <div class="v2-filter-field">
+        <label for="dateFrom" class="v2-filter-label">From</label>
+        <input type="date" id="dateFrom" name="date_from" value="{{ date_from }}" onchange="this.form.submit()">
+      </div>
+
+      <div class="v2-filter-field">
+        <label for="dateTo" class="v2-filter-label">To</label>
+        <input type="date" id="dateTo" name="date_to" value="{{ date_to }}" onchange="this.form.submit()">
+      </div>
+
+      {% if reason_filter or date_from or date_to %}
+        <a href="?{% if phone_filter %}phone={{ phone_filter }}&{% endif %}{% if tab and tab != 'all' %}tab={{ tab }}{% endif %}" class="v2-clear-filters">
+          <i class="bi bi-x-circle"></i> Clear
+        </a>
+      {% endif %}
+    </form>
 
     <div class="v2-calls-scroll">
       {% for c in enriched %}
@@ -214,6 +213,10 @@
 
       {# Header #}
       <div class="v2-call-detail-head">
+        <button type="button" class="v2-mobile-back" onclick="window.history.back();" aria-label="Back to calls">
+          <i class="bi bi-chevron-left"></i> Calls
+        </button>
+
         {% if c.memory %}
           <a href="{% url 'portal_guest_detail' restaurant.slug c.memory.pk %}"
              class="v2-call-detail-head-link"
@@ -427,6 +430,19 @@
     {% endif %}
   </section>
 </div>
+
+<script>
+  // Auto-scroll to detail pane on mobile when ?selected= is in URL
+  if (window.innerWidth < 768 && location.hash === '#call-detail') {
+    document.getElementById('call-detail')?.scrollIntoView({ behavior: 'auto' });
+  }
+
+  // Filter panel toggle button chevron rotation
+  document.getElementById('filterToggleBtn')?.addEventListener('click', function() {
+    this.classList.toggle('is-open');
+  });
+</script>
+
 {% endblock %}
 
 {% block extra_scripts %}
