@@ -3094,6 +3094,10 @@ p  { margin: 0; }
   gap: 16px;
   align-items: flex-start;
 }
+/* Grid items default to min-width: auto which lets wide children (heatmap
+   min-width: 480px) expand the entire column past the viewport. Force min-width: 0
+   so the heatmap's overflow-x: auto can actually scroll instead. */
+.v2-dash-main-grid > * { min-width: 0; }
 @media (max-width: 900px) {
   .v2-dash-main-grid { grid-template-columns: 1fr; }
 }
@@ -3120,6 +3124,25 @@ p  { margin: 0; }
   .v2-dash-hero-greeting { font-size: 24px; }
   .v2-dash-hero-stats { flex-wrap: wrap; gap: 8px; }
   .v2-dash-hero-stat { width: 80px; min-height: 76px; }
+}
+
+/* ── Dashboard page head — wrap into rows on mobile ─────────── */
+@media (max-width: 768px) {
+  .v2-page-head {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .v2-page-head-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+  /* KPI sparkline — shorter so cards don't take half the viewport */
+  .v2-dash-spark { height: 36px; margin-top: 6px; }
+  /* KPI card padding — tighter on narrow screens */
+  .v2-dash-kpi { padding: 14px 14px 10px; }
+  .v2-dash-kpi-value { font-size: 32px; }
+  /* Dashboard cards — uniform tighter padding on mobile */
+  .v2-dash-card { padding: 14px 16px; }
 }
 
 .v2-dash-kpi.accent {
@@ -3202,6 +3225,8 @@ p  { margin: 0; }
 /* ── Generic dashboard card heading ───────────────────────── */
 .v2-dash-card {
   padding: 18px 20px;
+  min-width: 0;        /* allow flex/grid parents to shrink card below content min-width */
+  overflow: hidden;    /* clip wide children (heatmap, charts) instead of expanding card */
 }
 .v2-dash-card-head {
   display: flex; align-items: center; gap: 10px;
