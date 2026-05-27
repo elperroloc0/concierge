@@ -938,13 +938,28 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
     duration_ms = call.get("duration_ms")
     duration_seconds = int(duration_ms / 1000) if duration_ms is not None else None
 
+    # Auto-promote status — single source of truth for inbox bucketing.
+    # `follow_up_needed` stays an independent operator "remind me" flag and is
+    # deliberately NOT coupled to status here.
+    _call_reason = _get("call_reason", "other")
+    if is_spam:
+        _status = CallDetail.STATUS_RESOLVED
+    elif (
+        _call_reason == "complaint"
+        or needs_review
+        or _get_bool("wants_reservation", None)
+    ):
+        _status = CallDetail.STATUS_NEEDS_REPLY
+    else:
+        _status = CallDetail.STATUS_NEW
+
     CallDetail.objects.update_or_create(
         call_event=call_event,
         defaults={
             "caller_name":       str(_get("caller_name", ""))[:255],
             "caller_phone":      (call.get("from_number") or "").strip(),
             "caller_email":      str(_get("caller_email", ""))[:255],
-            "call_reason":       _get("call_reason", "other"),
+            "call_reason":       _call_reason,
             "wants_reservation": _get_bool("wants_reservation", None),
             "party_size":        party_size,
             "reservation_date":  _parse_reservation_date(_get("reservation_date", "")),
@@ -958,6 +973,7 @@ def _build_call_detail_from_payload(call_event: CallEvent) -> None:
             "duration_seconds":  duration_seconds,
             "is_spam":           is_spam,
             "needs_review":      needs_review,
+            "status":            _status,
             "notes":             str(_get("caller_message", "")),
         },
     )
@@ -3940,52 +3956,49 @@ def portal_calls(request, slug):
     today = timezone.localdate()
     calls_today = base_qs.filter(created_at__date=today).count()
 
-    # ── Two-tier archive: today (Inbox) / 1–30d (Archive) / 30d+ (Deep) ────────
+    # ── Tab bucketing — driven by CallDetail.status (single source of truth) ──
     #
-    # Three orthogonal lenses over the same data:
-    #   - Inbox        = calls received today (calendar day), not spam
-    #   - Needs action = anything still needing operator attention (any age):
-    #                    follow_up_needed / needs_review / pending reservation
-    #   - Archive      = 1–30 days old that's NOT in Needs action, OR spam
-    #   - Deep archive = >30 days old that's NOT in Needs action, not spam
+    #   Inbox       = today's calls of any status (not spam)
+    #   Needs reply = status='needs_reply' at any age (not spam)
+    #   Archive     = everything else (not today AND not needs_reply, not spam)
     #
-    # A flagged-but-unhandled call lives in Needs action forever until acted on
-    # (Confirm / Mark resolved / etc) — it does NOT auto-fall into Archive.
-    today          = timezone.localdate()
-    cutoff_archive = timezone.now() - timezone.timedelta(days=30)
-    needs_action_q = (
-        Q(follow_up_needed=True)
-        | Q(needs_review=True)
-        | Q(wants_reservation=True, reservation_status="pending")
+    # An overdue-needs-reply banner above the tab list surfaces older needs_reply
+    # rows so they don't get buried in the Needs reply tab unnoticed. `is_spam`
+    # is hidden from all tabs by default — operators flip the spam flag to hide.
+    inbox_q       = (~Q(is_spam=True)) & Q(created_at__date=today)
+    needs_reply_q = (~Q(is_spam=True)) & Q(status=CallDetail.STATUS_NEEDS_REPLY)
+    archive_q     = (
+        ~Q(is_spam=True)
+        & ~Q(created_at__date=today)
+        & ~Q(status=CallDetail.STATUS_NEEDS_REPLY)
     )
-    inbox_q   = (~Q(is_spam=True)) & Q(created_at__date=today)
-    archive_q = Q(created_at__gte=cutoff_archive) & (
-        Q(is_spam=True)
-        | (~Q(created_at__date=today) & ~needs_action_q)
-    )
-    deep_q    = Q(created_at__lt=cutoff_archive) & ~needs_action_q & ~Q(is_spam=True)
 
-    inbox_count        = base_qs.filter(inbox_q).count()
-    archive_count      = base_qs.filter(archive_q).count()
-    deep_count         = base_qs.filter(deep_q).count()
-    needs_action_count = base_qs.filter(needs_action_q).count()
+    inbox_count       = base_qs.filter(inbox_q).count()
+    needs_reply_count = base_qs.filter(needs_reply_q).count()
+    archive_count     = base_qs.filter(archive_q).count()
+
+    # Overdue needs-reply (older than today) — drives the urgent banner above tabs
+    overdue_needs_reply_qs = (
+        base_qs.filter(needs_reply_q, created_at__date__lt=today)
+               .order_by("created_at")
+    )
+    overdue_count    = overdue_needs_reply_qs.count()
+    oldest_overdue   = overdue_needs_reply_qs.first()
 
     # Deep-link guard: if ?selected=<pk> points to a call that doesn't live in
-    # the current tab (e.g. dashboard linking yesterday's call → default Inbox
-    # tab filters by today), auto-switch to the first tab that contains it.
-    # Without this, the detail pane silently binds to the newest call in view
-    # and the operator can act on the wrong row.
+    # the current tab, auto-switch to the first tab that contains it.
+    # Without this, the detail pane silently binds to a different row and the
+    # operator can act on the wrong call.
     tab_q_map = {
-        "inbox":        inbox_q,
-        "needs_action": needs_action_q,
-        "archive":      archive_q,
-        "deep":         deep_q,
+        "inbox":       inbox_q,
+        "needs_reply": needs_reply_q,
+        "archive":     archive_q,
     }
     if selected_pk and tab in tab_q_map:
         try:
             sel_pk_int = int(selected_pk)
             if not base_qs.filter(tab_q_map[tab], pk=sel_pk_int).exists():
-                for candidate in ("needs_action", "inbox", "archive", "deep"):
+                for candidate in ("needs_reply", "inbox", "archive"):
                     if base_qs.filter(tab_q_map[candidate], pk=sel_pk_int).exists():
                         tab = candidate
                         break
@@ -4009,14 +4022,12 @@ def portal_calls(request, slug):
             Q(caller_phone__icontains=phone_filter) | Q(caller_name__icontains=phone_filter)
         )
 
-    # v2 tabs (overlay on existing filters)
-    if tab == "needs_action":
-        qs = qs.filter(needs_action_q)
+    # Tab filter (overlay on existing filters)
+    if tab == "needs_reply":
+        qs = qs.filter(needs_reply_q)
     elif tab == "archive":
         qs = qs.filter(archive_q)
-    elif tab == "deep":
-        qs = qs.filter(deep_q)
-    else:  # "inbox" (default) or any legacy value
+    else:  # "inbox" (default) or any legacy value (incl. old "needs_action"/"deep")
         qs = qs.filter(inbox_q)
 
     # ── Repeat caller detection (phone numbers with >1 call) ──────────────────
@@ -4085,17 +4096,11 @@ def portal_calls(request, slug):
             else f"Missed {_days}d ago"
         )
 
-    # Pre-compute the urgent-banner CTA target: oldest active token's call event.
-    _banner_event_pk = None
-    if pending_action_queue["active"]:
-        _banner_event_pk = pending_action_queue["active"][0].call_detail.call_event_id
-    elif pending_action_queue["missed"]:
-        _banner_event_pk = pending_action_queue["missed"][0].call_detail.call_event_id
-
-    # Oldest active waiting time for the banner copy
-    _banner_oldest_age = ""
-    if pending_action_queue["active"]:
-        _banner_oldest_age = _short_time_ago(pending_action_queue["active"][0].created_at)
+    # Urgent banner: oldest overdue needs_reply call (status-driven, single source).
+    # Computed earlier alongside needs_reply_q so the template can render a
+    # persistent overdue indicator above the tabs.
+    _banner_event_pk   = oldest_overdue.call_event_id if oldest_overdue else None
+    _banner_oldest_age = _short_time_ago(oldest_overdue.created_at) if oldest_overdue else ""
 
     # ── Phones with an existing CallerMemory profile (for v2 "View profile" link) ──
     page_phones = [
@@ -4181,15 +4186,15 @@ def portal_calls(request, slug):
         "pending_action_queue": pending_action_queue,
         "banner_event_pk":      _banner_event_pk,
         "banner_oldest_age":    _banner_oldest_age,
+        "overdue_count":        overdue_count,
         # stats
         "total_calls":         total_calls,
         "reservation_intents":  reservation_intents,
         "reservations_pending": reservations_pending,
         "follow_ups_pending":  follow_ups_pending,
-        "needs_action_count":  needs_action_count,
+        "needs_reply_count":   needs_reply_count,
         "inbox_count":         inbox_count,
         "archive_count":       archive_count,
-        "deep_count":          deep_count,
         "calls_today":         calls_today,
         "sms_sent":            sms_sent,
     })
@@ -4244,6 +4249,7 @@ def portal_send_sms(request, slug, event_pk):
 
 @portal_view()
 def portal_resolve_followup(request, slug, event_pk):
+    """AJAX: mark a call as resolved (closes the workflow)."""
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
     restaurant = request.restaurant
@@ -4253,7 +4259,8 @@ def portal_resolve_followup(request, slug, event_pk):
         detail.follow_up_needed = False
         detail.needs_review = False
         detail.reviewed_at = timezone.now()
-        detail.save(update_fields=["follow_up_needed", "needs_review", "reviewed_at"])
+        detail.status = CallDetail.STATUS_RESOLVED
+        detail.save(update_fields=["follow_up_needed", "needs_review", "reviewed_at", "status"])
     except CallDetail.DoesNotExist:
         pass
     return JsonResponse({"ok": True})
@@ -4261,7 +4268,11 @@ def portal_resolve_followup(request, slug, event_pk):
 
 @portal_view()
 def portal_reservation_status(request, slug, event_pk):
-    """AJAX: set reservation_status on a CallDetail (confirmed / lost / pending)."""
+    """AJAX: set reservation_status on a CallDetail (confirmed / lost / pending).
+
+    confirmed/lost are terminal — also close the workflow to resolved. pending
+    keeps the call in needs_reply (operator hasn't decided yet).
+    """
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
     restaurant = request.restaurant
@@ -4273,7 +4284,14 @@ def portal_reservation_status(request, slug, event_pk):
         detail = event.detail
         detail.reservation_status = status
         detail.reservation_confirmed_at = timezone.now() if status == "confirmed" else None
-        detail.save(update_fields=["reservation_status", "reservation_confirmed_at"])
+        update_fields = ["reservation_status", "reservation_confirmed_at"]
+        if status in ("confirmed", "lost"):
+            detail.status = CallDetail.STATUS_RESOLVED
+            update_fields.append("status")
+        elif status == "pending":
+            detail.status = CallDetail.STATUS_NEEDS_REPLY
+            update_fields.append("status")
+        detail.save(update_fields=update_fields)
         return JsonResponse({"ok": True, "status": status})
     except CallDetail.DoesNotExist:
         return JsonResponse({"ok": False, "error": "No detail"}, status=404)
@@ -4318,7 +4336,12 @@ def portal_call_set_reason(request, slug, event_pk):
 
 @portal_view()
 def portal_call_set_spam(request, slug, event_pk):
-    """AJAX: toggle the is_spam flag on a CallDetail."""
+    """AJAX: toggle the is_spam flag on a CallDetail.
+
+    Marking spam also resolves the workflow so the row disappears from inbox.
+    Un-marking spam reverts status to 'new' — operator can then re-escalate
+    manually if needed (we don't try to reconstruct the original signal).
+    """
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
     restaurant = request.restaurant
@@ -4329,13 +4352,14 @@ def portal_call_set_spam(request, slug, event_pk):
     except CallDetail.DoesNotExist:
         return JsonResponse({"ok": False, "error": "No detail"}, status=404)
     detail.is_spam = value
-    detail.save(update_fields=["is_spam", "updated_at"])
+    detail.status = CallDetail.STATUS_RESOLVED if value else CallDetail.STATUS_NEW
+    detail.save(update_fields=["is_spam", "status", "updated_at"])
     return JsonResponse({"ok": True, "is_spam": value})
 
 
 @portal_view()
 def portal_call_reopen(request, slug, event_pk):
-    """AJAX: reopen a previously-resolved call (sets follow_up_needed=True)."""
+    """AJAX: reopen a previously-resolved call — status returns to new."""
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
     restaurant = request.restaurant
@@ -4346,8 +4370,51 @@ def portal_call_reopen(request, slug, event_pk):
         return JsonResponse({"ok": False, "error": "No detail"}, status=404)
     detail.follow_up_needed = True
     detail.reviewed_at      = None
-    detail.save(update_fields=["follow_up_needed", "reviewed_at", "updated_at"])
+    detail.status           = CallDetail.STATUS_NEW
+    detail.save(update_fields=["follow_up_needed", "reviewed_at", "status", "updated_at"])
     return JsonResponse({"ok": True})
+
+
+@portal_view()
+def portal_call_set_status(request, slug, event_pk):
+    """AJAX: explicit status transition from overflow menu (e.g. "Move to needs reply").
+
+    Accepts ?status=new|needs_reply|resolved. Operator-driven override of the
+    auto-promotion logic when they decide the workflow state directly.
+    """
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    restaurant = request.restaurant
+    event = get_object_or_404(CallEvent, pk=event_pk, restaurant=restaurant)
+    new_status = request.POST.get("status", "").strip()
+    valid = {s for s, _ in CallDetail.STATUS_CHOICES}
+    if new_status not in valid:
+        return JsonResponse({"ok": False, "error": "Invalid status"}, status=400)
+    try:
+        detail = event.detail
+    except CallDetail.DoesNotExist:
+        return JsonResponse({"ok": False, "error": "No detail"}, status=404)
+    detail.status = new_status
+    detail.save(update_fields=["status", "updated_at"])
+    return JsonResponse({"ok": True, "status": new_status})
+
+
+@portal_view()
+def portal_mark_call_viewed(request, slug, event_pk):
+    """AJAX: stamp first_viewed_at on a CallDetail when an operator opens it.
+
+    Per-restaurant read tracking (variant A): once any operator views the call,
+    it's "read" for the whole team. Idempotent — only stamps if NULL.
+    """
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    restaurant = request.restaurant
+    updated = (
+        CallDetail.objects
+        .filter(call_event__restaurant=restaurant, call_event_id=event_pk, first_viewed_at__isnull=True)
+        .update(first_viewed_at=timezone.now())
+    )
+    return JsonResponse({"ok": True, "stamped": bool(updated)})
 
 
 @portal_view()
@@ -4357,7 +4424,8 @@ def portal_dismiss_action(request, slug, event_pk):
 
     Used by the v2 inbox when staff decides an expired/missed action no longer
     needs handling. Marks every unused CallActionToken for this CallDetail as
-    used_at=now / response=resolved so it disappears from the pending queue.
+    used_at=now / response=resolved AND closes the workflow status so the row
+    disappears from inbox/needs_reply views.
     """
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
@@ -4370,6 +4438,8 @@ def portal_dismiss_action(request, slug, event_pk):
     updated = CallActionToken.objects.filter(
         call_detail=detail, used_at__isnull=True
     ).update(used_at=timezone.now(), response=CallActionToken.RESP_RESOLVED)
+    detail.status = CallDetail.STATUS_RESOLVED
+    detail.save(update_fields=["status", "updated_at"])
     return JsonResponse({"ok": True, "dismissed": updated})
 
 
@@ -5858,18 +5928,36 @@ def call_action_respond(request, slug, token):
     t.used_from_ip  = _client_ip(request) or None
     t.save(update_fields=["response", "response_note", "used_at", "used_by", "used_from_ip", *edited_fields])
 
-    # Mirror the action onto CallDetail.reservation_status when relevant
-    if t.action_type == t.ACTION_RESERVATION and t.call_detail:
-        new_status = {
-            t.RESP_CONFIRMED: "confirmed",
-            t.RESP_DECLINED:  "lost",
-            t.RESP_CALLBACK:  "pending",
-        }.get(action)
-        if new_status:
-            t.call_detail.reservation_status = new_status
-            if new_status == "confirmed":
-                t.call_detail.reservation_confirmed_at = timezone.now()
-            t.call_detail.save(update_fields=["reservation_status", "reservation_confirmed_at"])
+    # Mirror the action onto CallDetail.reservation_status and workflow status.
+    if t.call_detail:
+        cd = t.call_detail
+        update_fields = []
+
+        if t.action_type == t.ACTION_RESERVATION:
+            new_res = {
+                t.RESP_CONFIRMED: "confirmed",
+                t.RESP_DECLINED:  "lost",
+                t.RESP_CALLBACK:  "pending",
+            }.get(action)
+            if new_res:
+                cd.reservation_status = new_res
+                update_fields.append("reservation_status")
+                if new_res == "confirmed":
+                    cd.reservation_confirmed_at = timezone.now()
+                    update_fields.append("reservation_confirmed_at")
+
+        # Workflow status: any concrete owner response closes the call.
+        # Callback ("we'll call back later") stays in needs_reply since the
+        # owner still owes the customer a return call.
+        if action in (t.RESP_CONFIRMED, t.RESP_DECLINED, t.RESP_RESOLVED):
+            cd.status = CallDetail.STATUS_RESOLVED
+            update_fields.append("status")
+        elif action == t.RESP_CALLBACK:
+            cd.status = CallDetail.STATUS_NEEDS_REPLY
+            update_fields.append("status")
+
+        if update_fields:
+            cd.save(update_fields=update_fields)
 
     # "Call now" → operator dials directly, no SMS needed
     if action == t.RESP_RESOLVED:

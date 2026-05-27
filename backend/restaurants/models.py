@@ -363,6 +363,25 @@ class CallDetail(models.Model):
     needs_review = models.BooleanField(default=False, db_index=True)
     reviewed_at  = models.DateTimeField(null=True, blank=True)
 
+    # Workflow state — primary key for inbox tab bucketing.
+    # `follow_up_needed` remains as an independent operator "remind me later" flag.
+    STATUS_NEW         = "new"
+    STATUS_NEEDS_REPLY = "needs_reply"
+    STATUS_RESOLVED    = "resolved"
+    STATUS_CHOICES = [
+        (STATUS_NEW,         "New"),
+        (STATUS_NEEDS_REPLY, "Needs reply"),
+        (STATUS_RESOLVED,    "Resolved"),
+    ]
+    status = models.CharField(
+        max_length=16, choices=STATUS_CHOICES, default=STATUS_NEW, db_index=True,
+        help_text="Workflow state. Drives inbox tab bucketing and overdue banner.",
+    )
+
+    # Inbox-style read tracking — null until any operator opens the call detail.
+    # Per-restaurant (variant A): first viewer marks it read for the whole team.
+    first_viewed_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -808,6 +808,18 @@ p  { margin: 0; }
   border-color: rgba(31, 63, 195, 0.25);
   box-shadow: 0 6px 22px -8px rgba(31, 63, 195, 0.22);
 }
+/* Unread state — first_viewed_at IS NULL */
+.v2-call-card.unread::before {
+  content: '';
+  position: absolute;
+  top: 18px; left: 6px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.v2-call-card.unread .v2-call-card-name {
+  font-weight: 700;
+}
 .v2-call-card .urgent-dot {
   position: absolute; top: 13px; right: 13px;
   width: 8px; height: 8px; border-radius: 99px;
@@ -1114,22 +1126,19 @@ p  { margin: 0; }
   .v2-calls-detail { width: 100%; max-height: none; }
 }
 
-/* Mobile breakpoint (768px): full stack, horizontal filter scroll, small list height */
+/* Mobile breakpoint (768px): full stack, wrap filter pills, small list height */
 @media (max-width: 768px) {
   .v2-calls-layout { flex-direction: column; gap: 12px; }
-  .v2-calls-list { width: 100%; max-height: 44vh; }
+  .v2-calls-list { width: 100%; max-height: 60vh; }
   .v2-calls-detail { width: 100%; max-height: none; }
 
   /* Show mobile back button */
   .v2-mobile-back { display: flex !important; }
 
-  /* Horizontal scroll for filter pills (no wrapping) */
+  /* Wrap filter pills onto multiple rows — horizontal scroll hid them under cards */
   .v2-calls-filters {
-    overflow-x: auto;
-    overflow-y: hidden;
-    flex-wrap: nowrap;
-    padding-right: 8px;
-    margin-right: -8px;
+    flex-wrap: wrap;
+    gap: 6px 6px;
   }
   .v2-filter-pill {
     flex-shrink: 0;
@@ -1146,6 +1155,46 @@ p  { margin: 0; }
   .v2-filter-panel select,
   .v2-filter-panel input[type=date] {
     width: 100%;
+  }
+
+  /* Call detail head — vertical stack so name + meta + actions don't crash */
+  .v2-call-detail-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+  .v2-mobile-back {
+    align-self: flex-start;
+    margin-right: 0;
+    margin-bottom: -4px;
+  }
+  .v2-call-detail-head-link,
+  .v2-call-detail-head-static {
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .v2-call-detail-head h2 {
+    font-size: 22px;
+  }
+  .v2-call-detail-head h2.is-phone {
+    font-size: 20px;
+  }
+  /* Action row (reason chip + overflow) wraps below the name on mobile */
+  .v2-call-detail-head .v2-reason-edit,
+  .v2-call-detail-head .v2-detail-overflow {
+    flex-shrink: 0;
+  }
+  .v2-call-detail-actions-top {
+    margin-left: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  /* The "354 calls →" link sits below the meta on its own row */
+  .v2-call-detail-actions-top .v2-link-action {
+    margin-left: 0;
   }
 }
 
