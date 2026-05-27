@@ -2378,21 +2378,32 @@ def _send_sms_via_twilio(restaurant, to_number: str, message: str) -> str:
     return msg.sid
 
 
-def _determine_caller_lang(call_detail, restaurant) -> str:
+def _determine_caller_lang(call_detail, restaurant, *, default_to_primary: bool = False) -> str:
     """Pick the SMS language for the caller.
 
-    English by default. We switch to the restaurant's primary language only
-    when Retell's `language_consistency=True` confirms the agent stayed in that
-    language throughout the call — i.e. the caller actually spoke it. The
-    signal is binary ("agent switched or not"), so we treat True as positive
-    evidence and everything else as English.
+    Two callsites with different semantics:
+
+    - Automated path (Retell tool fires the SMS during a live call):
+      `default_to_primary=False`. We start from English and switch to the
+      restaurant's primary language only when Retell's
+      `language_consistency=True` confirms the agent stayed in that language
+      throughout the call — i.e. the caller actually spoke it. This avoids
+      blasting Spanish at an English-speaking caller of an ES-primary restaurant.
+
+    - Operator path (human picks "Send SMS" from the portal):
+      `default_to_primary=True`. The operator is a person making a deliberate
+      choice — if Retell signals are missing (older calls, signal absent), we
+      fall back to the restaurant's primary language rather than overriding to
+      English. `language_consistency=True` still upgrades, and English-primary
+      restaurants always get English.
     """
     if not restaurant or restaurant.primary_lang in (None, "", "en"):
         return "en"
-    if not call_detail:
-        return "en"
-    sig = getattr(call_detail, "call_signals", None) or {}
+    sig = getattr(call_detail, "call_signals", None) if call_detail else None
+    sig = sig or {}
     if sig.get("language_consistency") is True:
+        return restaurant.primary_lang
+    if default_to_primary:
         return restaurant.primary_lang
     return "en"
 
@@ -3959,6 +3970,28 @@ def portal_calls(request, slug):
     deep_count         = base_qs.filter(deep_q).count()
     needs_action_count = base_qs.filter(needs_action_q).count()
 
+    # Deep-link guard: if ?selected=<pk> points to a call that doesn't live in
+    # the current tab (e.g. dashboard linking yesterday's call → default Inbox
+    # tab filters by today), auto-switch to the first tab that contains it.
+    # Without this, the detail pane silently binds to the newest call in view
+    # and the operator can act on the wrong row.
+    tab_q_map = {
+        "inbox":        inbox_q,
+        "needs_action": needs_action_q,
+        "archive":      archive_q,
+        "deep":         deep_q,
+    }
+    if selected_pk and tab in tab_q_map:
+        try:
+            sel_pk_int = int(selected_pk)
+            if not base_qs.filter(tab_q_map[tab], pk=sel_pk_int).exists():
+                for candidate in ("needs_action", "inbox", "archive", "deep"):
+                    if base_qs.filter(tab_q_map[candidate], pk=sel_pk_int).exists():
+                        tab = candidate
+                        break
+        except (TypeError, ValueError):
+            pass
+
     # ── Apply filters to paginated queryset ───────────────────────────────────
     qs = base_qs
     if reason_filter:
@@ -4109,7 +4142,11 @@ def portal_calls(request, slug):
             "missed_label":        _missed_label_by_detail.get(detail.id, ""),
         })
 
-    # Resolve the currently-selected call for v2 split-pane UI
+    # Resolve the currently-selected call for v2 split-pane UI.
+    # When ?selected=<pk> is explicitly given and the row isn't in the current
+    # filtered view, leave selected_call=None rather than binding to enriched[0]
+    # — silently rebinding to an unrelated newest call lets the operator act on
+    # the wrong row.
     selected_call = None
     if enriched:
         if selected_pk:
@@ -4120,7 +4157,7 @@ def portal_calls(request, slug):
                 )
             except (TypeError, ValueError):
                 selected_call = None
-        if selected_call is None:
+        else:
             selected_call = enriched[0]
 
     return render(request, "portal/calls.html", {
@@ -4184,7 +4221,7 @@ def portal_send_sms(request, slug, event_pk):
         return JsonResponse({"error": "sms_type is required."}, status=400)
 
     kb      = getattr(restaurant, "knowledge_base", None)
-    lang    = _determine_caller_lang(detail, restaurant)
+    lang    = _determine_caller_lang(detail, restaurant, default_to_primary=True)
     message = _build_sms_message(sms_type, restaurant, kb, custom_message, lang=lang)
 
     if not message:
@@ -4546,7 +4583,7 @@ def portal_guest_sms(request, slug, memory_pk):
         return JsonResponse({"error": "sms_type is required."}, status=400)
 
     kb      = getattr(restaurant, "knowledge_base", None)
-    lang    = _determine_caller_lang(latest_detail, restaurant)
+    lang    = _determine_caller_lang(latest_detail, restaurant, default_to_primary=True)
     message = _build_sms_message(sms_type, restaurant, kb, custom_message, lang=lang)
     if not message:
         return JsonResponse(
@@ -5661,7 +5698,7 @@ def _build_caller_sms(t: "CallActionToken", action: str, note: str, cb_when: str
     name  = d.caller_name or ""
     greet_name = (" " + name) if name else ""
 
-    lang = _determine_caller_lang(d, r)
+    lang = _determine_caller_lang(d, r, default_to_primary=True)
     is_es = lang == "es"
 
     date_str  = date.strftime("%a %-d %b") if date else ""
@@ -5780,7 +5817,7 @@ def call_action_respond(request, slug, token):
         return JsonResponse({"ok": True, "already": t.response})
 
     action  = request.POST.get("action", "").strip()
-    note    = request.POST.get("note", "")[:500]
+    note    = request.POST.get("note", "")
     cb_when = request.POST.get("callback_when", "").strip()
     variant = request.POST.get("variant", "").strip()  # "apology" / "comp" / "text_reply"
 
@@ -5813,8 +5850,9 @@ def call_action_respond(request, slug, token):
             pass
 
     t.response      = action
-    # Persist variant alongside the free-form note so downstream analytics keeps both
-    t.response_note = (f"[{variant}] " if variant else "") + note
+    # Persist variant alongside the free-form note so downstream analytics keeps both.
+    # Truncate AFTER concatenation so the prefix can't push us past the 500-char column.
+    t.response_note = ((f"[{variant}] " if variant else "") + note)[:500]
     t.used_at       = timezone.now()
     t.used_by       = request.user if request.user.is_authenticated else None
     t.used_from_ip  = _client_ip(request) or None

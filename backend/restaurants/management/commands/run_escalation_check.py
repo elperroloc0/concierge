@@ -16,7 +16,6 @@ Schedule via Render cron every 5 minutes:
     schedule: "*/5 * * * *"
 """
 import logging
-import threading
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -50,31 +49,36 @@ class Command(BaseCommand):
 
         advanced = {1: 0, 2: 0, 3: 0}
 
+        # Every send is synchronous here. We're in a short-lived management command
+        # (Render cron) so daemon threads would be killed before network I/O completes,
+        # silently dropping notifications while still bumping escalation_level.
+        # The level is advanced only after the underlying send succeeds — a failure
+        # leaves the row at its prior level so the next cron tick retries.
         for t in pending:
             age_min = t.age_minutes
 
             if age_min >= 15 and t.escalation_level < 1:
-                _fire_reminder_push(t)
-                t.escalation_level = 1
-                t.save(update_fields=["escalation_level"])
-                advanced[1] += 1
+                if _fire_reminder_push(t):
+                    t.escalation_level = 1
+                    t.save(update_fields=["escalation_level"])
+                    advanced[1] += 1
 
             if age_min >= 30 and t.escalation_level < 2:
-                _fire_auto_sms(t, _send_sms_via_twilio)
-                t.escalation_level = 2
-                t.save(update_fields=["escalation_level"])
-                advanced[2] += 1
+                if _fire_auto_sms(t, _send_sms_via_twilio):
+                    t.escalation_level = 2
+                    t.save(update_fields=["escalation_level"])
+                    advanced[2] += 1
 
             if age_min >= 60 and t.escalation_level < 3:
-                _fire_final_alert(
+                if _fire_final_alert(
                     t,
                     _send_reservation_alert_email,
                     _send_complaint_alert_email,
                     _send_followup_alert_email,
-                )
-                t.escalation_level = 3
-                t.save(update_fields=["escalation_level"])
-                advanced[3] += 1
+                ):
+                    t.escalation_level = 3
+                    t.save(update_fields=["escalation_level"])
+                    advanced[3] += 1
 
         msg = (
             f"escalation_check: advanced "
@@ -96,59 +100,86 @@ def _caller_label(t):
     )
 
 
-def _fire_reminder_push(t: CallActionToken) -> None:
-    """L1: gentle reminder with distinct vibrate (urgency=high bypasses throttle)."""
+def _fire_reminder_push(t: CallActionToken) -> bool:
+    """L1: gentle reminder with distinct vibrate (urgency=high bypasses throttle).
+
+    Returns True on success so the caller can advance escalation_level.
+    """
     title_by_type = {
         t.ACTION_RESERVATION: "⏰ Reserva esperando respuesta",
         t.ACTION_COMPLAINT:   "⏰ Reclamación sin atender",
         t.ACTION_FOLLOWUP:    "⏰ Devolver llamada pendiente",
     }
     title = title_by_type.get(t.action_type, "⏰ Acción pendiente")
-    send_push(
-        restaurant=t.restaurant,
-        title=title,
-        body=f"{_caller_label(t)} lleva 15 min esperando.",
-        url=f"/portal/{t.restaurant.slug}/r/{t.token}/",
-        urgency="high",
-        tag=f"escalation-l1-{t.pk}",
-    )
+    try:
+        send_push(
+            restaurant=t.restaurant,
+            title=title,
+            body=f"{_caller_label(t)} lleva 15 min esperando.",
+            url=f"/portal/{t.restaurant.slug}/r/{t.token}/",
+            urgency="high",
+            tag=f"escalation-l1-{t.pk}",
+            block=True,
+        )
+    except Exception:
+        logger.exception("escalation L1: push failed | token=%s", t.token[:12])
+        return False
     logger.info("escalation L1: reminder push | token=%s restaurant=%s",
                 t.token[:12], t.restaurant.slug)
+    return True
 
 
-def _fire_auto_sms(t: CallActionToken, send_sms) -> None:
-    """L2: auto-SMS to caller + push to owner. SMS only sent if we have a phone."""
-    # Owner-facing push
-    send_push(
-        restaurant=t.restaurant,
-        title="🚨 SMS automático enviado al cliente",
-        body=f"{_caller_label(t)} fue notificado automáticamente.",
-        url=f"/portal/{t.restaurant.slug}/r/{t.token}/",
-        urgency="high",
-        tag=f"escalation-l2-{t.pk}",
-    )
+def _fire_auto_sms(t: CallActionToken, send_sms) -> bool:
+    """L2: auto-SMS to caller + push to owner. SMS only sent if we have a phone.
 
-    # Caller-facing auto-SMS (background — same pattern as call_action_respond)
-    phone = t.call_detail.caller_phone or ""
-    if phone:
-        msg = (
-            f"Hola, recibimos tu llamada a {t.restaurant.name} y "
-            f"nos pondremos en contacto contigo dentro de una hora.\n\n"
-            f"(Mensaje automatizado. Por favor no responder por SMS — "
-            f"llámanos si es urgente.)"
+    Returns True only if the caller SMS was delivered (or skipped due to a
+    legitimately-missing phone). Returns False on a real send failure so the
+    next cron tick retries.
+    """
+    # Owner-facing push (best-effort — does not gate level advance)
+    try:
+        send_push(
+            restaurant=t.restaurant,
+            title="🚨 SMS automático enviado al cliente",
+            body=f"{_caller_label(t)} fue notificado automáticamente.",
+            url=f"/portal/{t.restaurant.slug}/r/{t.token}/",
+            urgency="high",
+            tag=f"escalation-l2-{t.pk}",
+            block=True,
         )
-        threading.Thread(
-            target=send_sms, args=(t.restaurant, phone, msg), daemon=True
-        ).start()
-        logger.info("escalation L2: auto-SMS → %s | token=%s restaurant=%s",
-                    phone, t.token[:12], t.restaurant.slug)
-    else:
+    except Exception:
+        logger.exception("escalation L2: owner push failed | token=%s", t.token[:12])
+
+    # Caller-facing auto-SMS — synchronous so we know whether it actually went out
+    phone = t.call_detail.caller_phone or ""
+    if not phone:
         logger.warning("escalation L2: no caller phone, SMS skipped | token=%s", t.token[:12])
+        return True  # nothing to retry — advance so we don't loop forever
+
+    msg = (
+        f"Hola, recibimos tu llamada a {t.restaurant.name} y "
+        f"nos pondremos en contacto contigo dentro de una hora.\n\n"
+        f"(Mensaje automatizado. Por favor no responder por SMS — "
+        f"llámanos si es urgente.)"
+    )
+    try:
+        send_sms(t.restaurant, phone, msg)
+    except Exception:
+        logger.exception("escalation L2: auto-SMS failed → %s | token=%s",
+                         phone, t.token[:12])
+        return False
+    logger.info("escalation L2: auto-SMS → %s | token=%s restaurant=%s",
+                phone, t.token[:12], t.restaurant.slug)
+    return True
 
 
 def _fire_final_alert(t: CallActionToken,
-                      send_reservation, send_complaint, send_followup) -> None:
-    """L3: re-send the owner alert email (last-resort). Dashboard pulse is CSS-driven."""
+                      send_reservation, send_complaint, send_followup) -> bool:
+    """L3: re-send the owner alert email (last-resort). Dashboard pulse is CSS-driven.
+
+    Returns True if the email send completed (or no sender was applicable), so
+    the level always advances past L3 once we get here.
+    """
     sender = {
         t.ACTION_RESERVATION: send_reservation,
         t.ACTION_COMPLAINT:   send_complaint,
@@ -158,11 +189,13 @@ def _fire_final_alert(t: CallActionToken,
     if not sender:
         logger.info("escalation L3: no email sender for action_type=%s | token=%s",
                     t.action_type, t.token[:12])
-        return
+        return True
 
     try:
         sender(t.call_detail.call_event, t.restaurant)
         logger.info("escalation L3: final email re-sent | token=%s restaurant=%s",
                     t.token[:12], t.restaurant.slug)
+        return True
     except Exception:
         logger.exception("escalation L3: email re-send failed | token=%s", t.token[:12])
+        return False

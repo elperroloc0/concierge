@@ -132,6 +132,7 @@ def send_push(
     image: str | None = None,
     tag: str | None = None,
     event_flag: str | None = None,
+    block: bool = False,
 ) -> None:
     """
     Fire-and-forget push to all subscribed operators of `restaurant`.
@@ -170,6 +171,13 @@ def send_push(
         cache.set(throttle_key, 1, THROTTLE_WINDOW_SEC)
 
     payload = _build_payload(title, body, url, urgency, actions, image, tag)
+
+    if block:
+        # Synchronous path — required from short-lived processes (e.g. cron
+        # management commands) where daemon threads would be killed before the
+        # network request completes.
+        _send_push_to_subscribers(restaurant.pk, payload, urgency, event_flag)
+        return
 
     threading.Thread(
         target=_send_push_to_subscribers,

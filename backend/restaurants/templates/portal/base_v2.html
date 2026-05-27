@@ -132,5 +132,15 @@
     ov.addEventListener('click', close);
   })();
 </script>
+
+{# Push notification client — only on slugged portal pages where we have CSRF + restaurant #}
+{% if vapid_public_key and restaurant %}
+<script>
+  window.__VAPID_PUBLIC     = "{{ vapid_public_key }}";
+  window.__CSRF             = "{{ csrf_token }}";
+  window.__RESTAURANT_SLUG  = "{{ restaurant.slug }}";
+</script>
+<script src="{% static 'portal/push.js' %}"></script>
+{% endif %}
 </body>
 </html>
