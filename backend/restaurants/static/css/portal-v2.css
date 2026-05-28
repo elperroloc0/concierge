@@ -1171,7 +1171,7 @@ p  { margin: 0; }
   }
   .v2-call-detail-head-link,
   .v2-call-detail-head-static {
-    align-items: flex-start;
+    align-items: center;
     gap: 12px;
   }
   .v2-call-detail-head h2 {
