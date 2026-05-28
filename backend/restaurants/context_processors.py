@@ -9,8 +9,15 @@ def web_push(request):
 
 
 def balance_status(request):
-    """Add balance_status and agent_status to all portal template contexts."""
-    if not request.user.is_authenticated:
+    """Add balance_status and agent_status to all portal template contexts.
+
+    Defends against `request.user` being absent — happens when an error fires
+    before AuthenticationMiddleware runs (e.g. during 500.html rendering after
+    an early middleware exception), which would otherwise swallow the real
+    stacktrace under an AttributeError.
+    """
+    user = getattr(request, "user", None)
+    if user is None or not user.is_authenticated:
         return {"balance_status": "", "agent_status": "inactive"}
     try:
         restaurant = getattr(request, "restaurant", None)
@@ -49,11 +56,12 @@ def membership(request):
     from .models import RestaurantMembership
 
     m = getattr(request, "membership", None)
+    user = getattr(request, "user", None)
     has_multiple = False
-    if m and request.user.is_authenticated:
+    if m and user is not None and user.is_authenticated:
         has_multiple = (
             RestaurantMembership.objects.filter(
-                user=request.user, is_active=True, restaurant__is_active=True,
+                user=user, is_active=True, restaurant__is_active=True,
             ).count() > 1
         )
     return {
