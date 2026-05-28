@@ -247,7 +247,7 @@
             {% if c.call_reason %}({{ c.call_reason }}){% endif %}
           {% endspaceless %}{% if not forloop.last %}, {% endif %}{% endfor %}.
         </span>
-        <a href="{% url 'portal_calls' restaurant.slug %}?tab=needs_action" class="btn btn-sm btn-accent">View calls</a>
+        <a href="{% url 'portal_calls' restaurant.slug %}?tab=needs_reply" class="btn btn-sm btn-accent">View calls</a>
       </div>
     {% endif %}
 

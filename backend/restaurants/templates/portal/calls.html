@@ -6,35 +6,20 @@
 
 {% block content %}
 
-{# ── Urgent banner (active or missed action tokens) ────────────── #}
-{% if pending_action_queue.active %}
+{# ── Overdue needs-reply banner (status-driven, single source) ──── #}
+{% if overdue_count %}
   <div class="v2-urgent-banner">
     <div class="v2-urgent-banner-body">
       <div class="eyebrow">
-        {% if banner_oldest_age %}{{ banner_oldest_age }} waiting{% else %}New{% endif %}
+        {% if banner_oldest_age %}Oldest: {{ banner_oldest_age }}{% else %}Older{% endif %}
       </div>
       <div class="headline">
-        {{ pending_action_queue.active|length }} call{{ pending_action_queue.active|length|pluralize }} need{{ pending_action_queue.active|length|pluralize:"s," }} your response
-      </div>
-    </div>
-    {% if pending_action_queue.missed %}
-      <div class="meta">{{ pending_action_queue.missed|length }} missed</div>
-    {% endif %}
-    <a class="arrow-btn"
-       href="?tab=needs_action{% if banner_event_pk %}&selected={{ banner_event_pk }}{% endif %}#call-detail"
-       aria-label="Open urgent call">→</a>
-  </div>
-{% elif pending_action_queue.missed %}
-  <div class="v2-urgent-banner subdued">
-    <div class="v2-urgent-banner-body">
-      <div class="eyebrow">Last 7 days</div>
-      <div class="headline">
-        {{ pending_action_queue.missed|length }} missed action{{ pending_action_queue.missed|length|pluralize }} — still recoverable
+        {{ overdue_count }} call{{ overdue_count|pluralize }} still need{{ overdue_count|pluralize:"s," }} reply
       </div>
     </div>
     <a class="arrow-btn"
-       href="?tab=needs_action{% if banner_event_pk %}&selected={{ banner_event_pk }}{% endif %}#call-detail"
-       aria-label="Review missed actions">→</a>
+       href="?tab=needs_reply{% if banner_event_pk %}&selected={{ banner_event_pk }}{% endif %}#call-detail"
+       aria-label="Open overdue calls">→</a>
   </div>
 {% endif %}
 
@@ -45,12 +30,6 @@
     <h1>Inbox</h1>
   </div>
 
-  {% if follow_ups_pending %}
-    <span class="v2-chip v2-chip-accent">
-      <span class="v2-chip-dot"></span>
-      {{ follow_ups_pending }} urgent
-    </span>
-  {% endif %}
   <span class="v2-chip">{{ calls_today }} call{{ calls_today|pluralize }} today</span>
 
   <div class="v2-page-head-actions">
@@ -84,17 +63,13 @@
          class="v2-filter-pill {% if not reason_filter and tab|default:'inbox' == 'inbox' %}active{% endif %}">
         Inbox <span class="count">{{ inbox_count }}</span>
       </a>
-      <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}tab=needs_action"
-         class="v2-filter-pill {% if not reason_filter and tab == 'needs_action' %}active{% elif needs_action_count and tab != 'needs_action' %}urgent{% endif %}">
-        Needs action <span class="count">{{ needs_action_count }}</span>
+      <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}tab=needs_reply"
+         class="v2-filter-pill {% if not reason_filter and tab == 'needs_reply' %}active{% elif needs_reply_count and tab != 'needs_reply' %}urgent{% endif %}">
+        Needs reply <span class="count">{{ needs_reply_count }}</span>
       </a>
       <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}tab=archive"
          class="v2-filter-pill {% if not reason_filter and tab == 'archive' %}active{% endif %}">
         Archive <span class="count">{{ archive_count }}</span>
-      </a>
-      <a href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}tab=deep"
-         class="v2-filter-pill {% if not reason_filter and tab == 'deep' %}active{% endif %}">
-        Deep archive <span class="count">{{ deep_count }}</span>
       </a>
 
       {# Filters toggle button #}
@@ -144,7 +119,9 @@
       {% for c in enriched %}
         {% with is_selected=selected_call.event.pk %}
         <a href="?{% if card_keep_qs %}{{ card_keep_qs }}&{% endif %}selected={{ c.event.pk }}#call-detail"
-           class="v2-call-card {% if c.event.pk == is_selected %}active{% endif %}">
+           class="v2-call-card
+                  {% if c.event.pk == is_selected %}active{% endif %}
+                  {% if not c.detail.first_viewed_at %}unread{% endif %}">
 
           {% if c.pending_token_state == "missed" %}
             <span class="missed-badge">{{ c.missed_label|default:"Missed" }}</span>
@@ -165,6 +142,18 @@
               {{ c.detail.call_summary|default:"No summary available."|truncatechars:140 }}
             </div>
             <div class="v2-call-card-tags">
+              {# Status chip — primary signal #}
+              {% if c.detail.status == "needs_reply" %}
+                <span class="v2-chip v2-chip-warn" style="font-size:11px; padding:2px 9px;">Needs reply</span>
+              {% elif c.detail.status == "resolved" %}
+                <span class="v2-chip v2-chip-mint" style="font-size:11px; padding:2px 9px;">Resolved</span>
+              {% else %}
+                <span class="v2-chip v2-chip-soft" style="font-size:11px; padding:2px 9px;">New</span>
+              {% endif %}
+              {# Independent operator flag — orthogonal to status #}
+              {% if c.detail.follow_up_needed %}
+                <span title="Follow-up flag" style="font-size:12px;">📌</span>
+              {% endif %}
               {% if c.detail.call_reason %}
                 <span class="v2-chip {% if c.detail.call_reason == 'complaint' %}v2-chip-danger{% elif c.detail.call_reason == 'reservation' %}v2-chip-mint{% elif c.detail.call_reason == 'billing' %}v2-chip-warn{% else %}v2-chip-soft{% endif %}"
                       style="font-size:11px; padding:2px 9px;">
@@ -280,9 +269,15 @@
             <details class="v2-detail-overflow">
               <summary aria-label="More actions">⋯</summary>
               <div class="v2-detail-overflow-menu">
-                {% if d.follow_up_needed or d.needs_review %}
-                  {# Already shown as primary "Mark resolved" button — no duplicate here #}
-                {% else %}
+                {# Manual status transitions — operator overrides auto-promotion #}
+                {% if d.status != "needs_reply" %}
+                  <button type="button" class="set-status-btn"
+                          data-url="{% url 'portal_call_set_status' restaurant.slug c.event.pk %}"
+                          data-status="needs_reply">
+                    <i class="bi bi-flag"></i> Move to needs reply
+                  </button>
+                {% endif %}
+                {% if d.status == "resolved" %}
                   <button type="button" class="reopen-call-btn"
                           data-url="{% url 'portal_call_reopen' restaurant.slug c.event.pk %}">
                     <i class="bi bi-arrow-counterclockwise"></i> Reopen
@@ -485,6 +480,26 @@
   document.querySelector('.reopen-call-btn')?.addEventListener('click', (e) => {
     postAndReload(e.currentTarget.dataset.url);
   });
+
+  // ── Set workflow status (overflow menu) ────────────────────────
+  document.querySelectorAll('.set-status-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const t = e.currentTarget;
+      postAndReload(t.dataset.url, new URLSearchParams({ status: t.dataset.status }).toString());
+    });
+  });
+
+  // ── Mark call as viewed (inbox read-state) ─────────────────────
+  // Fire-and-forget on page load — server is idempotent (only stamps if NULL).
+  // No await / no reload: the visual change applies on next page render.
+  (function markViewed() {
+    {% if selected_call %}
+    fetch("{% url 'portal_mark_call_viewed' restaurant.slug selected_call.event.pk %}", {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken },
+    }).catch(() => {});
+    {% endif %}
+  })();
 
   // ── Dismiss missed action ───────────────────────────────────────
   document.querySelector('.dismiss-action-btn')?.addEventListener('click', async (e) => {
