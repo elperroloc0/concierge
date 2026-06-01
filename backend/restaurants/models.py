@@ -10,6 +10,17 @@ from django.utils.translation import gettext_lazy as _
 
 User = get_user_model()
 
+VERTICAL_CHOICES = [
+    ("restaurant",    "Restaurant / Bar"),
+    ("home_services", "Home Services"),
+    ("medical",       "Medical / Clinic"),
+    ("real_estate",   "Real Estate"),
+    ("beauty",        "Beauty & Wellness"),
+    ("hotel",         "Hotel / Hospitality"),
+    ("other",         "Other"),
+]
+
+
 # Create your models here.
 class Restaurant(models.Model):
     # identity
@@ -19,6 +30,11 @@ class Restaurant(models.Model):
     user = models.OneToOneField(
         get_user_model(), null=True, blank=True,
         on_delete=models.SET_NULL, related_name="restaurant"
+    )
+    # Industry vertical (supports multi-vertical expansion).
+    vertical = models.CharField(
+        max_length=32, default="restaurant", choices=VERTICAL_CHOICES, db_index=True,
+        help_text="Industry vertical — drives KB template and agent prompt.",
     )
 
     # contacts
@@ -184,6 +200,15 @@ class Restaurant(models.Model):
             self.slug = slug
 
         super().save(*args, **kwargs)
+
+    @property
+    def is_provisioned(self):
+        """True when Retell agent is configured and ready to take calls.
+
+        New signups land in an unprovisioned state (no agent_id, no phone).
+        Ops manually provisions Retell within 24h, then this flips to True.
+        """
+        return bool(self.retell_agent_id and self.retell_phone_number)
 
     def __str__(self):
         return self.name
@@ -901,6 +926,55 @@ class CallActionToken(models.Model):
     @property
     def age_minutes(self) -> float:
         return (timezone.now() - self.created_at).total_seconds() / 60
+
+
+# ─── Landing page artifacts ───────────────────────────────────────────────────
+
+class DemoCallLog(models.Model):
+    """Outbound demo call triggered from the landing page hero.
+
+    Used for analytics (demo→signup conversion) and rate-limiting forensics.
+    """
+
+    STATUS_TRIGGERED = "triggered"
+    STATUS_FAILED    = "failed"
+    STATUS_CHOICES = [
+        (STATUS_TRIGGERED, "Triggered"),
+        (STATUS_FAILED,    "Failed"),
+    ]
+
+    phone           = models.CharField(max_length=32, db_index=True)
+    ip              = models.GenericIPAddressField()
+    lang            = models.CharField(max_length=4, default="en")
+    user_agent      = models.CharField(max_length=300, blank=True, default="")
+    retell_call_id  = models.CharField(max_length=128, blank=True, default="")
+    status          = models.CharField(max_length=16, default=STATUS_TRIGGERED, choices=STATUS_CHOICES)
+    error_message   = models.TextField(blank=True, default="")
+    created_at      = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"DemoCall[{self.phone} | {self.status}]"
+
+
+class WaitlistEntry(models.Model):
+    """Email capture from industry chips (vertical waitlist)."""
+
+    email      = models.EmailField(db_index=True)
+    vertical   = models.CharField(max_length=32, choices=VERTICAL_CHOICES, db_index=True)
+    lang       = models.CharField(max_length=4, default="en")
+    ip         = models.GenericIPAddressField(null=True, blank=True)
+    notified   = models.BooleanField(default=False, help_text="True once we sent the launch email.")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        unique_together = [("email", "vertical")]
+
+    def __str__(self):
+        return f"Waitlist[{self.vertical} | {self.email}]"
 
     def __str__(self):
         return f"CallActionToken[{self.action_type} @ {self.restaurant.slug} | {self.response or 'pending'}]"
