@@ -976,5 +976,19 @@ class WaitlistEntry(models.Model):
     def __str__(self):
         return f"Waitlist[{self.vertical} | {self.email}]"
 
+
+class EmailVerificationToken(models.Model):
+    """One-time token emailed to new users to verify email ownership.
+
+    Presence of a row means the user's email is NOT yet verified.
+    Clicking the link → deletes the row → email is considered verified.
+    """
+    user       = models.OneToOneField(User, on_delete=models.CASCADE, related_name="email_verification_token")
+    token      = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def is_expired(self):
+        return timezone.now() > self.created_at + timezone.timedelta(hours=72)
+
     def __str__(self):
-        return f"CallActionToken[{self.action_type} @ {self.restaurant.slug} | {self.response or 'pending'}]"
+        return f"EmailVerif[{self.user.email}]"

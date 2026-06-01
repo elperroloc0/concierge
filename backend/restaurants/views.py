@@ -51,7 +51,7 @@ from retell import Retell
 
 from .decorators import portal_view
 from .forms import KnowledgeBaseForm, RestaurantBasicForm, AccountEmailForm, PasswordUpdateForm
-from .models import CallDetail, CallEvent, CallerMemory, PushSubscription, Restaurant, RestaurantKnowledgeBase, RestaurantMembership, SmsLog, Subscription, PendingEmailChange, WeeklyReport
+from .models import CallDetail, CallEvent, CallerMemory, EmailVerificationToken, PushSubscription, Restaurant, RestaurantKnowledgeBase, RestaurantMembership, SmsLog, Subscription, PendingEmailChange, WeeklyReport
 from .services.retell_client import RetellClient
 from .services.retell_tools import build_tool_list
 
@@ -3017,6 +3017,12 @@ def portal_signup(request):
     Membership + trialing Subscription, logs the user in, and redirects to their
     new portal dashboard. Retell provisioning happens manually by ops afterwards
     (Path A — see `Restaurant.is_provisioned`).
+
+    Security measures:
+    - IP rate limit: 5 signups per IP per hour (cache-based)
+    - Honeypot field: `website` must be empty (bots fill hidden fields)
+    - Email verification: token sent on signup; banner shown until confirmed
+    - Password never echoed back to the form
     """
     if request.user.is_authenticated:
         redir = _get_login_redirect(request.user)
@@ -3028,10 +3034,27 @@ def portal_signup(request):
 
     if request.method == "POST":
         from django.contrib.auth import get_user_model
-        from django.utils.crypto import get_random_string
+        from django.core.cache import cache
         from django.core.validators import validate_email
         from django.core.exceptions import ValidationError as DjangoValidationError
-        from .models import VERTICAL_CHOICES
+        from django.core.mail import send_mail
+        from .models import VERTICAL_CHOICES, EmailVerificationToken
+
+        # ── Honeypot: bots fill hidden fields, humans leave them empty ─────────
+        if request.POST.get("website"):
+            # Silently drop the request — bots don't need an error message
+            return redirect("portal_signup")
+
+        # ── IP rate limiting: 5 signups per IP per hour ────────────────────────
+        ip = request.META.get("HTTP_X_FORWARDED_FOR", request.META.get("REMOTE_ADDR", "")).split(",")[0].strip()
+        rate_key = f"signup_rate:{ip}"
+        attempt_count = cache.get(rate_key, 0)
+        if attempt_count >= 5:
+            return render(request, "portal/signup.html", {
+                "errors": {}, "form_data": {},
+                "global_error": "Too many signup attempts. Please try again later.",
+            })
+        cache.set(rate_key, attempt_count + 1, timeout=3600)
 
         User = get_user_model()
         valid_verticals = {choice[0] for choice in VERTICAL_CHOICES}
@@ -3039,9 +3062,11 @@ def portal_signup(request):
         first_name    = (request.POST.get("first_name") or "").strip()[:150]
         last_name     = (request.POST.get("last_name")  or "").strip()[:150]
         email         = (request.POST.get("email")      or "").strip().lower()[:254]
+        password      = request.POST.get("password") or ""
         business_name = (request.POST.get("business_name") or "").strip()[:255]
         vertical      = (request.POST.get("vertical") or "").strip()
 
+        # Never echo back the password — only the non-secret fields
         form_data = {
             "first_name": first_name, "last_name": last_name,
             "email": email, "business_name": business_name, "vertical": vertical,
@@ -3052,6 +3077,11 @@ def portal_signup(request):
         if not business_name: errors["business_name"] = "Required."
         if vertical not in valid_verticals: errors["vertical"] = "Choose your industry."
 
+        if not password:
+            errors["password"] = "Choose a password."
+        elif len(password) < 8:
+            errors["password"] = "At least 8 characters."
+
         try:
             validate_email(email)
         except DjangoValidationError:
@@ -3061,10 +3091,8 @@ def portal_signup(request):
             errors["email"] = "An account already exists with this email. Try signing in."
 
         if not errors:
-            # ── Create user (random password — they'll set one via reset link) ─
-            temp_password = get_random_string(20)
             user = User.objects.create_user(
-                username=email, email=email, password=temp_password,
+                username=email, email=email, password=password,
                 first_name=first_name, last_name=last_name,
             )
             # ── Business container (unprovisioned — no Retell yet) ─────────────
@@ -3085,15 +3113,17 @@ def portal_signup(request):
                 current_period_end=timezone.now() + timedelta(days=14),
             )
             # ── KB scaffolding: only for verticals where we have a KB model ───
-            # Restaurant is the only vertical with a KB schema today. Other
-            # verticals will get their own KB models as they launch.
             if vertical == "restaurant":
                 RestaurantKnowledgeBase.objects.get_or_create(restaurant=business)
+
+            # ── Email verification token ───────────────────────────────────────
+            verif_token = EmailVerificationToken.objects.create(user=user)
+            _send_signup_verification_email(user, verif_token, request)
 
             _notify_ops_new_signup(business, user)
 
             # ── Log the user in and send them to the portal ────────────────────
-            user = authenticate(request, username=email, password=temp_password)
+            user = authenticate(request, username=email, password=password)
             if user is not None:
                 login(request, user)
             return redirect("portal_dashboard", slug=business.slug)
@@ -3129,65 +3159,151 @@ def _notify_ops_new_signup(business, user):
         logger.exception("Failed to notify ops of new signup | slug=%s", business.slug)
 
 
+def _send_signup_verification_email(user, verif_token, request):
+    """Send the 'please verify your email' message to a newly signed-up user."""
+    try:
+        from django.core.mail import send_mail
+        verify_url = request.build_absolute_uri(
+            reverse("portal_verify_signup_email", kwargs={"token": verif_token.token})
+        )
+        send_mail(
+            subject="Please verify your email — Concierge",
+            message=(
+                f"Hi {user.first_name},\n\n"
+                f"Welcome to Concierge! Please verify your email address by clicking the link below:\n\n"
+                f"{verify_url}\n\n"
+                f"This link expires in 72 hours.\n\n"
+                f"If you didn't sign up for Concierge, you can safely ignore this email.\n"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=True,
+        )
+    except Exception:
+        logger.exception("Failed to send signup verification email | user=%s", user.email)
+
+
+def portal_verify_signup_email(request, token):
+    """Clicked from the verification email — marks the user's email as verified."""
+    from .models import EmailVerificationToken
+    try:
+        verif = EmailVerificationToken.objects.select_related("user").get(token=token)
+    except EmailVerificationToken.DoesNotExist:
+        return render(request, "portal/email_confirmed.html", {
+            "success": False,
+            "error": "This verification link is invalid or has already been used.",
+        })
+
+    if verif.is_expired():
+        verif.delete()
+        return render(request, "portal/email_confirmed.html", {
+            "success": False,
+            "error": "This verification link has expired. Please request a new one from your account settings.",
+        })
+
+    user = verif.user
+    verif.delete()  # Deleting the token marks the email as verified
+
+    # If the user isn't logged in already, log them in now (they just proved email ownership)
+    if not request.user.is_authenticated:
+        user.backend = "django.contrib.auth.backends.ModelBackend"
+        login(request, user)
+
+    return render(request, "portal/email_confirmed.html", {
+        "success": True,
+        "new_email": user.email,
+        "is_signup_verification": True,
+    })
+
+
 def portal_password_reset_request(request):
-    """Step 1: user enters their email to receive a reset link."""
+    """Step 1: user enters their email to receive a reset link.
+
+    Security:
+    - IP rate limit: 5 requests/IP/hour (stops inbox flooding)
+    - Email sent in background thread: response time is always instant regardless
+      of whether the email exists (prevents timing-based account enumeration)
+    - Always shows "check inbox" — never leaks whether email is registered
+    """
     from django.contrib.auth import get_user_model
     from django.contrib.auth.tokens import default_token_generator
+    from django.core.cache import cache
     from django.utils.encoding import force_bytes
     from django.utils.http import urlsafe_base64_encode
 
     if request.user.is_authenticated:
         return redirect("portal_login")
 
-    sent = False
-    error = None
-
     if request.method == "POST":
+        # Rate limit: 5 requests per IP per hour
+        ip = request.META.get("HTTP_X_FORWARDED_FOR", request.META.get("REMOTE_ADDR", "")).split(",")[0].strip()
+        rate_key = f"pwreset_rate:{ip}"
+        if cache.get(rate_key, 0) >= 5:
+            # Still show "sent" — don't reveal the block to potential attackers
+            return render(request, "portal/password_reset_request.html", {"sent": True})
+        cache.set(rate_key, cache.get(rate_key, 0) + 1, timeout=3600)
+
         email = request.POST.get("email", "").strip().lower()
         User = get_user_model()
-        try:
-            user = User.objects.get(email__iexact=email)
-            uid   = urlsafe_base64_encode(force_bytes(user.pk))
-            token = default_token_generator.make_token(user)
-            reset_url = request.build_absolute_uri(
-                reverse("portal_password_reset_confirm", kwargs={"uidb64": uid, "token": token})
-            )
-            from django.core.mail import send_mail
-            send_mail(
-                subject="Reset your Concierge Portal password",
-                message=(
-                    f"Hi,\n\n"
-                    f"We received a request to reset the password for your Concierge Portal account ({email}).\n\n"
-                    f"Click the link below to set a new password (valid for 24 hours):\n{reset_url}\n\n"
-                    f"If you did not request this, you can ignore this email.\n\n"
-                    f"— Concierge AI"
-                ),
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[email],
-            )
-        except User.DoesNotExist:
-            pass  # Don't reveal whether email exists
-        except Exception:
-            logger.exception("portal_password_reset_request: failed to send email")
-            error = "Failed to send reset email. Please try again later."
 
-        if not error:
-            sent = True
+        # Capture for the thread closure before request object may be recycled
+        build_uri = request.build_absolute_uri
 
-    return render(request, "portal/password_reset_request.html", {"sent": sent, "error": error})
+        def _send_async():
+            try:
+                user = User.objects.get(email__iexact=email)
+                uid   = urlsafe_base64_encode(force_bytes(user.pk))
+                token = default_token_generator.make_token(user)
+                reset_url = build_uri(
+                    reverse("portal_password_reset_confirm", kwargs={"uidb64": uid, "token": token})
+                )
+                from django.core.mail import send_mail
+                send_mail(
+                    subject="Reset your Concierge Portal password",
+                    message=(
+                        f"Hi,\n\n"
+                        f"We received a request to reset the password for your Concierge Portal account ({email}).\n\n"
+                        f"Click the link below to set a new password (valid for 24 hours):\n{reset_url}\n\n"
+                        f"You will also need to confirm your business name to complete the reset.\n\n"
+                        f"If you did not request this, you can safely ignore this email.\n\n"
+                        f"— Concierge"
+                    ),
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[email],
+                )
+            except User.DoesNotExist:
+                pass  # Silently ignore — caller always sees "sent"
+            except Exception:
+                logger.exception("portal_password_reset_request: failed to send email | email=%s", email)
+
+        threading.Thread(target=_send_async, daemon=True).start()
+        # Always return "sent" — never reveal whether the email is registered
+        return render(request, "portal/password_reset_request.html", {"sent": True})
+
+    return render(request, "portal/password_reset_request.html", {"sent": False})
 
 
 def portal_password_reset_confirm(request, uidb64, token):
-    """Step 2: user sets a new password via the link."""
+    """Two-step password reset: link click → knowledge check → new password.
+
+    Step 1 (verify): user must enter their business name (knowledge factor).
+                     3 wrong attempts burn the token permanently.
+    Step 2 (set_password): shown only after step 1 passes (session-gated).
+
+    Security:
+    - Token burned in cache after 3 wrong KB attempts (prevents brute-force)
+    - Session key ties KB-verified state to this specific reset link
+    - hmac.compare_digest for constant-time business name comparison
+    """
+    import hmac
     from django.contrib.auth import get_user_model
     from django.contrib.auth.forms import SetPasswordForm
     from django.contrib.auth.tokens import default_token_generator
+    from django.core.cache import cache
     from django.utils.encoding import force_str
     from django.utils.http import urlsafe_base64_decode
 
     User = get_user_model()
-    error = None
-    form = None
 
     try:
         uid  = force_str(urlsafe_base64_decode(uidb64))
@@ -3195,31 +3311,155 @@ def portal_password_reset_confirm(request, uidb64, token):
     except (TypeError, ValueError, OverflowError, User.DoesNotExist):
         user = None
 
-    valid_link = user is not None and default_token_generator.check_token(user, token)
+    burned_key  = f"pwreset_burned:{uidb64}"
+    session_key = f"reset_kb_ok_{uidb64}"
+
+    valid_link = (
+        user is not None
+        and default_token_generator.check_token(user, token)
+        and not cache.get(burned_key)
+    )
 
     if not valid_link:
         return render(request, "portal/password_reset_confirm.html", {"valid_link": False})
 
-    if request.method == "POST":
-        form = SetPasswordForm(user, request.POST)
-        if form.is_valid():
-            form.save()
-            return render(request, "portal/password_reset_confirm.html", {
-                "valid_link": True,
-                "done": True,
-            })
-    else:
-        form = SetPasswordForm(user)
+    kb_verified = request.session.get(session_key, False)
 
-    # Apply portal form-control styling to the form fields
-    for field in form.fields.values():
-        field.widget.attrs.update({"class": "form-control"})
+    # ── Step 2: set new password (only reachable after KB verified) ───────────
+    if kb_verified:
+        if request.method == "POST":
+            form = SetPasswordForm(user, request.POST)
+            if form.is_valid():
+                form.save()
+                request.session.pop(session_key, None)
+                _send_password_changed_notification(user, request)
+                return render(request, "portal/password_reset_confirm.html", {
+                    "valid_link": True, "done": True,
+                })
+        else:
+            form = SetPasswordForm(user)
+
+        for field in form.fields.values():
+            field.widget.attrs.update({"class": "form-control"})
+
+        return render(request, "portal/password_reset_confirm.html", {
+            "valid_link": True, "done": False,
+            "step": "set_password", "form": form,
+            "uidb64": uidb64, "token": token,
+        })
+
+    # ── Step 1: verify business name ──────────────────────────────────────────
+    kb_error       = None
+    attempts_left  = 3
+
+    if request.method == "POST":
+        submitted = (request.POST.get("business_name") or "").strip().lower()
+
+        membership = RestaurantMembership.objects.filter(
+            user=user, role="owner", is_active=True,
+        ).select_related("restaurant").first()
+
+        # Use business name if available, last name as fallback (new account edge case)
+        expected = (membership.restaurant.name if membership else user.last_name).strip().lower()
+
+        attempts_key = f"pwreset_attempts:{uidb64}"
+        attempts     = cache.get(attempts_key, 0)
+
+        # Constant-time comparison — prevent timing oracle on the business name
+        if hmac.compare_digest(submitted, expected):
+            request.session[session_key] = True
+            cache.delete(attempts_key)
+
+            form = SetPasswordForm(user)
+            for field in form.fields.values():
+                field.widget.attrs.update({"class": "form-control"})
+
+            return render(request, "portal/password_reset_confirm.html", {
+                "valid_link": True, "done": False,
+                "step": "set_password", "form": form,
+                "uidb64": uidb64, "token": token,
+            })
+        else:
+            attempts += 1
+            if attempts >= 3:
+                cache.set(burned_key, True, timeout=86400)
+                cache.delete(attempts_key)
+                _send_reset_blocked_notification(user, request)
+                return render(request, "portal/password_reset_confirm.html", {"valid_link": False})
+            cache.set(attempts_key, attempts, timeout=3600)
+            kb_error      = "That doesn't match. Please check the business name on your account."
+            attempts_left = 3 - attempts
 
     return render(request, "portal/password_reset_confirm.html", {
-        "valid_link": True,
-        "done": False,
-        "form": form,
+        "valid_link": True, "step": "verify",
+        "kb_error": kb_error, "attempts_left": attempts_left,
+        "uidb64": uidb64, "token": token,
     })
+
+
+def _client_ip(request):
+    """Best-effort client IP — uses X-Forwarded-For first hop, falls back to REMOTE_ADDR."""
+    return request.META.get("HTTP_X_FORWARDED_FOR", request.META.get("REMOTE_ADDR", "")).split(",")[0].strip()
+
+
+def _send_password_changed_notification(user, request):
+    """Sent after a successful password reset — confirms the change to the account holder."""
+    try:
+        from django.core.mail import send_mail
+        when = timezone.now().strftime("%Y-%m-%d %H:%M UTC")
+        ip   = _client_ip(request) or "unknown"
+        ua   = (request.META.get("HTTP_USER_AGENT") or "unknown")[:200]
+        send_mail(
+            subject="Your Concierge password was changed",
+            message=(
+                f"Hi {user.first_name or ''},\n\n"
+                f"Your Concierge account password was just changed.\n\n"
+                f"  When:    {when}\n"
+                f"  IP:      {ip}\n"
+                f"  Device:  {ua}\n\n"
+                f"If this was you, no further action is needed.\n\n"
+                f"If this was NOT you, your account may be compromised. Please:\n"
+                f"  1. Reset your password again immediately\n"
+                f"  2. Contact support: support@halobits.com\n\n"
+                f"— Concierge"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=True,
+        )
+    except Exception:
+        logger.exception("Failed to send password-changed notification | user=%s", user.email)
+
+
+def _send_reset_blocked_notification(user, request):
+    """Sent when 3 wrong knowledge-check attempts burn a reset token — possible attack signal."""
+    try:
+        from django.core.mail import send_mail
+        when = timezone.now().strftime("%Y-%m-%d %H:%M UTC")
+        ip   = _client_ip(request) or "unknown"
+        send_mail(
+            subject="Suspicious activity on your Concierge account",
+            message=(
+                f"Hi {user.first_name or ''},\n\n"
+                f"Someone used a password reset link for your Concierge account but failed the\n"
+                f"identity verification step three times. The reset link has been disabled.\n\n"
+                f"  When: {when}\n"
+                f"  IP:   {ip}\n\n"
+                f"Your password has NOT been changed — your account is still secure.\n\n"
+                f"What this could mean:\n"
+                f"  - It was you, and you forgot your business name (just request a new link)\n"
+                f"  - Someone else has your email and is trying to break into your account\n\n"
+                f"If it wasn't you, we recommend:\n"
+                f"  1. Sign in and change your password as a precaution\n"
+                f"  2. Contact support if you suspect anything: support@halobits.com\n\n"
+                f"— Concierge"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=True,
+        )
+    except Exception:
+        logger.exception("Failed to send reset-blocked notification | user=%s", user.email)
 
 
 @portal_view()
@@ -3899,6 +4139,7 @@ def portal_dashboard(request, slug):
         "avg_cover_set": avg_cover is not None,
         "confirmed_count": confirmed_count,
         "pending_leads": pending_leads,
+        "email_unverified": EmailVerificationToken.objects.filter(user=request.user).exists(),
     }
     return render(request, "portal/dashboard.html", context)
 

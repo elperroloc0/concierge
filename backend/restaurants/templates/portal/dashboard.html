@@ -6,6 +6,20 @@
 
 {% block content %}
 
+{# ── Email verification banner ──────────────────────────────────── #}
+{% if email_unverified %}
+  <div class="v2-alert" style="margin-bottom: 18px; display:flex; gap:14px; align-items:flex-start; background: rgba(250,180,60,0.12); border-color: rgba(250,180,60,0.35);">
+    <i class="bi bi-envelope-exclamation" style="font-size:20px; color:#c47900; flex-shrink:0; margin-top:2px;"></i>
+    <div style="flex:1;">
+      <strong style="display:block; font-size:14px; margin-bottom:4px;">Please verify your email address</strong>
+      <span style="font-size:13px; color:var(--muted-strong);">
+        We sent a confirmation link to <strong>{{ request.user.email }}</strong>.
+        Check your inbox and click the link to verify your account.
+      </span>
+    </div>
+  </div>
+{% endif %}
+
 {# ── Pending provisioning banner (new signups, pre-Retell) ─────── #}
 {% if not restaurant.is_provisioned %}
   <div class="v2-alert" style="margin-bottom: 18px; display:flex; gap:14px; align-items:flex-start;">

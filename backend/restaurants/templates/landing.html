@@ -17,7 +17,7 @@
 <style>
 /* ── Tokens ── */
 :root{
-  --bg:#e5e5d6;
+  --bg:##fef3eb;
   --surface:#f8f8e8;
   --accent:#1f3fc3;
   --accent-deep:#173098;
@@ -115,7 +115,7 @@ nav{
   position:fixed;top:0;left:0;right:0;height:64px;z-index:100;
   display:flex;align-items:center;gap:16px;
   padding:0 clamp(1.25rem,5vw,2.25rem);
-  background:rgba(245,245,226,0.75);
+  background:rgba(255,255,255,0.02);
   backdrop-filter:blur(24px) saturate(160%);
   -webkit-backdrop-filter:blur(24px) saturate(160%);
   border-bottom:1px solid transparent;
@@ -123,7 +123,7 @@ nav{
 }
 nav.scrolled{border-bottom-color:var(--warm-line);box-shadow:0 4px 24px -16px rgba(56,36,12,0.3);}
 .brand{display:flex;align-items:baseline;gap:8px;text-decoration:none;color:var(--ink);}
-.brand-mark{color:var(--accent);font-size:17px;transform:translateY(2px);display:inline-block;}
+.brand-mark{color:var(--accent);font-size:37px;transform:translateY(2px);display:inline-block;}
 .brand-name{font-weight:900;font-size:19px;letter-spacing:-0.03em;font-family:'Geist',sans-serif;}
 .brand-by{font-size:11px;color:var(--muted-soft);font-weight:400;font-family:'Geist',sans-serif;}
 .nav-right{margin-left:auto;display:flex;align-items:center;gap:12px;}
@@ -243,13 +243,14 @@ section{position:relative;z-index:2;}
 .ticker-stream{
   display:flex;flex-direction:column;
   animation:tickerScroll 28s linear infinite;
+  animation-play-state:paused;   /* idle until the ticker is scrolled into view */
   will-change:transform;
 }
+.ticker-frame.in-view .ticker-stream{animation-play-state:running;}
 @keyframes tickerScroll{
   from{transform:translateY(0);}
   to  {transform:translateY(-50%);}
 }
-.ticker-frame:hover .ticker-stream{animation-play-state:paused;}
 .ticker-row{
   display:grid;
   grid-template-columns:54px 1fr auto;
@@ -383,13 +384,16 @@ section{position:relative;z-index:2;}
 .hero-sec-sep{color:var(--muted-soft);font-size:11px;}
 
 /* ════ LIVE ACTIVITY section (V2.2 — counter + ticker, was hero) ════ */
+/* flex-center keeps the layout correct whether the section contains
+   counter+ticker (2 children) or only the ticker (1 child). */
 #live-activity .live-grid{
-  display:grid;grid-template-columns:1fr 1.05fr;gap:clamp(28px,5vw,56px);
-  align-items:center;
+  display:flex;flex-wrap:wrap;justify-content:center;align-items:center;
+  gap:clamp(28px,5vw,56px);
   margin-top:clamp(2rem,4vw,3rem);
 }
+#live-activity .ticker-frame{margin:0;flex:0 1 540px;}
+#live-activity .hero-counter{flex:0 1 320px;}
 @media(max-width:780px){
-  #live-activity .live-grid{grid-template-columns:1fr;}
   #live-activity .hero-counter{text-align:center;}
   #live-activity .counter-number{font-size:clamp(4.5rem,18vw,8rem);}
 }
@@ -615,31 +619,27 @@ input[type="range"].roi-slider::-moz-range-thumb{
 .price-assure i{color:var(--accent);}
 .price-foot{max-width:600px;margin:16px auto 0;text-align:center;font-size:12px;color:var(--muted-soft);line-height:1.6;font-family:'Geist Mono',monospace;}
 
-/* ════ SIGNUP ════ */
-.signup-card{max-width:560px;margin:0 auto;padding:clamp(28px,5vw,42px) clamp(22px,5vw,36px);}
-.signup-card h2{font-size:clamp(1.9rem,3.8vw,2.5rem);text-align:center;}
-.signup-card .desc{font-size:14px;color:var(--muted);margin:14px 0 28px;line-height:1.55;text-align:center;font-family:'Geist',sans-serif;}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
-.field{position:relative;}
-.field input,.field select{width:100%;padding:13px 18px;border-radius:var(--r-pill);background:rgba(255,255,255,0.85);border:1px solid var(--warm-line);font-family:'Geist',sans-serif;font-size:14px;color:var(--ink);outline:none;transition:border-color .15s ease,box-shadow .15s ease;appearance:none;}
-.field input::placeholder{color:var(--muted-soft);}
-.field input:focus,.field select:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(31,63,195,0.12);}
-.field.full{margin-bottom:12px;}
-.field select{color:var(--ink);cursor:pointer;}
-.field .chev{position:absolute;right:18px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--muted);font-size:13px;}
-.signup-card .btn-accent{width:100%;margin-top:8px;font-size:15px;padding:15px;}
-.signup-assure{display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin-top:18px;}
-.signup-assure span{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);font-family:'Geist',sans-serif;}
-.signup-assure i{color:var(--accent);}
-.terms{text-align:center;font-size:11px;color:var(--muted-soft);margin-top:16px;line-height:1.5;font-family:'Geist',sans-serif;}
-.terms a{color:var(--muted);text-decoration:underline;}
-.form-error{
-  display:none;margin-top:12px;padding:10px 14px;
-  background:rgba(193,68,68,0.08);border:1px solid rgba(193,68,68,0.2);
-  border-radius:12px;font-size:13px;color:var(--warn);
-  font-family:'Geist',sans-serif;
+/* ════ FINAL CTA (no form — links to /portal/signup/) ════ */
+.final-cta{
+  max-width:640px;margin:0 auto;text-align:center;
+  display:flex;flex-direction:column;align-items:center;gap:18px;
+  padding:clamp(28px,5vw,48px) clamp(20px,5vw,40px);
 }
-.form-error.show{display:block;}
+.final-cta h2{font-size:clamp(2rem,4.5vw,3.4rem);}
+.final-cta-desc{
+  font-family:'Geist',sans-serif;font-weight:300;
+  font-size:clamp(1rem,1.5vw,1.15rem);color:var(--muted);
+  max-width:48ch;line-height:1.55;
+}
+.final-cta-btn{
+  padding:18px 32px;font-size:16px;
+  box-shadow:0 18px 50px -14px rgba(31,63,195,0.50);
+}
+.final-cta-assure{
+  display:flex;flex-wrap:wrap;justify-content:center;gap:18px;margin-top:6px;
+}
+.final-cta-assure span{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);font-family:'Geist',sans-serif;}
+.final-cta-assure i{color:var(--accent);}
 
 /* ════ FOOTER ════ */
 footer{border-top:1px solid var(--warm-line);position:relative;z-index:2;}
@@ -685,7 +685,6 @@ footer{border-top:1px solid var(--warm-line);position:relative;z-index:2;}
   <a class="brand" href="#top">
     <span class="brand-mark">✦</span>
     <span class="brand-name">Concierge</span>
-    <span class="brand-by">by HaloBits</span>
   </a>
   <div class="nav-right">
     <div class="lang" id="lang">
@@ -693,7 +692,7 @@ footer{border-top:1px solid var(--warm-line);position:relative;z-index:2;}
       <button data-set="es">ES</button>
     </div>
     <a class="nav-signin" href="{% url 'portal_login' %}" data-en="Sign in" data-es="Entrar">Sign in</a>
-    <a class="btn btn-accent btn-sm" href="#signup" data-en="Get started →" data-es="Empezar →">Get started →</a>
+    <a class="btn btn-accent btn-sm" href="{% url 'portal_signup' %}" data-en="Get started →" data-es="Empezar →">Get started →</a>
   </div>
 </nav>
 
@@ -747,7 +746,7 @@ footer{border-top:1px solid var(--warm-line);position:relative;z-index:2;}
 
     <div class="wave-after rv" id="waveAfter">
       <span data-en="Sounds good?" data-es="¿Suena bien?">Sounds good?</span>
-      <a class="btn btn-accent btn-sm" href="#signup"
+      <a class="btn btn-accent btn-sm" href="{% url 'portal_signup' %}"
          data-en="Create your account →" data-es="Crear tu cuenta →">Create your account →</a>
     </div>
 
@@ -879,7 +878,7 @@ footer{border-top:1px solid var(--warm-line);position:relative;z-index:2;}
           <span id="roiNet" data-en-prefix="Your net gain:" data-es-prefix="Ganancia neta:">Your net gain: $151/mo</span>
         </div>
         <div class="roi-mult mono" id="roiMult">1.4× ROI</div>
-        <a class="btn btn-accent roi-cta" href="#signup" data-en="Start free trial →" data-es="Empieza gratis →">Start free trial →</a>
+        <a class="btn btn-accent roi-cta" href="{% url 'portal_signup' %}" data-en="Start free trial →" data-es="Empieza gratis →">Start free trial →</a>
       </div>
     </div>
 
@@ -935,7 +934,7 @@ footer{border-top:1px solid var(--warm-line);position:relative;z-index:2;}
           <li><i class="bi bi-check-lg"></i><span data-en="Email alerts" data-es="Alertas por email">Email alerts</span></li>
           <li class="note"><i class="bi bi-clock"></i><span data-en="200 minutes / month" data-es="200 minutos / mes">200 minutes / month</span></li>
         </ul>
-        <a class="btn btn-light" href="#signup" data-en="Start free" data-es="Empieza gratis">Start free</a>
+        <a class="btn btn-light" href="{% url 'portal_signup' %}" data-en="Start free" data-es="Empieza gratis">Start free</a>
       </div>
       <div class="price paper pro rv">
         <div class="price-pop"><i class="bi bi-star-fill"></i> <span data-en="Most popular" data-es="Más popular">Most popular</span></div>
@@ -951,7 +950,7 @@ footer{border-top:1px solid var(--warm-line);position:relative;z-index:2;}
           <li><i class="bi bi-check-lg"></i><span>WhatsApp</span></li>
           <li class="note"><i class="bi bi-clock"></i><span data-en="700 minutes / month" data-es="700 minutos / mes">700 minutes / month</span></li>
         </ul>
-        <a class="btn btn-accent" href="#signup" data-en="Start free" data-es="Empieza gratis">Start free</a>
+        <a class="btn btn-accent" href="{% url 'portal_signup' %}" data-en="Start free" data-es="Empieza gratis">Start free</a>
       </div>
       <div class="price paper bespoke rv">
         <div class="price-name">Bespoke</div>
@@ -984,12 +983,6 @@ footer{border-top:1px solid var(--warm-line);position:relative;z-index:2;}
       <p class="lead rv" data-en="Real bookings, real questions, real customers — answered by Concierge today." data-es="Reservas reales, preguntas reales, clientes reales — atendidos por Concierge hoy.">Real bookings, real questions, real customers — answered by Concierge today.</p>
     </div>
     <div class="live-grid">
-      <div class="hero-counter rv">
-        <div class="counter-number mono" id="heroCounter" data-target="{{ hero_today_calls|default:'47' }}">0</div>
-        <div class="counter-label"
-             data-en="calls answered for Miami businesses today"
-             data-es="llamadas contestadas hoy para negocios de Miami">calls answered for Miami businesses today</div>
-      </div>
       <div class="ticker-frame rv" aria-label="Live call activity">
         <div class="ticker-mask">
           <div class="ticker-stream" id="tickerStream"></div>
@@ -999,43 +992,22 @@ footer{border-top:1px solid var(--warm-line);position:relative;z-index:2;}
   </div>
 </section>
 
-<!-- SIGNUP -->
+<!-- FINAL CTA — links to the standalone /portal/signup/ page -->
 <section id="signup" style="position:relative;overflow:hidden;">
   <div class="orb orb-accent" style="width:500px;height:500px;top:50%;left:50%;transform:translate(-50%,-50%);opacity:0.14;"></div>
   <div class="wrap">
-    <div class="signup-card card rv">
-      <h2 data-en="Ready to start?" data-es="¿Listo para empezar?">Ready to start?</h2>
-      <p class="desc" data-en="Create your account. Agent live in 24 hours." data-es="Crea tu cuenta. Tu agente estará listo en 24 horas.">Create your account. Agent live in 24 hours.</p>
-      <form method="post" action="{% url 'portal_signup' %}" id="signupForm">
-        {% csrf_token %}
-        <div class="form-row">
-          <div class="field"><input type="text" name="first_name" placeholder="First name" data-en-placeholder="First name" data-es-placeholder="Nombre" required /></div>
-          <div class="field"><input type="text" name="last_name" placeholder="Last name" data-en-placeholder="Last name" data-es-placeholder="Apellido" required /></div>
-        </div>
-        <div class="field full"><input type="email" name="email" placeholder="Work email" data-en-placeholder="Work email" data-es-placeholder="Correo de trabajo" required /></div>
-        <div class="field full"><input type="text" name="business_name" placeholder="Business name" data-en-placeholder="Business name" data-es-placeholder="Nombre del negocio" required /></div>
-        <div class="field full">
-          <select name="vertical" required>
-            <option value="" disabled selected data-en="Industry" data-es="Industria">Industry</option>
-            <option value="restaurant" data-en="Restaurants & Bars" data-es="Restaurantes y Bares">Restaurants &amp; Bars</option>
-            <option value="home_services" data-en="Home Services" data-es="Servicios del Hogar">Home Services</option>
-            <option value="medical" data-en="Medical & Clinics" data-es="Médicos y Clínicas">Medical &amp; Clinics</option>
-            <option value="real_estate" data-en="Real Estate" data-es="Bienes Raíces">Real Estate</option>
-            <option value="beauty" data-en="Beauty & Wellness" data-es="Belleza y Bienestar">Beauty &amp; Wellness</option>
-            <option value="hotel" data-en="Hotels & Hospitality" data-es="Hoteles y Hospitalidad">Hotels &amp; Hospitality</option>
-            <option value="other" data-en="Other" data-es="Otro">Other</option>
-          </select>
-          <i class="bi bi-chevron-down chev"></i>
-        </div>
-        <button type="submit" class="btn btn-accent" data-en="Create account — it's free →" data-es="Crear cuenta — es gratis →">Create account — it's free →</button>
-        <div class="form-error" id="signupError"></div>
-      </form>
-      <div class="signup-assure">
+    <div class="final-cta rv">
+      <h2 data-en="Ready when you are." data-es="Listos cuando tú quieras.">Ready when you are.</h2>
+      <p class="final-cta-desc"
+         data-en="Create your account in two minutes. Your agent is live within 24 hours."
+         data-es="Crea tu cuenta en dos minutos. Tu agente estará activo en 24 horas.">Create your account in two minutes. Your agent is live within 24 hours.</p>
+      <a class="btn btn-accent btn-lg final-cta-btn" href="{% url 'portal_signup' %}"
+         data-en="Create your account →" data-es="Crear tu cuenta →">Create your account →</a>
+      <div class="final-cta-assure">
         <span><i class="bi bi-check-lg"></i><span data-en="Free 14 days" data-es="14 días gratis">Free 14 days</span></span>
-        <span><i class="bi bi-check-lg"></i><span data-en="No card" data-es="Sin tarjeta">No card</span></span>
+        <span><i class="bi bi-check-lg"></i><span data-en="No credit card" data-es="Sin tarjeta">No credit card</span></span>
         <span><i class="bi bi-check-lg"></i><span data-en="Cancel anytime" data-es="Cancela cuando quieras">Cancel anytime</span></span>
       </div>
-      <p class="terms" data-en="By signing up you agree to our <a href='#'>Terms of Service</a> and <a href='#'>Privacy Policy</a>." data-es="Al registrarte aceptas nuestros <a href='#'>Términos de Servicio</a> y <a href='#'>Política de Privacidad</a>.">By signing up you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.</p>
     </div>
   </div>
 </section>
@@ -1158,40 +1130,44 @@ if (phrases.length && !reduceMotion) {
 }
 
 /* ══ Live-activity counter — animated count-up + slow simulated increment ══ */
+/* Guarded so removing the #heroCounter element from the page doesn't break
+   the rest of the script (ticker, morph button, etc.) below this point. */
 const heroCounter = document.getElementById('heroCounter');
-const TARGET_CALLS = parseInt(heroCounter.dataset.target, 10) || 47;
-let currentCalls = 0;
-function animateCounter(from, to, durationMs) {
-  const start = performance.now();
-  function tick(now) {
-    const p = Math.min((now - start) / durationMs, 1);
-    const e = 1 - Math.pow(1 - p, 3.5);
-    const val = Math.round(from + (to - from) * e);
-    heroCounter.textContent = val.toLocaleString();
-    currentCalls = val;
-    if (p < 1) requestAnimationFrame(tick);
-    else heroCounter.textContent = to.toLocaleString();
-  }
-  requestAnimationFrame(tick);
-}
-function scheduleCounterTick() {
-  // Random 45-90s between simulated +1 ticks.
-  const wait = 45000 + Math.random() * 45000;
-  setTimeout(() => {
-    animateCounter(currentCalls, currentCalls + 1, 700);
-    scheduleCounterTick();
-  }, wait);
-}
-const counterIO = new IntersectionObserver(entries => {
-  entries.forEach(e => {
-    if (e.isIntersecting) {
-      animateCounter(0, TARGET_CALLS, 1400);
-      counterIO.unobserve(heroCounter);
+if (heroCounter) {
+  const TARGET_CALLS = parseInt(heroCounter.dataset.target, 10) || 47;
+  let currentCalls = 0;
+  const animateCounter = (from, to, durationMs) => {
+    const start = performance.now();
+    const tick = (now) => {
+      const p = Math.min((now - start) / durationMs, 1);
+      const e = 1 - Math.pow(1 - p, 3.5);
+      const val = Math.round(from + (to - from) * e);
+      heroCounter.textContent = val.toLocaleString();
+      currentCalls = val;
+      if (p < 1) requestAnimationFrame(tick);
+      else heroCounter.textContent = to.toLocaleString();
+    };
+    requestAnimationFrame(tick);
+  };
+  const scheduleCounterTick = () => {
+    // Random 45-90s between simulated +1 ticks.
+    const wait = 45000 + Math.random() * 45000;
+    setTimeout(() => {
+      animateCounter(currentCalls, currentCalls + 1, 700);
       scheduleCounterTick();
-    }
-  });
-}, {threshold: 0.4});
-counterIO.observe(heroCounter);
+    }, wait);
+  };
+  const counterIO = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        animateCounter(0, TARGET_CALLS, 1400);
+        counterIO.unobserve(heroCounter);
+        scheduleCounterTick();
+      }
+    });
+  }, {threshold: 0.4});
+  counterIO.observe(heroCounter);
+}
 
 /* ══ Live activity ticker ══ */
 const TICKER_DATA = [
@@ -1230,6 +1206,15 @@ function renderTicker() {
 }
 renderTicker();
 window.__tickerRender = renderTicker;
+
+/* Scroll-driven play/pause: animation runs only while the ticker is on screen. */
+const tickerFrame = document.querySelector('.ticker-frame');
+if (tickerFrame) {
+  const tickerIO = new IntersectionObserver(entries => {
+    entries.forEach(e => tickerFrame.classList.toggle('in-view', e.isIntersecting));
+  }, {threshold: 0.15});
+  tickerIO.observe(tickerFrame);
+}
 
 /* ══ Morph button: idle → expanded form ══ */
 const morphCta = document.getElementById('morphCta');

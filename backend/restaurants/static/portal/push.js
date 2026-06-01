@@ -183,7 +183,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("/sw.js", { scope: "/" })
+      navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "all" })
         .catch((e) => console.warn("SW registration failed:", e));
       _watchPermission();
     });

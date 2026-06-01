@@ -14,6 +14,7 @@ urlpatterns = [
     path("password-reset/", views.portal_password_reset_request, name="portal_password_reset_request"),
     path("password-reset/<uidb64>/<token>/", views.portal_password_reset_confirm, name="portal_password_reset_confirm"),
     path("account/confirm-email/<uuid:token>/", views.portal_confirm_email, name="portal_confirm_email"),
+    path("account/verify-email/<uuid:token>/",  views.portal_verify_signup_email, name="portal_verify_signup_email"),
 
     # ── Restaurant-scoped pages ────────────────────────────────────────────
     path("<slug:slug>/",                    views.portal_dashboard,        name="portal_dashboard"),
