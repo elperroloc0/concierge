@@ -80,7 +80,22 @@ def root_redirect(request):
         if redir:
             return redir
         return redirect("portal_login")
-    return render(request, "landing.html")
+
+    # Live counter for the hero ticker: today's call_ended events across all
+    # provisioned restaurants. Falls back to a sensible default if zero (early
+    # morning) so the hero never shows "0 calls today".
+    try:
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_calls = CallEvent.objects.filter(
+            created_at__gte=today_start,
+            event_type="call_ended",
+        ).count()
+    except Exception:
+        today_calls = 0
+
+    return render(request, "landing.html", {
+        "hero_today_calls": today_calls if today_calls > 0 else 47,
+    })
 
 
 def help_cancel_forwarding(request):

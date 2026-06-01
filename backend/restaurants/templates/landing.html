@@ -12,7 +12,7 @@
 <meta property="og:image" content="{% static 'img/og_image.jpg' %}" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;900&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Geist:wght@300;400;500;600;900&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
 <style>
 /* ── Tokens ── */
@@ -48,19 +48,21 @@ body{
 
 /* ── Type ── */
 h1,.display-h{
-  font-family:'Instrument Serif',Georgia,serif;
-  font-weight:400;font-style:normal;
-  font-size:clamp(3rem,6.5vw,5.4rem);
-  line-height:1.0;letter-spacing:-0.02em;
+  font-family:'Bricolage Grotesque','Geist',system-ui,sans-serif;
+  font-weight:800;
+  font-size:clamp(3rem,7vw,6rem);
+  line-height:0.95;letter-spacing:-0.035em;
+  font-variation-settings:"wdth" 100,"opsz" 96;
 }
 h2,.display-h2{
-  font-family:'Instrument Serif',Georgia,serif;
-  font-weight:400;
-  font-size:clamp(2rem,4vw,3rem);
-  letter-spacing:-0.015em;line-height:1.08;
+  font-family:'Bricolage Grotesque','Geist',system-ui,sans-serif;
+  font-weight:700;
+  font-size:clamp(2rem,4.2vw,3.2rem);
+  letter-spacing:-0.025em;line-height:1.04;
+  font-variation-settings:"wdth" 100,"opsz" 48;
 }
 h3{font-weight:600;letter-spacing:-0.02em;font-size:1.05rem;line-height:1.3;}
-em.ac{font-style:italic;color:var(--accent);}
+em.ac{font-style:normal;color:var(--accent);}
 .lead{font-weight:300;font-size:clamp(1rem,1.6vw,1.18rem);color:var(--muted);line-height:1.6;}
 .tag{
   display:inline-flex;align-items:center;gap:7px;
@@ -140,111 +142,222 @@ section{position:relative;z-index:2;}
 .wrap{max-width:1160px;margin:0 auto;padding:clamp(3.5rem,7vw,6rem) clamp(1.25rem,5vw,2.25rem);}
 .sec-head{max-width:640px;margin:0 auto;text-align:center;display:flex;flex-direction:column;align-items:center;gap:16px;}
 
-/* ════ HERO ════ */
+/* ════ HERO (live activity ticker + morph CTA) ════ */
 .hero{min-height:100vh;padding-top:80px;display:flex;align-items:center;overflow:hidden;position:relative;}
 .hero-inner{
-  max-width:760px;margin:0 auto;padding:0 clamp(1.25rem,5vw,2.25rem) clamp(2rem,5vw,4rem);
+  max-width:780px;margin:0 auto;padding:0 clamp(1.25rem,5vw,2.25rem) clamp(2rem,5vw,4rem);
   width:100%;display:flex;flex-direction:column;align-items:center;text-align:center;
   position:relative;z-index:2;
 }
 .hero-badge{
   display:inline-flex;align-items:center;gap:9px;
   background:rgba(255,252,248,0.72);border:1px solid var(--warm-line);
-  padding:7px 14px;border-radius:var(--r-pill);
-  font-family:'Geist',sans-serif;font-size:13px;font-weight:500;
+  padding:6px 13px;border-radius:var(--r-pill);
+  font-family:'Geist',sans-serif;font-size:12px;font-weight:600;
+  letter-spacing:0.04em;text-transform:uppercase;color:var(--muted-strong,#3a352c);
   box-shadow:var(--shadow-soft);
 }
-.dot-live{width:8px;height:8px;border-radius:50%;background:var(--ok);position:relative;flex-shrink:0;}
+.dot-live{width:7px;height:7px;border-radius:50%;background:var(--ok);position:relative;flex-shrink:0;}
 .dot-live::after{content:'';position:absolute;inset:0;border-radius:50%;background:var(--ok);animation:pulse 2s infinite;}
-@keyframes pulse{0%{transform:scale(1);opacity:.6;}70%{transform:scale(2.5);opacity:0;}100%{opacity:0;}}
-.hero h1{margin:26px 0 18px;max-width:14ch;}
-.hero .lead{max-width:52ch;margin-bottom:0;}
+@keyframes pulse{0%{transform:scale(1);opacity:.6;}70%{transform:scale(2.6);opacity:0;}100%{opacity:0;}}
 
-/* ── Hero call zone (V2.1 real call trigger) ── */
-.call-zone{
-  width:100%;max-width:680px;margin:38px auto 0;
-  background:rgba(255,252,248,0.90);
-  backdrop-filter:blur(32px) saturate(140%);
-  -webkit-backdrop-filter:blur(32px) saturate(140%);
-  border:1px solid rgba(255,255,255,0.65);
-  border-radius:var(--r);box-shadow:var(--shadow-card);
-  padding:28px 32px 22px;
-  transition:box-shadow .3s ease;
+/* ── Phrase carousel (hero slogan with rotating phrases) ── */
+.phrase-carousel{
+  position:relative;
+  margin:28px 0 0;
+  min-height:1.05em;
+  width:100%;
+  font-family:'Bricolage Grotesque','Geist',sans-serif;
+  font-weight:800;
+  font-size:clamp(2.6rem,6vw,5.2rem);
+  line-height:1.0;letter-spacing:-0.04em;color:var(--ink);
+  font-variation-settings:"wdth" 100,"opsz" 96;
+  text-align:center;
 }
-.call-zone:hover{box-shadow:0 24px 72px -18px rgba(31,63,195,0.18),var(--shadow-card);}
-.call-zone-head{display:flex;align-items:center;justify-content:center;gap:9px;margin-bottom:16px;}
-.cz-ic{font-size:18px;color:var(--accent);}
-.cz-label{font-family:'Geist',sans-serif;font-weight:600;font-size:14px;color:var(--accent-deep);letter-spacing:-0.01em;}
+.phrase-carousel .phrase{
+  position:absolute;left:0;right:0;top:0;
+  opacity:0;transform:translateY(28px);
+  transition:opacity .55s var(--ease-settle),transform .55s var(--ease-settle);
+  pointer-events:none;
+}
+.phrase-carousel .phrase.active{
+  opacity:1;transform:translateY(0);
+  position:relative;
+  pointer-events:auto;
+}
+.phrase-carousel .phrase.exiting{
+  opacity:0;transform:translateY(-22px);
+  position:absolute;
+}
+.phrase-carousel em.ac{font-style:normal;color:var(--accent);}
 
-.wave-bars-wrap{height:64px;display:flex;align-items:flex-end;overflow:hidden;margin-bottom:20px;}
-.wave-bars{display:flex;align-items:flex-end;gap:3px;height:100%;width:100%;justify-content:center;}
-.bar{
-  flex:1;max-width:9px;min-width:3px;height:40px;
-  background:var(--accent);border-radius:3px 3px 0 0;
-  transform-origin:bottom;transform:scaleY(0.3);opacity:.7;
-  animation:breathe 4s var(--ease-wave) infinite alternate;
-  will-change:transform,opacity;
-}
-@keyframes breathe{
-  from{transform:scaleY(var(--min,0.2));opacity:.5;}
-  to{transform:scaleY(var(--max,1));opacity:1;}
+.hero-tagline{
+  font-family:'Geist',sans-serif;font-weight:300;
+  font-size:clamp(1.05rem,1.5vw,1.18rem);
+  color:var(--muted);max-width:42ch;line-height:1.5;
+  margin:22px 0 0;letter-spacing:-0.011em;
 }
 
-.call-form{display:flex;flex-direction:column;gap:10px;}
-.call-input-row{display:flex;gap:10px;flex-wrap:wrap;}
-.call-input-row input{
-  flex:1;min-width:200px;
-  padding:13px 18px;border-radius:var(--r-pill);
-  background:rgba(255,255,255,0.92);
-  border:1px solid var(--warm-line-2);
-  font-family:'Geist Mono',monospace;font-size:14.5px;
-  color:var(--ink);outline:none;
-  transition:border-color .15s ease,box-shadow .15s ease;
+/* ── Big counter (now used in #live-activity section, not hero) ── */
+.hero-counter{margin:0 auto;display:flex;flex-direction:column;align-items:center;}
+.counter-number{
+  font-family:'Bricolage Grotesque','Geist',sans-serif;
+  font-weight:800;font-size:clamp(5rem,14vw,10rem);
+  line-height:0.88;letter-spacing:-0.05em;color:var(--ink);
+  font-variation-settings:"wdth" 100,"opsz" 96;
+  font-feature-settings:"tnum" 1;
+  display:inline-flex;align-items:baseline;
 }
-.call-input-row input::placeholder{color:var(--muted-soft);}
-.call-input-row input:focus{
-  border-color:var(--accent);
-  box-shadow:0 0 0 4px rgba(31,63,195,0.12);
-  background:#fff;
+.counter-label{
+  font-family:'Geist',sans-serif;font-weight:500;
+  font-size:clamp(0.95rem,1.3vw,1.05rem);
+  color:var(--muted-strong,#3a352c);
+  margin-top:6px;letter-spacing:-0.005em;
 }
-.call-input-row input:disabled{opacity:0.6;}
-.call-input-row .btn{padding:13px 22px;}
 
+/* ── Live activity ticker ── */
+.ticker-frame{
+  position:relative;width:100%;max-width:540px;margin:34px auto 0;
+  border-radius:18px;
+  background:rgba(255,252,248,0.55);
+  border:1px solid var(--warm-line);
+  box-shadow:0 8px 30px -16px rgba(56,36,12,0.16);
+  overflow:hidden;
+}
+.ticker-frame::before{
+  content:'';position:absolute;top:10px;left:14px;z-index:3;
+  width:6px;height:6px;border-radius:50%;background:var(--ok);
+  box-shadow:0 0 0 4px rgba(34,160,107,0.16);
+}
+.ticker-frame::after{
+  content:'LIVE';position:absolute;top:7px;left:28px;z-index:3;
+  font-family:'Geist Mono',monospace;font-size:10px;font-weight:600;
+  letter-spacing:0.12em;color:var(--ok);
+}
+.ticker-mask{
+  position:relative;height:172px;overflow:hidden;
+  padding:32px 0 0;
+  mask-image:linear-gradient(180deg,transparent 0%,#000 24%,#000 76%,transparent 100%);
+  -webkit-mask-image:linear-gradient(180deg,transparent 0%,#000 24%,#000 76%,transparent 100%);
+}
+.ticker-stream{
+  display:flex;flex-direction:column;
+  animation:tickerScroll 28s linear infinite;
+  will-change:transform;
+}
+@keyframes tickerScroll{
+  from{transform:translateY(0);}
+  to  {transform:translateY(-50%);}
+}
+.ticker-frame:hover .ticker-stream{animation-play-state:paused;}
+.ticker-row{
+  display:grid;
+  grid-template-columns:54px 1fr auto;
+  align-items:center;gap:12px;
+  padding:9px 18px;
+  font-family:'Geist',sans-serif;font-size:13px;
+  color:var(--ink);line-height:1.3;
+  border-bottom:1px solid rgba(0,0,0,0.04);
+}
+.ticker-row .t-time{
+  font-family:'Geist Mono',monospace;font-size:11px;font-weight:500;
+  color:var(--muted-soft);letter-spacing:-0.01em;
+}
+.ticker-row .t-msg{
+  text-align:left;font-weight:400;color:var(--ink);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.ticker-row .t-msg b{font-weight:600;}
+.ticker-row .t-tag{
+  font-family:'Geist Mono',monospace;font-size:10px;font-weight:600;
+  letter-spacing:0.06em;text-transform:uppercase;
+  padding:3px 8px;border-radius:99px;flex-shrink:0;
+}
+.ticker-row .t-tag.book{background:rgba(31,63,195,0.10);color:var(--accent-deep);}
+.ticker-row .t-tag.faq {background:rgba(0,0,0,0.05);color:var(--muted-strong,#3a352c);}
+.ticker-row .t-tag.crm {background:rgba(34,160,107,0.10);color:#1c7a52;}
+.ticker-row .t-tag.esc {background:rgba(193,68,68,0.10);color:var(--warn);}
+
+/* ── Morph button (idle → expanded input on click) ── */
+.morph-cta{
+  position:relative;width:100%;max-width:480px;
+  margin:30px auto 0;min-height:62px;
+  display:flex;align-items:center;justify-content:center;
+}
+.morph-btn,
+.morph-form{
+  transition:opacity .35s var(--ease-settle),transform .35s var(--ease-settle);
+}
+.morph-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  padding:18px 32px;border-radius:var(--r-pill);
+  background:var(--ink);color:#fff;border:none;cursor:pointer;
+  font-family:'Geist',sans-serif;font-weight:600;font-size:15.5px;letter-spacing:-0.01em;
+  box-shadow:0 14px 40px -12px rgba(12,10,8,0.55);
+}
+.morph-btn:hover{transform:translateY(-1px);box-shadow:0 18px 48px -12px rgba(12,10,8,0.62);}
+.morph-btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}
+.morph-btn i.bi-arrow-right{font-size:13px;opacity:0.7;transform:translateX(0);transition:transform .15s ease;}
+.morph-btn:hover i.bi-arrow-right{transform:translateX(3px);}
+
+.morph-form{
+  position:absolute;inset:0;
+  display:flex;align-items:center;gap:8px;
+  padding:6px 8px 6px 22px;
+  background:#fff;border:1px solid var(--warm-line-2);border-radius:var(--r-pill);
+  box-shadow:0 14px 40px -10px rgba(56,36,12,0.18);
+  opacity:0;transform:scale(0.94);pointer-events:none;
+}
+.morph-form input{
+  flex:1;min-width:0;border:none;outline:none;background:transparent;
+  font-family:'Geist Mono',monospace;font-size:15px;
+  color:var(--ink);padding:8px 0;
+}
+.morph-form input::placeholder{color:var(--muted-soft);}
+.morph-form input:disabled{opacity:0.55;}
+.morph-submit{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:11px 19px;border-radius:var(--r-pill);
+  background:var(--accent);color:#fff;border:none;cursor:pointer;
+  font-family:'Geist',sans-serif;font-weight:600;font-size:14px;
+  box-shadow:0 6px 18px -4px rgba(31,63,195,0.45);
+  transition:background .15s ease,box-shadow .15s ease,transform .15s ease;
+}
+.morph-submit:hover:not(:disabled){background:var(--accent-deep);transform:translateY(-1px);}
+.morph-submit:disabled{opacity:0.7;cursor:wait;}
+.morph-submit i{font-size:12px;}
+.morph-close{
+  background:transparent;border:none;cursor:pointer;
+  color:var(--muted);font-size:16px;
+  width:32px;height:32px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .15s ease,color .15s ease;
+}
+.morph-close:hover{background:rgba(0,0,0,0.06);color:var(--ink);}
+
+.morph-cta.open .morph-btn{opacity:0;pointer-events:none;transform:scale(0.94);}
+.morph-cta.open .morph-form{opacity:1;pointer-events:auto;transform:scale(1);position:absolute;inset:0;}
+
+/* call status reused in JS */
 .call-status{
   min-height:0;font-size:13px;font-family:'Geist',sans-serif;
   display:flex;align-items:center;justify-content:center;gap:8px;
-  color:var(--muted);
+  color:var(--muted);margin-top:12px;
   transition:min-height .3s ease;
 }
-.call-status.show{min-height:24px;margin-top:4px;}
+.call-status.show{min-height:22px;}
 .call-status.ok{color:var(--ok);font-weight:600;}
 .call-status.err{color:var(--warn);}
 .call-status .live-dot{width:7px;height:7px;border-radius:50%;background:var(--ok);}
 .call-status .live-dot.pulse{animation:pulse 2s infinite;}
 
-.cz-divider{
-  display:flex;align-items:center;gap:12px;margin:16px 0 12px;
-  font-size:11px;font-weight:600;color:var(--muted-soft);
-  letter-spacing:0.08em;text-transform:uppercase;font-family:'Geist',sans-serif;
-}
-.cz-divider::before,.cz-divider::after{
-  content:'';flex:1;height:1px;background:var(--warm-line);
-}
-
-.play-sample{
-  display:inline-flex;align-items:center;gap:8px;margin:0 auto;
-  background:transparent;border:none;cursor:pointer;
-  font-family:'Geist',sans-serif;font-weight:500;font-size:13.5px;
-  color:var(--muted);padding:6px 14px;
-  transition:color .15s ease;
-}
-.play-sample:hover{color:var(--accent-deep);}
-.play-sample i{font-size:14px;}
-.play-sample.playing i{color:var(--accent);}
+/* loading spinner inside submit button */
+.spinner{width:13px;height:13px;border-radius:50%;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;animation:spin 0.7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
 
 .wave-after{
-  display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;
-  margin-top:20px;opacity:0;transform:translateY(8px);
+  display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;
+  margin-top:18px;opacity:0;transform:translateY(8px);
   max-height:0;overflow:hidden;
   transition:opacity .5s var(--ease-settle),transform .5s var(--ease-settle),max-height .5s ease,margin-top .5s ease;
   pointer-events:none;
@@ -252,9 +365,34 @@ section{position:relative;z-index:2;}
 .wave-after.show{opacity:1;transform:none;pointer-events:auto;max-height:80px;}
 .wave-after span{font-size:14px;color:var(--muted);font-family:'Geist',sans-serif;}
 
-.hero-secondary{margin-top:22px;font-size:14px;color:var(--muted);font-family:'Geist',sans-serif;text-decoration:none;display:inline-flex;align-items:center;gap:7px;}
-.hero-secondary:hover{color:var(--accent-deep);}
-.hero-secondary i{font-size:13px;opacity:.6;}
+/* Secondary actions row */
+.hero-secondaries{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;
+  margin-top:22px;font-family:'Geist',sans-serif;font-size:13.5px;color:var(--muted);
+}
+.hero-sec-link{
+  background:transparent;border:none;cursor:pointer;
+  display:inline-flex;align-items:center;gap:7px;
+  font:inherit;color:var(--muted);
+  padding:4px 8px;border-radius:8px;
+  transition:color .15s ease,background .15s ease;
+  text-decoration:none;
+}
+.hero-sec-link:hover{color:var(--accent-deep);background:rgba(31,63,195,0.05);}
+.hero-sec-link i{font-size:13px;opacity:0.7;}
+.hero-sec-sep{color:var(--muted-soft);font-size:11px;}
+
+/* ════ LIVE ACTIVITY section (V2.2 — counter + ticker, was hero) ════ */
+#live-activity .live-grid{
+  display:grid;grid-template-columns:1fr 1.05fr;gap:clamp(28px,5vw,56px);
+  align-items:center;
+  margin-top:clamp(2rem,4vw,3rem);
+}
+@media(max-width:780px){
+  #live-activity .live-grid{grid-template-columns:1fr;}
+  #live-activity .hero-counter{text-align:center;}
+  #live-activity .counter-number{font-size:clamp(4.5rem,18vw,8rem);}
+}
 
 /* ════ DEMO (V2.1: single full-width video) ════ */
 .sec-alt{background:linear-gradient(180deg,transparent,rgba(248,248,232,0.55) 14%,rgba(248,248,232,0.55) 86%,transparent);}
@@ -421,8 +559,8 @@ input[type="range"].roi-slider::-moz-range-thumb{
 .wave-divider span{display:block;width:3px;background:var(--accent);border-radius:2px;}
 
 .quote-block{margin:0 auto;max-width:720px;padding:36px 40px;position:relative;overflow:hidden;}
-.qmark{font-family:'Instrument Serif',Georgia,serif;font-size:72px;line-height:0.65;color:var(--accent);opacity:0.2;margin-bottom:8px;}
-.quote-block blockquote{font-family:'Instrument Serif',Georgia,serif;font-size:clamp(1.2rem,2.4vw,1.5rem);font-style:italic;font-weight:400;line-height:1.45;letter-spacing:-0.01em;color:var(--ink);}
+.qmark{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:88px;line-height:0.65;color:var(--accent);opacity:0.18;margin-bottom:8px;}
+.quote-block blockquote{font-family:'Bricolage Grotesque','Geist',sans-serif;font-weight:500;font-size:clamp(1.25rem,2.4vw,1.55rem);line-height:1.32;letter-spacing:-0.02em;color:var(--ink);}
 .quote-foot{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:22px;}
 .quote-who{font-size:14px;color:var(--muted);font-weight:500;font-family:'Geist',sans-serif;}
 .audio-btn{display:inline-flex;align-items:center;gap:8px;background:var(--ink);color:#fff;border:none;cursor:pointer;font-family:'Geist',sans-serif;font-weight:600;font-size:13px;padding:10px 18px;border-radius:99px;margin-left:auto;transition:transform .15s ease,opacity .15s ease;}
@@ -563,72 +701,67 @@ footer{border-top:1px solid var(--warm-line);position:relative;z-index:2;}
 
 <!-- HERO -->
 <section class="hero">
-  <div class="orb orb-accent" style="width:440px;height:440px;top:-100px;right:-80px;opacity:0.17;animation:float-orb 9s ease-in-out infinite alternate;"></div>
+  <div class="orb orb-accent" style="width:440px;height:440px;top:-100px;right:-80px;opacity:0.16;animation:float-orb 9s ease-in-out infinite alternate;"></div>
   <div class="hero-inner">
     <div class="hero-badge rv">
       <span class="dot-live"></span>
-      <span data-en="Live — AI receptionist for Miami businesses" data-es="En vivo — Recepcionista de IA para negocios en Miami">Live — AI receptionist for Miami businesses</span>
+      <span data-en="Live in Miami" data-es="En vivo en Miami">Live in Miami</span>
     </div>
 
-    <h1 class="rv"
-        data-en="Every call <i>answered.</i><br>Every guest <em class='ac'>remembered.</em>"
-        data-es="Cada llamada <i>contestada.</i><br>Cada cliente <em class='ac'>recordado.</em>">
-      Every call <i>answered.</i><br>Every guest <em class="ac">remembered.</em>
+    <h1 class="phrase-carousel rv" id="phraseCarousel" aria-live="polite">
+      <span class="phrase active" data-en-html="Every <em class='ac'>call</em> answered." data-es-html="Cada <em class='ac'>llamada</em> contestada.">Every <em class="ac">call</em> answered.</span>
+      <span class="phrase"        data-en-html="Every <em class='ac'>guest</em> remembered." data-es-html="Cada <em class='ac'>cliente</em> recordado.">Every <em class="ac">guest</em> remembered.</span>
+      <span class="phrase"        data-en-html="Every <em class='ac'>booking</em> confirmed." data-es-html="Cada <em class='ac'>reserva</em> confirmada.">Every <em class="ac">booking</em> confirmed.</span>
+      <span class="phrase"        data-en-html="Every <em class='ac'>shift</em> covered." data-es-html="Cada <em class='ac'>turno</em> cubierto.">Every <em class="ac">shift</em> covered.</span>
     </h1>
 
-    <p class="lead rv"
-       data-en="The AI receptionist for Miami businesses. Bilingual, always on, and built to grow with you."
-       data-es="El recepcionista de IA para negocios en Miami. Bilingüe, siempre disponible, listo para crecer contigo.">
-      The AI receptionist for Miami businesses. Bilingual, always on, and built to grow with you.
-    </p>
+    <p class="hero-tagline rv"
+       data-en="Bilingual AI receptionist for Miami businesses. Always on."
+       data-es="Recepcionista de IA bilingüe para negocios de Miami. Siempre activo.">Bilingual AI receptionist for Miami businesses. Always on.</p>
 
-    <!-- Real call trigger zone (V2.1) -->
-    <div class="call-zone rv" id="callZone">
-      <div class="call-zone-head">
-        <i class="bi bi-soundwave cz-ic" id="czIc"></i>
-        <span class="cz-label" id="czLabel"
-              data-en="Hear it on your phone"
-              data-es="Escúchalo en tu teléfono">Hear it on your phone</span>
-      </div>
-      <div class="wave-bars-wrap">
-        <div class="wave-bars" id="waveBars"></div>
-      </div>
-
-      <form class="call-form" id="callForm" autocomplete="off">
-        {% csrf_token %}
-        <div class="call-input-row">
-          <input type="tel" id="callPhone" name="phone"
-                 placeholder="+1 (305) 555-0000"
-                 data-en-placeholder="+1 (305) 555-0000"
-                 data-es-placeholder="+1 (305) 555-0000"
-                 maxlength="20" required />
-          <button type="submit" class="btn btn-accent" id="callBtn">
-            <i class="bi bi-telephone-fill"></i>
-            <span data-en="Call me now →" data-es="Llámame ahora →">Call me now →</span>
-          </button>
-        </div>
-        <div class="call-status" id="callStatus"></div>
-      </form>
-
-      <div class="cz-divider"><span data-en="or" data-es="o">or</span></div>
-
-      <button class="play-sample" id="playSampleBtn">
-        <i class="bi bi-play-fill"></i>
-        <span data-en="Play a recorded sample · 47 sec" data-es="Escuchar grabación · 47 seg">Play a recorded sample · 47 sec</span>
+    <!-- Morph button → expanded call form -->
+    <div class="morph-cta rv" id="morphCta">
+      <button type="button" class="morph-btn" id="morphBtn">
+        <i class="bi bi-telephone-fill"></i>
+        <span data-en="Call me — hear it for yourself" data-es="Llámame — escúchalo tú mismo">Call me — hear it for yourself</span>
+        <i class="bi bi-arrow-right"></i>
       </button>
+
+      <form class="morph-form" id="callForm" autocomplete="off">
+        {% csrf_token %}
+        <input type="tel" id="callPhone" name="phone"
+               placeholder="+1 (305) 555-0000"
+               maxlength="20" required />
+        <button type="submit" class="morph-submit" id="callBtn">
+          <span data-en="Call" data-es="Llamar">Call</span>
+          <i class="bi bi-arrow-right"></i>
+        </button>
+        <button type="button" class="morph-close" id="morphClose"
+                aria-label="Close" data-title-en="Close" data-title-es="Cerrar">
+          <i class="bi bi-x"></i>
+        </button>
+      </form>
     </div>
+
+    <div class="call-status" id="callStatus"></div>
 
     <div class="wave-after rv" id="waveAfter">
       <span data-en="Sounds good?" data-es="¿Suena bien?">Sounds good?</span>
       <a class="btn btn-accent btn-sm" href="#signup"
-         data-en="Create your account →"
-         data-es="Crear tu cuenta →">Create your account →</a>
+         data-en="Create your account →" data-es="Crear tu cuenta →">Create your account →</a>
     </div>
 
-    <a class="hero-secondary rv" href="#demo">
-      <span data-en="Or: watch the dashboard" data-es="O: ver el panel">Or: watch the dashboard</span>
-      <i class="bi bi-arrow-right"></i>
-    </a>
+    <div class="hero-secondaries rv">
+      <button type="button" class="hero-sec-link" id="playSampleBtn">
+        <i class="bi bi-play-fill"></i>
+        <span data-en="Play recorded sample" data-es="Escuchar grabación">Play recorded sample</span>
+      </button>
+      <span class="hero-sec-sep">·</span>
+      <a class="hero-sec-link" href="#demo">
+        <span data-en="Watch the dashboard" data-es="Ver el panel">Watch the dashboard</span>
+        <i class="bi bi-arrow-right"></i>
+      </a>
+    </div>
   </div>
 </section>
 
@@ -842,6 +975,30 @@ footer{border-top:1px solid var(--warm-line);position:relative;z-index:2;}
   </div>
 </section>
 
+<!-- LIVE ACTIVITY (counter + ticker — moved from hero, V2.2) -->
+<section id="live-activity">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="tag rv"><i class="bi bi-broadcast"></i> <span data-en="Live activity" data-es="Actividad en vivo">Live activity</span></span>
+      <h2 class="rv" data-en="Right now in Miami" data-es="Ahora mismo en Miami">Right now in Miami</h2>
+      <p class="lead rv" data-en="Real bookings, real questions, real customers — answered by Concierge today." data-es="Reservas reales, preguntas reales, clientes reales — atendidos por Concierge hoy.">Real bookings, real questions, real customers — answered by Concierge today.</p>
+    </div>
+    <div class="live-grid">
+      <div class="hero-counter rv">
+        <div class="counter-number mono" id="heroCounter" data-target="{{ hero_today_calls|default:'47' }}">0</div>
+        <div class="counter-label"
+             data-en="calls answered for Miami businesses today"
+             data-es="llamadas contestadas hoy para negocios de Miami">calls answered for Miami businesses today</div>
+      </div>
+      <div class="ticker-frame rv" aria-label="Live call activity">
+        <div class="ticker-mask">
+          <div class="ticker-stream" id="tickerStream"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- SIGNUP -->
 <section id="signup" style="position:relative;overflow:hidden;">
   <div class="orb orb-accent" style="width:500px;height:500px;top:50%;left:50%;transform:translate(-50%,-50%);opacity:0.14;"></div>
@@ -936,8 +1093,10 @@ function setLang(lang) {
   });
   // active lang for downstream JS
   window.__lang = lang;
-  // re-render ROI calculator strings that depend on lang
+  // re-render dynamic widgets whose strings depend on lang
   if (window.__roiRender) window.__roiRender();
+  if (window.__tickerRender) window.__tickerRender();
+  if (window.__phraseRender) window.__phraseRender();
   try { localStorage.setItem(LANG_KEY, lang); } catch(e) {}
 }
 function initLang() {
@@ -969,24 +1128,128 @@ document.querySelectorAll('.rv').forEach((el) => {
   revealIO.observe(el);
 });
 
-/* ══ Build waveform bars (visual only — breathing) ══ */
-const waveBarsEl = document.getElementById('waveBars');
-const N_BARS = 32;
-const bars = [];
-for (let i = 0; i < N_BARS; i++) {
-  const bar = document.createElement('div');
-  bar.className = 'bar';
-  const t = i / N_BARS;
-  const phase = t * Math.PI * 2.2;
-  const minS = 0.12 + Math.abs(Math.sin(phase * 0.6)) * 0.18;
-  const maxS = 0.45 + Math.abs(Math.sin(phase)) * 1.1;
-  bar.style.setProperty('--min', minS.toFixed(3));
-  bar.style.setProperty('--max', maxS.toFixed(3));
-  bar.style.animationDelay = -(t * 4).toFixed(2) + 's';
-  bar.style.animationDuration = (2.8 + Math.sin(i * 1.3) * 0.9).toFixed(2) + 's';
-  bars.push(bar);
-  waveBarsEl.appendChild(bar);
+/* ══ Phrase carousel (rotating slogan in hero) ══ */
+const phraseCarousel = document.getElementById('phraseCarousel');
+const phrases = phraseCarousel ? phraseCarousel.querySelectorAll('.phrase') : [];
+let phraseIdx = 0;
+function rotatePhrase() {
+  if (!phrases.length) return;
+  const current = phrases[phraseIdx];
+  phraseIdx = (phraseIdx + 1) % phrases.length;
+  const next = phrases[phraseIdx];
+  current.classList.remove('active');
+  current.classList.add('exiting');
+  next.classList.add('active');
+  setTimeout(() => current.classList.remove('exiting'), 600);
 }
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (phrases.length && !reduceMotion) {
+  // Render localized phrase contents now and on lang switch
+  function renderPhrases() {
+    const lang = window.__lang || 'en';
+    phrases.forEach(p => {
+      const html = p.getAttribute('data-' + lang + '-html') || p.getAttribute('data-en-html');
+      if (html) p.innerHTML = html;
+    });
+  }
+  renderPhrases();
+  window.__phraseRender = renderPhrases;
+  setInterval(rotatePhrase, 3200);
+}
+
+/* ══ Live-activity counter — animated count-up + slow simulated increment ══ */
+const heroCounter = document.getElementById('heroCounter');
+const TARGET_CALLS = parseInt(heroCounter.dataset.target, 10) || 47;
+let currentCalls = 0;
+function animateCounter(from, to, durationMs) {
+  const start = performance.now();
+  function tick(now) {
+    const p = Math.min((now - start) / durationMs, 1);
+    const e = 1 - Math.pow(1 - p, 3.5);
+    const val = Math.round(from + (to - from) * e);
+    heroCounter.textContent = val.toLocaleString();
+    currentCalls = val;
+    if (p < 1) requestAnimationFrame(tick);
+    else heroCounter.textContent = to.toLocaleString();
+  }
+  requestAnimationFrame(tick);
+}
+function scheduleCounterTick() {
+  // Random 45-90s between simulated +1 ticks.
+  const wait = 45000 + Math.random() * 45000;
+  setTimeout(() => {
+    animateCounter(currentCalls, currentCalls + 1, 700);
+    scheduleCounterTick();
+  }, wait);
+}
+const counterIO = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      animateCounter(0, TARGET_CALLS, 1400);
+      counterIO.unobserve(heroCounter);
+      scheduleCounterTick();
+    }
+  });
+}, {threshold: 0.4});
+counterIO.observe(heroCounter);
+
+/* ══ Live activity ticker ══ */
+const TICKER_DATA = [
+  // time, name, message (with <b> for emphasis), tag class, tag-en, tag-es
+  ['14:32', 'María',     {en: 'Table for <b>4</b> — Sat 8pm',      es: 'Mesa para <b>4</b> — sáb 8pm'},      'book', 'BOOKED',    'RESERVADO'],
+  ['14:30', 'Carlos',    {en: '“Do you have <b>valet</b>?”',         es: '«¿Tienen <b>valet</b>?»'},            'faq',  'ANSWERED',  'CONTESTADO'],
+  ['14:28', 'Ana',       {en: 'Party of <b>6</b> — Fri 7pm',         es: 'Grupo de <b>6</b> — vie 7pm'},        'book', 'BOOKED',    'RESERVADO'],
+  ['14:25', 'Luis',      {en: 'Returning guest — <b>birthday</b>',   es: 'Cliente que vuelve — <b>cumple</b>'}, 'crm',  'REMEMBERED','RECORDADO'],
+  ['14:22', 'Sofía',     {en: '<b>Gluten-free</b> options?',         es: 'Opciones <b>sin gluten</b>'},         'faq',  'ANSWERED',  'CONTESTADO'],
+  ['14:18', 'Diego',     {en: '<b>Callback</b> to owner',            es: '<b>Devolver llamada</b> al dueño'},   'esc',  'FORWARDED', 'TRANSFERIDO'],
+  ['14:15', 'Pedro',     {en: 'Move <b>8pm → 9pm</b> reservation',   es: 'Cambiar reserva <b>8pm → 9pm</b>'},   'book', 'UPDATED',   'ACTUALIZADO'],
+  ['14:10', 'Carolina',  {en: '<b>Vegan</b> menu question',          es: 'Pregunta de menú <b>vegano</b>'},     'faq',  'ANSWERED',  'CONTESTADO'],
+  ['14:05', 'Roberto',   {en: '<b>Happy hour</b> times',             es: 'Horario de <b>happy hour</b>'},       'faq',  'ANSWERED',  'CONTESTADO'],
+  ['14:00', 'Isabella',  {en: '<b>Private event</b> for 20',         es: '<b>Evento privado</b> para 20'},      'esc',  'FORWARDED', 'TRANSFERIDO'],
+  ['13:56', 'Andrés',    {en: 'Table for <b>2</b> — tonight',        es: 'Mesa para <b>2</b> — esta noche'},    'book', 'BOOKED',    'RESERVADO'],
+  ['13:52', 'Valentina', {en: '<b>Kids menu</b>?',                   es: '¿Hay <b>menú infantil</b>?'},         'faq',  'ANSWERED',  'CONTESTADO'],
+];
+const tickerStream = document.getElementById('tickerStream');
+function renderTicker() {
+  const lang = window.__lang || 'en';
+  // Render entries twice so the seamless infinite scroll loops cleanly
+  tickerStream.innerHTML = '';
+  for (let pass = 0; pass < 2; pass++) {
+    TICKER_DATA.forEach(([time, name, msg, tagClass, tagEn, tagEs]) => {
+      const row = document.createElement('div');
+      row.className = 'ticker-row';
+      const msgText = lang === 'es' ? msg.es : msg.en;
+      const tagText = lang === 'es' ? tagEs : tagEn;
+      row.innerHTML =
+        '<span class="t-time">' + time + '</span>' +
+        '<span class="t-msg"><b>' + name + '</b> — ' + msgText + '</span>' +
+        '<span class="t-tag ' + tagClass + '">' + tagText + '</span>';
+      tickerStream.appendChild(row);
+    });
+  }
+}
+renderTicker();
+window.__tickerRender = renderTicker;
+
+/* ══ Morph button: idle → expanded form ══ */
+const morphCta = document.getElementById('morphCta');
+const morphBtn = document.getElementById('morphBtn');
+const morphClose = document.getElementById('morphClose');
+
+function openMorph() {
+  morphCta.classList.add('open');
+  setTimeout(() => document.getElementById('callPhone').focus(), 240);
+}
+function closeMorph() {
+  morphCta.classList.remove('open');
+  document.getElementById('callStatus').className = 'call-status';
+  document.getElementById('callStatus').innerHTML = '';
+}
+morphBtn.addEventListener('click', openMorph);
+morphClose.addEventListener('click', closeMorph);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && morphCta.classList.contains('open')) closeMorph();
+});
 
 /* ══ Build section divider waveform ══ */
 const waveDivEl = document.getElementById('waveDiv');
@@ -1012,7 +1275,11 @@ const callPhone = document.getElementById('callPhone');
 const callBtn = document.getElementById('callBtn');
 const callStatus = document.getElementById('callStatus');
 const waveAfter = document.getElementById('waveAfter');
-const czIc = document.getElementById('czIc');
+
+function resetCallBtn() {
+  const label = window.__lang === 'es' ? 'Llamar' : 'Call';
+  callBtn.innerHTML = '<span>' + label + '</span><i class="bi bi-arrow-right"></i>';
+}
 
 const STATUS_TXT = {
   en: {
@@ -1097,14 +1364,12 @@ callForm.addEventListener('submit', async e => {
     const data = await resp.json();
     if (resp.ok && data.status === 'calling') {
       setStatus(txt('connected'), 'ok');
-      czIc.classList.remove('bi-soundwave');
-      czIc.classList.add('bi-volume-up-fill');
-      // After ~60s show post-call CTA
+      // After ~60s show post-call CTA and re-enable
       setTimeout(() => {
         waveAfter.classList.add('show');
         callBtn.disabled = false;
         callPhone.disabled = false;
-        callBtn.innerHTML = '<i class="bi bi-telephone-fill"></i><span>' + (window.__lang === 'es' ? 'Llámame de nuevo →' : 'Call me again →') + '</span>';
+        resetCallBtn();
         setStatus(txt('success'), 'ok');
       }, 60000);
     } else {
@@ -1112,13 +1377,13 @@ callForm.addEventListener('submit', async e => {
       setStatus(txt(reason) || txt('error'), 'err');
       callBtn.disabled = false;
       callPhone.disabled = false;
-      callBtn.innerHTML = '<i class="bi bi-telephone-fill"></i><span data-en="Call me now →" data-es="Llámame ahora →">' + (window.__lang === 'es' ? 'Llámame ahora →' : 'Call me now →') + '</span>';
+      resetCallBtn();
     }
   } catch (err) {
     setStatus(txt('error'), 'err');
     callBtn.disabled = false;
     callPhone.disabled = false;
-    callBtn.innerHTML = '<i class="bi bi-telephone-fill"></i><span>' + (window.__lang === 'es' ? 'Llámame ahora →' : 'Call me now →') + '</span>';
+    resetCallBtn();
   }
 });
 
