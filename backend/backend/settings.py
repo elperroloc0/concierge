@@ -29,6 +29,17 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 
 RETELL_WEBHOOK_BASE_URL = os.environ.get("RETELL_WEBHOOK_URL", "").rstrip("/")
 
+# ── Demo call (landing page hero) ─────────────────────────────────────────────
+# Separate Retell agent + number used only by the public landing demo.
+# Set these in env to enable the "Call me now" trigger; missing values disable the feature.
+DEMO_RETELL_API_KEY      = os.environ.get("DEMO_RETELL_API_KEY", "")
+DEMO_RETELL_AGENT_ID     = os.environ.get("DEMO_RETELL_AGENT_ID", "")
+DEMO_RETELL_PHONE_NUMBER = os.environ.get("DEMO_RETELL_PHONE_NUMBER", "")
+
+# Cloudflare Turnstile (anti-bot for /api/demo/trigger-call/ and /api/waitlist/)
+CLOUDFLARE_TURNSTILE_SITE_KEY = os.environ.get("CLOUDFLARE_TURNSTILE_SITE_KEY", "")
+CLOUDFLARE_TURNSTILE_SECRET   = os.environ.get("CLOUDFLARE_TURNSTILE_SECRET", "")
+
 LOGIN_URL = "/portal/login/"
 CSRF_FAILURE_VIEW = "restaurants.views.csrf_failure"
 

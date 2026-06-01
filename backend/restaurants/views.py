@@ -2975,6 +2975,145 @@ def portal_logout(request):
     return redirect("portal_login")
 
 
+# ─── Self-service signup (multi-vertical) ─────────────────────────────────────
+#
+# Currently the only backing container is the `Restaurant` model (legacy name —
+# will be renamed to `Business` when we expose more than one vertical). The
+# signup flow below is deliberately vertical-agnostic: nothing in here assumes
+# the visitor is a restaurant. Vertical-specific behaviour (KB shape, agent
+# template, provisioning steps) is dispatched by `vertical` value.
+
+# Per-vertical hint for ops when provisioning a new account's Retell agent.
+PROVISIONING_HINT_BY_VERTICAL = {
+    "restaurant":    "Use the Calle Dragones agent template (reservation + FAQ flow).",
+    "home_services": "Use the dispatch agent template (job intake + ETA flow).",
+    "medical":       "HIPAA-compliant intake agent — confirm BAA in place before provisioning.",
+    "real_estate":   "Lead-qualification agent template.",
+    "beauty":        "Appointment-booking agent template.",
+    "hotel":         "Concierge/front-desk agent template.",
+    "other":         "Custom — schedule a call with the owner first.",
+}
+
+
+def portal_signup(request):
+    """Self-service signup from the landing page form.
+
+    Creates User + Business (currently `Restaurant` model, unprovisioned) + owner
+    Membership + trialing Subscription, logs the user in, and redirects to their
+    new portal dashboard. Retell provisioning happens manually by ops afterwards
+    (Path A — see `Restaurant.is_provisioned`).
+    """
+    if request.user.is_authenticated:
+        redir = _get_login_redirect(request.user)
+        if redir:
+            return redir
+
+    errors = {}
+    form_data = {}
+
+    if request.method == "POST":
+        from django.contrib.auth import get_user_model
+        from django.utils.crypto import get_random_string
+        from django.core.validators import validate_email
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .models import VERTICAL_CHOICES
+
+        User = get_user_model()
+        valid_verticals = {choice[0] for choice in VERTICAL_CHOICES}
+
+        first_name    = (request.POST.get("first_name") or "").strip()[:150]
+        last_name     = (request.POST.get("last_name")  or "").strip()[:150]
+        email         = (request.POST.get("email")      or "").strip().lower()[:254]
+        business_name = (request.POST.get("business_name") or "").strip()[:255]
+        vertical      = (request.POST.get("vertical") or "").strip()
+
+        form_data = {
+            "first_name": first_name, "last_name": last_name,
+            "email": email, "business_name": business_name, "vertical": vertical,
+        }
+
+        if not first_name:    errors["first_name"]    = "Required."
+        if not last_name:     errors["last_name"]     = "Required."
+        if not business_name: errors["business_name"] = "Required."
+        if vertical not in valid_verticals: errors["vertical"] = "Choose your industry."
+
+        try:
+            validate_email(email)
+        except DjangoValidationError:
+            errors["email"] = "Enter a valid email address."
+
+        if not errors.get("email") and User.objects.filter(email__iexact=email).exists():
+            errors["email"] = "An account already exists with this email. Try signing in."
+
+        if not errors:
+            # ── Create user (random password — they'll set one via reset link) ─
+            temp_password = get_random_string(20)
+            user = User.objects.create_user(
+                username=email, email=email, password=temp_password,
+                first_name=first_name, last_name=last_name,
+            )
+            # ── Business container (unprovisioned — no Retell yet) ─────────────
+            business = Restaurant.objects.create(
+                name=business_name,
+                user=user,
+                vertical=vertical,
+                contact_person=f"{first_name} {last_name}".strip(),
+                contact_email=email,
+                notify_email=email,
+            )
+            RestaurantMembership.objects.create(
+                user=user, restaurant=business, role="owner", is_active=True,
+            )
+            Subscription.objects.create(
+                restaurant=business,
+                status="trialing",
+                current_period_end=timezone.now() + timedelta(days=14),
+            )
+            # ── KB scaffolding: only for verticals where we have a KB model ───
+            # Restaurant is the only vertical with a KB schema today. Other
+            # verticals will get their own KB models as they launch.
+            if vertical == "restaurant":
+                RestaurantKnowledgeBase.objects.get_or_create(restaurant=business)
+
+            _notify_ops_new_signup(business, user)
+
+            # ── Log the user in and send them to the portal ────────────────────
+            user = authenticate(request, username=email, password=temp_password)
+            if user is not None:
+                login(request, user)
+            return redirect("portal_dashboard", slug=business.slug)
+
+    return render(request, "portal/signup.html", {
+        "errors": errors,
+        "form_data": form_data,
+    })
+
+
+def _notify_ops_new_signup(business, user):
+    """Internal email to ops with vertical-specific provisioning steps."""
+    try:
+        from django.core.mail import mail_admins
+        hint = PROVISIONING_HINT_BY_VERTICAL.get(business.vertical, PROVISIONING_HINT_BY_VERTICAL["other"])
+        subject = f"[Concierge] New {business.get_vertical_display()} signup: {business.name}"
+        body = (
+            f"A new account just signed up and needs Retell provisioning.\n\n"
+            f"Business:    {business.name}\n"
+            f"Vertical:    {business.get_vertical_display()}\n"
+            f"Owner:       {user.get_full_name()} <{user.email}>\n"
+            f"Slug:        {business.slug}\n"
+            f"Portal:      /portal/{business.slug}/\n\n"
+            f"Agent template: {hint}\n\n"
+            f"Next steps:\n"
+            f"  1. Create Retell agent using the template above\n"
+            f"  2. Provision Miami-area phone number\n"
+            f"  3. Set retell_agent_id, retell_phone_number, retell_api_key on the business\n"
+            f"  4. Email the owner: agent is live\n"
+        )
+        mail_admins(subject, body, fail_silently=True)
+    except Exception:
+        logger.exception("Failed to notify ops of new signup | slug=%s", business.slug)
+
+
 def portal_password_reset_request(request):
     """Step 1: user enters their email to receive a reset link."""
     from django.contrib.auth import get_user_model
@@ -5678,6 +5817,186 @@ def _handle_stripe_event(event, data):
 
 def demo_call(request):
     return render(request, "demo_call.html")
+
+
+# ─── Landing page demo trigger + waitlist ─────────────────────────────────────
+
+from django.views.decorators.http import require_POST  # noqa: E402 (used below)
+
+# Miami metro area codes accepted by the demo. Outside this list = rejected.
+DEMO_VALID_AREA_CODES = {"305", "786", "954", "561", "754", "689"}
+
+
+def _client_ip(request) -> str:
+    fwd = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "0.0.0.0")
+
+
+def _verify_turnstile(token: str, ip: str) -> bool:
+    """Verify Cloudflare Turnstile token. If secret unset, skip verification (dev)."""
+    secret = getattr(settings, "CLOUDFLARE_TURNSTILE_SECRET", "")
+    if not secret:
+        return True  # dev mode — accept anything
+    if not token:
+        return False
+    try:
+        import urllib.parse, urllib.request
+        body = urllib.parse.urlencode({
+            "secret": secret,
+            "response": token,
+            "remoteip": ip,
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+            data=body,
+        )
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return bool(data.get("success"))
+    except Exception:
+        logger.exception("Turnstile verification failed")
+        return False
+
+
+@csrf_exempt
+@require_POST
+def demo_trigger_call(request):
+    """Public endpoint: trigger an outbound Retell demo call to the visitor's phone.
+
+    Rate-limited per phone (1/hour) and per IP (3/day). Miami metro area codes only.
+    """
+    from django.core.cache import cache
+    from .models import DemoCallLog
+
+    try:
+        body = json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"status": "error", "reason": "error"}, status=400)
+
+    phone = (body.get("phone") or "").strip()
+    lang  = (body.get("lang")  or "en").strip().lower()[:4]
+    token = (body.get("turnstile_token") or "").strip()
+    ip    = _client_ip(request)
+
+    # ── Validate phone format (+1NNNNNNNNNN, US only, Miami metro area code) ──
+    digits = re.sub(r"\D", "", phone)
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    if len(digits) != 10:
+        return JsonResponse({"status": "error", "reason": "invalid"}, status=400)
+    area = digits[:3]
+    if area not in DEMO_VALID_AREA_CODES:
+        return JsonResponse({"status": "error", "reason": "invalid"}, status=400)
+    e164 = "+1" + digits
+
+    # ── Anti-bot (skipped in dev when no Turnstile secret) ─────────────────────
+    if not _verify_turnstile(token, ip):
+        return JsonResponse({"status": "error", "reason": "error"}, status=400)
+
+    # ── Rate limit: 1 call per phone per hour, 3 per IP per day ───────────────
+    phone_key = f"demo_call:phone:{e164}"
+    ip_key    = f"demo_call:ip:{ip}"
+
+    if cache.get(phone_key):
+        return JsonResponse({"status": "error", "reason": "rate_phone"}, status=429)
+
+    ip_count = cache.get(ip_key, 0)
+    if ip_count >= 3:
+        return JsonResponse({"status": "error", "reason": "rate_ip"}, status=429)
+
+    # ── Trigger Retell outbound call ───────────────────────────────────────────
+    demo_agent_id = getattr(settings, "DEMO_RETELL_AGENT_ID", "")
+    demo_from     = getattr(settings, "DEMO_RETELL_PHONE_NUMBER", "")
+    demo_api_key  = getattr(settings, "DEMO_RETELL_API_KEY", "")
+
+    if not (demo_agent_id and demo_from and demo_api_key):
+        # Feature flag: silently log and pretend success in dev,
+        # so frontend flow can be tested without Retell configured.
+        logger.warning("Demo call requested but DEMO_RETELL_* settings missing — skipping Retell")
+        DemoCallLog.objects.create(
+            phone=e164, ip=ip, lang=lang,
+            user_agent=request.META.get("HTTP_USER_AGENT", "")[:300],
+            status=DemoCallLog.STATUS_FAILED,
+            error_message="DEMO_RETELL_* not configured",
+        )
+        return JsonResponse({"status": "error", "reason": "error"}, status=503)
+
+    retell_call_id = ""
+    status = DemoCallLog.STATUS_TRIGGERED
+    error_msg = ""
+
+    try:
+        client = Retell(api_key=demo_api_key)
+        result = client.call.create_phone_call(
+            from_number=demo_from,
+            to_number=e164,
+            override_agent_id=demo_agent_id,
+            retell_llm_dynamic_variables={"lang": lang},
+        )
+        retell_call_id = getattr(result, "call_id", "") or ""
+    except Exception as exc:
+        logger.exception("Retell demo call failed | phone=%s", e164)
+        status = DemoCallLog.STATUS_FAILED
+        error_msg = str(exc)[:500]
+
+    DemoCallLog.objects.create(
+        phone=e164, ip=ip, lang=lang,
+        user_agent=request.META.get("HTTP_USER_AGENT", "")[:300],
+        retell_call_id=retell_call_id,
+        status=status,
+        error_message=error_msg,
+    )
+
+    if status == DemoCallLog.STATUS_FAILED:
+        return JsonResponse({"status": "error", "reason": "error"}, status=502)
+
+    # Mark rate limits after successful trigger
+    cache.set(phone_key, 1, 60 * 60)         # 1 hour
+    cache.set(ip_key, ip_count + 1, 60 * 60 * 24)  # 1 day
+
+    return JsonResponse({"status": "calling", "call_id": retell_call_id})
+
+
+@csrf_exempt
+@require_POST
+def waitlist_create(request):
+    """Public endpoint: capture email for an unreleased vertical from industry chips."""
+    from .models import WaitlistEntry, VERTICAL_CHOICES
+    from django.core.cache import cache
+
+    try:
+        body = json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"status": "error"}, status=400)
+
+    email    = (body.get("email") or "").strip().lower()[:254]
+    vertical = (body.get("vertical") or "").strip()
+    lang     = (body.get("lang") or "en").strip().lower()[:4]
+    ip       = _client_ip(request)
+
+    # Basic email validation
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        return JsonResponse({"status": "error", "reason": "invalid_email"}, status=400)
+
+    valid_verticals = {choice[0] for choice in VERTICAL_CHOICES}
+    if vertical not in valid_verticals:
+        return JsonResponse({"status": "error", "reason": "invalid_vertical"}, status=400)
+
+    # Rate limit per IP: 10 waitlist sign-ups per IP per day
+    ip_key = f"waitlist:ip:{ip}"
+    ip_count = cache.get(ip_key, 0)
+    if ip_count >= 10:
+        return JsonResponse({"status": "error", "reason": "rate"}, status=429)
+
+    WaitlistEntry.objects.update_or_create(
+        email=email, vertical=vertical,
+        defaults={"lang": lang, "ip": ip},
+    )
+    cache.set(ip_key, ip_count + 1, 60 * 60 * 24)
+
+    return JsonResponse({"status": "ok"})
 
 
 # ─── Web Push Notifications ───────────────────────────────────────────────────

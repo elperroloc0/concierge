@@ -9,6 +9,7 @@ urlpatterns = [
     # ── Auth (no slug — pre-login) ─────────────────────────────────────────
     path("login/",views.portal_login,   name="portal_login"),
     path("logout/",views.portal_logout,  name="portal_logout"),
+    path("signup/", views.portal_signup, name="portal_signup"),
     path("select-restaurant/", views.portal_select_restaurant, name="portal_select_restaurant"),
     path("password-reset/", views.portal_password_reset_request, name="portal_password_reset_request"),
     path("password-reset/<uidb64>/<token>/", views.portal_password_reset_confirm, name="portal_password_reset_confirm"),

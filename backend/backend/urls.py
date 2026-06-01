@@ -28,6 +28,9 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/retell/', include('restaurants.urls')),
     path('api/stripe/webhook/', restaurant_views.stripe_webhook, name='stripe_webhook'),
+    # Public landing-page endpoints
+    path('api/demo/trigger-call/', restaurant_views.demo_trigger_call, name='demo_trigger_call'),
+    path('api/waitlist/',          restaurant_views.waitlist_create,   name='waitlist_create'),
     # Service worker + manifest must live at root so SW can claim scope "/"
     path('sw.js',         restaurant_views.push_service_worker, name='push_service_worker'),
     path('manifest.json', restaurant_views.pwa_manifest,        name='pwa_manifest'),
