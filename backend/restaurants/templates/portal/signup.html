@@ -1,0 +1,144 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create your account — Concierge</title>
+  <link href="{% static 'css/portal-v2.css' %}" rel="stylesheet">
+  <style>
+    /* Local tweaks for the signup card — wider than login, two-column on desktop. */
+    .signup-card { max-width: 480px; }
+    .signup-card .field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 540px) {
+      .signup-card .field-row { grid-template-columns: 1fr; }
+    }
+    .signup-card .select {
+      width: 100%;
+      padding: 13px 18px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid var(--warm-line, rgba(0,0,0,0.08));
+      font-family: 'Geist', sans-serif;
+      font-size: 14px;
+      color: var(--ink);
+      outline: none;
+      appearance: none;
+      cursor: pointer;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .signup-card .select:focus {
+      border-color: var(--accent, #1f3fc3);
+      box-shadow: 0 0 0 4px rgba(31, 63, 195, 0.12);
+    }
+    .signup-card .field-error {
+      font-family: 'Geist', sans-serif;
+      font-size: 12px;
+      color: #c14444;
+      margin-top: 4px;
+    }
+    .signup-card .signup-foot {
+      text-align: center;
+      margin-top: 4px;
+      font-family: 'Geist', sans-serif;
+      font-size: 13px;
+      color: var(--muted, rgba(12,10,8,0.62));
+    }
+    .signup-card .signup-foot a { color: var(--accent-deep, #173098); text-decoration: none; font-weight: 600; }
+    .signup-card .signup-foot a:hover { text-decoration: underline; }
+    .signup-card .assure {
+      display: flex; flex-wrap: wrap; justify-content: center; gap: 14px;
+      margin-top: 10px;
+      font-family: 'Geist', sans-serif; font-size: 12px;
+      color: var(--muted, rgba(12,10,8,0.62));
+    }
+    .signup-card .assure span { display: inline-flex; align-items: center; gap: 4px; }
+    .signup-card .assure i { color: var(--accent, #1f3fc3); }
+  </style>
+</head>
+<body>
+  <div class="v2-backdrop grain">
+    <div class="orb-accent" style="top: -120px; right: -100px; opacity: 0.40;"></div>
+    <div class="orb-cream"  style="bottom: -100px; left: -80px; opacity: 0.70;"></div>
+  </div>
+
+  <main class="login-shell">
+    <div class="login-card signup-card glass-deep">
+      <h2>Create your account</h2>
+      <div class="login-tagline">Agent live within 24 hours. 14-day free trial — no credit card.</div>
+
+      <form method="post" style="display: flex; flex-direction: column; gap: 14px;">
+        {% csrf_token %}
+
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label" for="id_first_name">First name</label>
+            <input id="id_first_name" type="text" name="first_name"
+                   value="{{ form_data.first_name|default:'' }}"
+                   class="input" autofocus required>
+            {% if errors.first_name %}<div class="field-error">{{ errors.first_name }}</div>{% endif %}
+          </div>
+          <div class="field">
+            <label class="field-label" for="id_last_name">Last name</label>
+            <input id="id_last_name" type="text" name="last_name"
+                   value="{{ form_data.last_name|default:'' }}"
+                   class="input" required>
+            {% if errors.last_name %}<div class="field-error">{{ errors.last_name }}</div>{% endif %}
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="id_email">Work email</label>
+          <input id="id_email" type="email" name="email"
+                 value="{{ form_data.email|default:'' }}"
+                 class="input" required>
+          {% if errors.email %}<div class="field-error">{{ errors.email }}</div>{% endif %}
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="id_business_name">Business name</label>
+          <input id="id_business_name" type="text" name="business_name"
+                 value="{{ form_data.business_name|default:'' }}"
+                 class="input" required>
+          {% if errors.business_name %}<div class="field-error">{{ errors.business_name }}</div>{% endif %}
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="id_vertical">Industry</label>
+          <select id="id_vertical" name="vertical" class="select" required>
+            <option value="" disabled {% if not form_data.vertical %}selected{% endif %}>Choose your industry</option>
+            <option value="restaurant"    {% if form_data.vertical == "restaurant" %}selected{% endif %}>Restaurant / Bar</option>
+            <option value="home_services" {% if form_data.vertical == "home_services" %}selected{% endif %}>Home Services</option>
+            <option value="medical"       {% if form_data.vertical == "medical" %}selected{% endif %}>Medical / Clinic</option>
+            <option value="real_estate"   {% if form_data.vertical == "real_estate" %}selected{% endif %}>Real Estate</option>
+            <option value="beauty"        {% if form_data.vertical == "beauty" %}selected{% endif %}>Beauty &amp; Wellness</option>
+            <option value="hotel"         {% if form_data.vertical == "hotel" %}selected{% endif %}>Hotel / Hospitality</option>
+            <option value="other"         {% if form_data.vertical == "other" %}selected{% endif %}>Other</option>
+          </select>
+          {% if errors.vertical %}<div class="field-error">{{ errors.vertical }}</div>{% endif %}
+        </div>
+
+        <button type="submit" class="btn btn-accent btn-lg btn-block" style="margin-top: 6px;">
+          Create account — it's free →
+        </button>
+
+        <div class="assure">
+          <span>✓ 14 days free</span>
+          <span>✓ No card required</span>
+          <span>✓ Cancel anytime</span>
+        </div>
+
+        <div class="signup-foot">
+          Already have an account? <a href="{% url 'portal_login' %}">Sign in</a>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <div class="login-foot">Powered by Concierge · by HaloBits</div>
+</body>
+</html>

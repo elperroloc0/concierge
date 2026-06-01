@@ -1,515 +1,1304 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Voice Agents for Your Business</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-  <link href="{% static 'css/portal-v2.css' %}" rel="stylesheet">
-  <style>
-    html { scroll-behavior: smooth; }
-    body { line-height: 1.6; }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Concierge — AI receptionist for Miami businesses</title>
+<meta name="description" content="Concierge — the AI receptionist built for Miami businesses. Bilingual, always on, and built to grow with you. Not a service. A partner." />
+<meta property="og:title" content="Concierge — AI receptionist for Miami businesses" />
+<meta property="og:description" content="Every call answered. Every guest remembered. Bilingual AI receptionist for Miami restaurants and businesses." />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="{% static 'img/og_image.jpg' %}" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;900&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+<style>
+/* ── Tokens ── */
+:root{
+  --bg:#e5e5d6;
+  --surface:#f8f8e8;
+  --accent:#1f3fc3;
+  --accent-deep:#173098;
+  --accent-light:#5973d8;
+  --ink:#0c0a08;
+  --muted:rgba(12,10,8,0.62);
+  --muted-soft:rgba(12,10,8,0.45);
+  --warm-line:rgba(0,0,0,0.06);
+  --warm-line-2:rgba(0,0,0,0.10);
+  --shadow-soft:0 6px 28px -10px rgba(56,36,12,0.18);
+  --shadow-card:0 14px 50px -16px rgba(56,36,12,0.25);
+  --ease-settle:cubic-bezier(0.16,1,0.3,1);
+  --ease-wave:cubic-bezier(0.25,0.46,0.45,0.94);
+  --ease-pop:cubic-bezier(0.34,1.56,0.64,1);
+  --r:24px; --r-pill:99px; --r-icon:12px;
+  --ok:#22a06b;
+  --warn:#c14444;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{
+  background:var(--bg);
+  font-family:'Geist',-apple-system,system-ui,sans-serif;
+  color:var(--ink);font-weight:300;letter-spacing:-0.011em;
+  line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+.mono{font-family:'Geist Mono',monospace;letter-spacing:-0.02em;}
 
-    /* ── Page backdrop (fixed, behind everything) ─────────── */
-    .page-backdrop { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
+/* ── Type ── */
+h1,.display-h{
+  font-family:'Instrument Serif',Georgia,serif;
+  font-weight:400;font-style:normal;
+  font-size:clamp(3rem,6.5vw,5.4rem);
+  line-height:1.0;letter-spacing:-0.02em;
+}
+h2,.display-h2{
+  font-family:'Instrument Serif',Georgia,serif;
+  font-weight:400;
+  font-size:clamp(2rem,4vw,3rem);
+  letter-spacing:-0.015em;line-height:1.08;
+}
+h3{font-weight:600;letter-spacing:-0.02em;font-size:1.05rem;line-height:1.3;}
+em.ac{font-style:italic;color:var(--accent);}
+.lead{font-weight:300;font-size:clamp(1rem,1.6vw,1.18rem);color:var(--muted);line-height:1.6;}
+.tag{
+  display:inline-flex;align-items:center;gap:7px;
+  font-family:'Geist',sans-serif;font-size:11px;font-weight:600;
+  letter-spacing:0.08em;text-transform:uppercase;
+  color:var(--accent-deep);background:rgba(31,63,195,0.08);
+  border:1px solid rgba(31,63,195,0.14);padding:7px 13px;border-radius:var(--r-pill);
+}
 
-    /* ── Nav ──────────────────────────────────────────────── */
-    .site-nav {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 14px clamp(1.5rem, 5vw, 4rem);
-      background: rgba(245, 245, 232, 0.72);
-      backdrop-filter: blur(24px) saturate(160%);
-      -webkit-backdrop-filter: blur(24px) saturate(160%);
-      border-bottom: 1px solid var(--warm-line);
-    }
-    .nav-logo {
-      display: inline-flex; align-items: center; gap: 8px;
-      font: 900 18px 'Geist', sans-serif; letter-spacing: -.03em;
-      color: var(--ink); text-decoration: none;
-    }
-    .nav-logo .sparkle { color: var(--accent); font-size: 18px; line-height: 1; }
-    .nav-links { display: flex; align-items: center; gap: 28px; }
-    .nav-links a {
-      color: var(--muted-strong); text-decoration: none;
-      font: 600 13px 'Geist', sans-serif; letter-spacing: -.005em;
-      transition: color .15s;
-    }
-    .nav-links a:hover { color: var(--accent); }
+/* ── Surfaces (perf: blur only on nav + hero zone) ── */
+.paper{background:var(--surface);border:1px solid var(--warm-line);border-radius:var(--r);box-shadow:var(--shadow-soft);}
+.card{background:rgba(255,252,248,0.90);border:1px solid rgba(255,255,255,0.55);border-radius:var(--r);box-shadow:var(--shadow-card);}
 
-    /* ── Sections ─────────────────────────────────────────── */
-    section { padding: clamp(4rem, 9vw, 6.5rem) clamp(1.5rem, 5vw, 4rem); }
-    .container { max-width: 1100px; margin: 0 auto; }
-    .section-label {
-      display: inline-flex; align-items: center; gap: 6px;
-      font: 600 11px 'Geist', sans-serif; letter-spacing: .08em;
-      text-transform: uppercase; color: var(--accent);
-      background: rgba(31, 63, 195, 0.08);
-      border: 1px solid rgba(31, 63, 195, 0.18);
-      border-radius: 99px; padding: 4px 12px; margin-bottom: 18px;
-    }
-    h2.section-title {
-      font-size: clamp(1.9rem, 4vw, 2.6rem);
-      font-weight: 900; letter-spacing: -.035em; line-height: 1.05;
-      margin-bottom: 12px;
-    }
-    .section-sub {
-      font: 300 1.05rem 'Geist', sans-serif;
-      color: var(--muted-strong); max-width: 560px;
-    }
+/* ── Orb ── */
+.orb{position:absolute;border-radius:50%;pointer-events:none;z-index:0;}
+.orb-accent{background:radial-gradient(circle at 38% 38%,#c7d2ff 0%,#1f3fc3 70%);filter:blur(40px);}
+@keyframes float-orb{from{transform:translateY(0);}to{transform:translateY(-10px);}}
 
-    /* ── Hero ─────────────────────────────────────────────── */
-    #hero {
-      min-height: 100vh;
-      display: flex; align-items: center;
-      padding-top: 92px;
-      position: relative; overflow: hidden;
-    }
-    .hero-content { position: relative; z-index: 2; max-width: 820px; }
-    .hero-badge {
-      display: inline-flex; align-items: center; gap: 8px;
-      font: 600 12px 'Geist', sans-serif; letter-spacing: -.005em;
-      color: var(--ink-soft);
-      background: rgba(255, 255, 252, 0.7);
-      backdrop-filter: blur(12px);
-      border: 1px solid var(--warm-line);
-      border-radius: 99px; padding: 6px 14px; margin-bottom: 28px;
-    }
-    .hero-badge-dot {
-      width: 7px; height: 7px; border-radius: 99px; background: #2e7d3a;
-      box-shadow: 0 0 0 3px rgba(46, 125, 58, 0.18);
-      animation: pulse 2s infinite;
-    }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
-    h1.hero-title {
-      font-size: clamp(2.6rem, 6vw, 4.2rem);
-      font-weight: 900; letter-spacing: -.040em; line-height: 1.02;
-      margin-bottom: 22px;
-    }
-    h1.hero-title .accent { color: var(--accent); }
-    .hero-sub {
-      font: 300 clamp(1rem, 1.6vw, 1.18rem) 'Geist', sans-serif;
-      color: var(--muted-strong);
-      max-width: 580px; margin-bottom: 32px; line-height: 1.6;
-    }
-    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+/* ── Buttons ── */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:13px 24px;border-radius:var(--r-pill);
+  font-family:'Geist',sans-serif;font-weight:600;font-size:15px;letter-spacing:-0.01em;
+  cursor:pointer;border:1px solid transparent;white-space:nowrap;
+  transition:transform .15s var(--ease-settle),box-shadow .15s ease,background .15s ease;
+  text-decoration:none;
+}
+.btn:hover{transform:translateY(-1px);}
+.btn:active{transform:translateY(0);}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:99px;}
+.btn:disabled{opacity:0.7;cursor:not-allowed;transform:none;}
+.btn-accent{background:var(--accent);color:#fff;box-shadow:0 6px 22px -6px rgba(31,63,195,0.48);}
+.btn-accent:hover:not(:disabled){background:var(--accent-deep);box-shadow:0 10px 30px -8px rgba(31,63,195,0.55);}
+.btn-ghost{background:transparent;color:var(--ink);border-color:var(--warm-line-2);}
+.btn-ghost:hover{background:rgba(0,0,0,0.04);}
+.btn-light{background:rgba(255,255,255,0.88);color:var(--ink);border-color:var(--warm-line);box-shadow:var(--shadow-soft);}
+.btn-sm{padding:9px 16px;font-size:13px;}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}
 
-    /* ── Stats ────────────────────────────────────────────── */
-    #stats { padding: 2rem clamp(1.5rem, 5vw, 4rem); }
-    .stats-strip {
-      max-width: 1100px; margin: 0 auto;
-      padding: 22px 28px;
-      display: flex; gap: 18px; flex-wrap: wrap; justify-content: space-between;
-    }
-    .stat-item { text-align: center; flex: 1; min-width: 140px; }
-    .stat-number {
-      font: 900 2rem 'Geist', sans-serif; letter-spacing: -.04em;
-      color: var(--ink);
-    }
-    .stat-number .accent { color: var(--accent); }
-    .stat-label {
-      font: 600 11px 'Geist', sans-serif; letter-spacing: .06em;
-      text-transform: uppercase; color: var(--muted-strong); margin-top: 4px;
-    }
+/* spinner for loading state */
+.spinner{
+  width:14px;height:14px;border-radius:50%;
+  border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;
+  animation:spin 0.7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
 
-    /* ── Problem ──────────────────────────────────────────── */
-    .problem-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 18px; margin-top: 38px;
-    }
-    .problem-card { padding: 22px; }
-    .problem-icon {
-      width: 42px; height: 42px; border-radius: 12px;
-      background: rgba(31, 63, 195, 0.08);
-      border: 1px solid rgba(31, 63, 195, 0.15);
-      display: flex; align-items: center; justify-content: center;
-      color: var(--accent); font-size: 18px; margin-bottom: 16px;
-    }
-    .problem-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
-    .problem-card p { font: 300 .92rem 'Geist', sans-serif; color: var(--muted-strong); line-height: 1.55; }
+/* ── Nav ── */
+nav{
+  position:fixed;top:0;left:0;right:0;height:64px;z-index:100;
+  display:flex;align-items:center;gap:16px;
+  padding:0 clamp(1.25rem,5vw,2.25rem);
+  background:rgba(245,245,226,0.75);
+  backdrop-filter:blur(24px) saturate(160%);
+  -webkit-backdrop-filter:blur(24px) saturate(160%);
+  border-bottom:1px solid transparent;
+  transition:border-color .25s ease,box-shadow .25s ease;
+}
+nav.scrolled{border-bottom-color:var(--warm-line);box-shadow:0 4px 24px -16px rgba(56,36,12,0.3);}
+.brand{display:flex;align-items:baseline;gap:8px;text-decoration:none;color:var(--ink);}
+.brand-mark{color:var(--accent);font-size:17px;transform:translateY(2px);display:inline-block;}
+.brand-name{font-weight:900;font-size:19px;letter-spacing:-0.03em;font-family:'Geist',sans-serif;}
+.brand-by{font-size:11px;color:var(--muted-soft);font-weight:400;font-family:'Geist',sans-serif;}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:12px;}
+.lang{display:inline-flex;background:rgba(0,0,0,0.05);border-radius:var(--r-pill);padding:3px;gap:2px;}
+.lang button{border:none;background:transparent;cursor:pointer;font-family:'Geist',sans-serif;font-weight:600;font-size:12px;letter-spacing:0.02em;padding:5px 11px;border-radius:var(--r-pill);color:var(--muted);transition:all .15s ease;}
+.lang button.on{background:var(--accent);color:#fff;}
+.nav-signin{font-weight:500;font-size:14px;color:var(--ink);padding:8px 10px;font-family:'Geist',sans-serif;text-decoration:none;}
+.nav-signin:hover{color:var(--accent-deep);}
 
-    /* ── How it works ─────────────────────────────────────── */
-    .steps {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 26px; margin-top: 38px;
-    }
-    .step { display: flex; gap: 16px; }
-    .step-num {
-      flex-shrink: 0; width: 40px; height: 40px; border-radius: 12px;
-      background: var(--accent); color: white;
-      display: flex; align-items: center; justify-content: center;
-      font: 900 .95rem 'Geist', sans-serif;
-      box-shadow: 0 4px 14px -2px rgba(31, 63, 195, 0.4);
-    }
-    .step h3 { font-size: 1rem; font-weight: 600; margin-bottom: 6px; }
-    .step p { font: 300 .9rem 'Geist', sans-serif; color: var(--muted-strong); line-height: 1.55; }
+/* ── Scroll reveal ── */
+.rv{opacity:0;transform:translateY(18px);transition:opacity .5s var(--ease-settle),transform .5s var(--ease-settle);}
+.rv.in{opacity:1;transform:none;}
 
-    /* ── Features ─────────────────────────────────────────── */
-    .features-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 16px; margin-top: 38px;
-    }
-    .feature-card {
-      padding: 22px;
-      transition: transform .15s ease, box-shadow .15s ease;
-    }
-    .feature-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-card); }
-    .feature-icon {
-      width: 44px; height: 44px; border-radius: 12px;
-      background: rgba(31, 63, 195, 0.10);
-      border: 1px solid rgba(31, 63, 195, 0.20);
-      color: var(--accent);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 18px; margin-bottom: 14px;
-    }
-    .feature-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 6px; }
-    .feature-card p { font: 300 .9rem 'Geist', sans-serif; color: var(--muted-strong); line-height: 1.55; }
+/* ── Layout ── */
+section{position:relative;z-index:2;}
+.wrap{max-width:1160px;margin:0 auto;padding:clamp(3.5rem,7vw,6rem) clamp(1.25rem,5vw,2.25rem);}
+.sec-head{max-width:640px;margin:0 auto;text-align:center;display:flex;flex-direction:column;align-items:center;gap:16px;}
 
-    /* ── Industries ───────────────────────────────────────── */
-    .industries-grid { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 38px; }
-    .industry-chip {
-      display: inline-flex; align-items: center; gap: 8px;
-      background: rgba(255, 255, 252, 0.65);
-      border: 1px solid var(--warm-line);
-      border-radius: 99px; padding: 8px 14px;
-      font: 600 13px 'Geist', sans-serif; color: var(--ink-soft);
-    }
-    .industry-chip.active {
-      background: var(--accent); color: white; border-color: var(--accent);
-      box-shadow: 0 4px 14px -3px rgba(31, 63, 195, 0.4);
-    }
-    .industry-chip.soon { color: var(--muted-strong); }
-    .chip-badge {
-      font: 600 10px 'Geist', sans-serif; letter-spacing: .05em; text-transform: uppercase;
-      background: rgba(255, 255, 255, 0.25); color: inherit;
-      border-radius: 6px; padding: 2px 6px;
-    }
-    .industry-chip.soon .chip-badge {
-      background: rgba(0, 0, 0, 0.05); color: var(--muted-strong);
-    }
+/* ════ HERO ════ */
+.hero{min-height:100vh;padding-top:80px;display:flex;align-items:center;overflow:hidden;position:relative;}
+.hero-inner{
+  max-width:760px;margin:0 auto;padding:0 clamp(1.25rem,5vw,2.25rem) clamp(2rem,5vw,4rem);
+  width:100%;display:flex;flex-direction:column;align-items:center;text-align:center;
+  position:relative;z-index:2;
+}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:9px;
+  background:rgba(255,252,248,0.72);border:1px solid var(--warm-line);
+  padding:7px 14px;border-radius:var(--r-pill);
+  font-family:'Geist',sans-serif;font-size:13px;font-weight:500;
+  box-shadow:var(--shadow-soft);
+}
+.dot-live{width:8px;height:8px;border-radius:50%;background:var(--ok);position:relative;flex-shrink:0;}
+.dot-live::after{content:'';position:absolute;inset:0;border-radius:50%;background:var(--ok);animation:pulse 2s infinite;}
+@keyframes pulse{0%{transform:scale(1);opacity:.6;}70%{transform:scale(2.5);opacity:0;}100%{opacity:0;}}
+.hero h1{margin:26px 0 18px;max-width:14ch;}
+.hero .lead{max-width:52ch;margin-bottom:0;}
 
-    /* ── Demo CTA ─────────────────────────────────────────── */
-    #demo { position: relative; overflow: hidden; }
-    .demo-box {
-      max-width: 580px; margin: 0 auto; text-align: center;
-      padding: 38px 32px;
-      position: relative; z-index: 2;
-    }
-    .demo-box h2 {
-      font-size: clamp(1.9rem, 4vw, 2.4rem); font-weight: 900;
-      letter-spacing: -.035em; margin-bottom: 12px;
-    }
-    .demo-box > p {
-      font: 300 1rem 'Geist', sans-serif; color: var(--muted-strong);
-      margin-bottom: 28px;
-    }
-    .demo-form { display: flex; flex-direction: column; gap: 12px; text-align: left; }
-    .demo-form .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .demo-form input,
-    .demo-form select {
-      width: 100%; padding: 12px 16px; border-radius: 99px;
-      background: rgba(255, 255, 255, 0.85);
-      border: 1px solid var(--warm-line);
-      font: 300 14px 'Geist', sans-serif; letter-spacing: -.01em;
-      color: var(--ink); outline: none;
-      transition: border-color .15s, box-shadow .15s, background .15s;
-    }
-    .demo-form input::placeholder { color: var(--muted); }
-    .demo-form input:focus,
-    .demo-form select:focus {
-      border-color: rgba(31, 63, 195, 0.45);
-      background: rgba(255, 255, 255, 0.98);
-      box-shadow: 0 0 0 4px rgba(31, 63, 195, 0.12);
-    }
-    .demo-form select { appearance: none; cursor: pointer; }
-    .demo-form button {
-      width: 100%; padding: 14px 22px; border-radius: 99px;
-      background: var(--accent); color: white; border: 1px solid var(--accent);
-      font: 600 15px 'Geist', sans-serif; cursor: pointer;
-      box-shadow: 0 4px 16px -2px rgba(31, 63, 195, 0.35);
-      transition: background .15s, box-shadow .15s, transform .15s;
-      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    }
-    .demo-form button:hover {
-      background: var(--accent-deep); border-color: var(--accent-deep);
-      box-shadow: 0 6px 22px -2px rgba(31, 63, 195, 0.45);
-      transform: translateY(-1px);
-    }
-    .form-note { font: 300 .78rem 'Geist', sans-serif; color: var(--muted); text-align: center; margin-top: 4px; }
+/* ── Hero call zone (V2.1 real call trigger) ── */
+.call-zone{
+  width:100%;max-width:680px;margin:38px auto 0;
+  background:rgba(255,252,248,0.90);
+  backdrop-filter:blur(32px) saturate(140%);
+  -webkit-backdrop-filter:blur(32px) saturate(140%);
+  border:1px solid rgba(255,255,255,0.65);
+  border-radius:var(--r);box-shadow:var(--shadow-card);
+  padding:28px 32px 22px;
+  transition:box-shadow .3s ease;
+}
+.call-zone:hover{box-shadow:0 24px 72px -18px rgba(31,63,195,0.18),var(--shadow-card);}
+.call-zone-head{display:flex;align-items:center;justify-content:center;gap:9px;margin-bottom:16px;}
+.cz-ic{font-size:18px;color:var(--accent);}
+.cz-label{font-family:'Geist',sans-serif;font-weight:600;font-size:14px;color:var(--accent-deep);letter-spacing:-0.01em;}
 
-    /* ── Footer ───────────────────────────────────────────── */
-    .site-footer {
-      border-top: 1px solid var(--warm-line);
-      padding: 28px clamp(1.5rem, 5vw, 4rem);
-      display: flex; align-items: center; justify-content: space-between;
-      flex-wrap: wrap; gap: 16px;
-      background: rgba(245, 245, 232, 0.5);
-    }
-    .site-footer .logo {
-      font: 900 1rem 'Geist', sans-serif; color: var(--ink-soft);
-      letter-spacing: -.025em;
-      display: inline-flex; align-items: center; gap: 8px;
-    }
-    .site-footer .logo .sparkle { color: var(--accent); }
-    .site-footer p { font: 300 .8rem 'Geist', sans-serif; color: var(--muted-strong); }
-    .site-footer a {
-      font: 600 .85rem 'Geist', sans-serif;
-      color: var(--muted-strong); text-decoration: none;
-    }
-    .site-footer a:hover { color: var(--accent); }
+.wave-bars-wrap{height:64px;display:flex;align-items:flex-end;overflow:hidden;margin-bottom:20px;}
+.wave-bars{display:flex;align-items:flex-end;gap:3px;height:100%;width:100%;justify-content:center;}
+.bar{
+  flex:1;max-width:9px;min-width:3px;height:40px;
+  background:var(--accent);border-radius:3px 3px 0 0;
+  transform-origin:bottom;transform:scaleY(0.3);opacity:.7;
+  animation:breathe 4s var(--ease-wave) infinite alternate;
+  will-change:transform,opacity;
+}
+@keyframes breathe{
+  from{transform:scaleY(var(--min,0.2));opacity:.5;}
+  to{transform:scaleY(var(--max,1));opacity:1;}
+}
 
-    /* ── Mobile ───────────────────────────────────────────── */
-    @media (max-width: 640px) {
-      .nav-links { display: none; }
-      .demo-form .form-row { grid-template-columns: 1fr; }
-      .stats-strip { gap: 12px; }
-    }
-  </style>
+.call-form{display:flex;flex-direction:column;gap:10px;}
+.call-input-row{display:flex;gap:10px;flex-wrap:wrap;}
+.call-input-row input{
+  flex:1;min-width:200px;
+  padding:13px 18px;border-radius:var(--r-pill);
+  background:rgba(255,255,255,0.92);
+  border:1px solid var(--warm-line-2);
+  font-family:'Geist Mono',monospace;font-size:14.5px;
+  color:var(--ink);outline:none;
+  transition:border-color .15s ease,box-shadow .15s ease;
+}
+.call-input-row input::placeholder{color:var(--muted-soft);}
+.call-input-row input:focus{
+  border-color:var(--accent);
+  box-shadow:0 0 0 4px rgba(31,63,195,0.12);
+  background:#fff;
+}
+.call-input-row input:disabled{opacity:0.6;}
+.call-input-row .btn{padding:13px 22px;}
+
+.call-status{
+  min-height:0;font-size:13px;font-family:'Geist',sans-serif;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  color:var(--muted);
+  transition:min-height .3s ease;
+}
+.call-status.show{min-height:24px;margin-top:4px;}
+.call-status.ok{color:var(--ok);font-weight:600;}
+.call-status.err{color:var(--warn);}
+.call-status .live-dot{width:7px;height:7px;border-radius:50%;background:var(--ok);}
+.call-status .live-dot.pulse{animation:pulse 2s infinite;}
+
+.cz-divider{
+  display:flex;align-items:center;gap:12px;margin:16px 0 12px;
+  font-size:11px;font-weight:600;color:var(--muted-soft);
+  letter-spacing:0.08em;text-transform:uppercase;font-family:'Geist',sans-serif;
+}
+.cz-divider::before,.cz-divider::after{
+  content:'';flex:1;height:1px;background:var(--warm-line);
+}
+
+.play-sample{
+  display:inline-flex;align-items:center;gap:8px;margin:0 auto;
+  background:transparent;border:none;cursor:pointer;
+  font-family:'Geist',sans-serif;font-weight:500;font-size:13.5px;
+  color:var(--muted);padding:6px 14px;
+  transition:color .15s ease;
+}
+.play-sample:hover{color:var(--accent-deep);}
+.play-sample i{font-size:14px;}
+.play-sample.playing i{color:var(--accent);}
+
+.wave-after{
+  display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;
+  margin-top:20px;opacity:0;transform:translateY(8px);
+  max-height:0;overflow:hidden;
+  transition:opacity .5s var(--ease-settle),transform .5s var(--ease-settle),max-height .5s ease,margin-top .5s ease;
+  pointer-events:none;
+}
+.wave-after.show{opacity:1;transform:none;pointer-events:auto;max-height:80px;}
+.wave-after span{font-size:14px;color:var(--muted);font-family:'Geist',sans-serif;}
+
+.hero-secondary{margin-top:22px;font-size:14px;color:var(--muted);font-family:'Geist',sans-serif;text-decoration:none;display:inline-flex;align-items:center;gap:7px;}
+.hero-secondary:hover{color:var(--accent-deep);}
+.hero-secondary i{font-size:13px;opacity:.6;}
+
+/* ════ DEMO (V2.1: single full-width video) ════ */
+.sec-alt{background:linear-gradient(180deg,transparent,rgba(248,248,232,0.55) 14%,rgba(248,248,232,0.55) 86%,transparent);}
+.demo-video-wrap{
+  max-width:880px;margin:clamp(2.5rem,5vw,3.5rem) auto 0;
+  position:relative;
+}
+.demo-video{
+  position:relative;border-radius:var(--r);overflow:hidden;
+  aspect-ratio:16/9;
+  background:linear-gradient(135deg,#1a1a2e 0%,#0c0a1e 100%);
+  border:1px solid rgba(31,63,195,0.2);
+  box-shadow:var(--shadow-card);
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.demo-video img,.demo-video video{
+  position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+}
+.demo-video::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(0,0,0,0) 60%,rgba(0,0,0,0.35) 100%);
+  pointer-events:none;
+  transition:opacity .3s ease;
+}
+.demo-video:hover::after{opacity:0.6;}
+.demo-play{
+  position:relative;z-index:2;
+  width:84px;height:84px;border-radius:50%;
+  background:rgba(255,255,255,0.92);backdrop-filter:blur(8px);
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;color:var(--accent);
+  box-shadow:0 14px 40px -8px rgba(0,0,0,0.4);
+  transition:transform .2s var(--ease-pop);
+}
+.demo-video:hover .demo-play{transform:scale(1.08);}
+.demo-caption{
+  position:absolute;bottom:14px;left:16px;z-index:2;
+  font-family:'Geist Mono',monospace;font-size:11px;
+  color:rgba(255,255,255,0.7);letter-spacing:0.02em;
+}
+
+/* Video lightbox modal */
+.lightbox{
+  position:fixed;inset:0;z-index:200;
+  background:rgba(12,10,8,0.88);
+  backdrop-filter:blur(8px);
+  display:none;align-items:center;justify-content:center;
+  padding:clamp(1rem,4vw,3rem);
+}
+.lightbox.show{display:flex;}
+.lightbox-content{
+  position:relative;max-width:1100px;width:100%;
+  aspect-ratio:16/9;border-radius:var(--r);overflow:hidden;
+  box-shadow:0 40px 100px -20px rgba(0,0,0,0.6);
+}
+.lightbox-content video{width:100%;height:100%;object-fit:cover;background:#000;}
+.lightbox-close{
+  position:absolute;top:-12px;right:-12px;z-index:3;
+  width:40px;height:40px;border-radius:50%;
+  background:#fff;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;color:var(--ink);
+  box-shadow:0 6px 16px rgba(0,0,0,0.4);
+}
+
+/* ════ HOW ════ */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:clamp(2.5rem,5vw,3.5rem);position:relative;}
+.steps-line{position:absolute;top:50px;left:16%;right:16%;height:0;border-top:2px dashed var(--warm-line-2);pointer-events:none;}
+.step{padding:28px 24px;position:relative;z-index:2;}
+.step-n{width:40px;height:40px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;font-family:'Geist Mono',monospace;margin-bottom:18px;box-shadow:0 6px 18px -6px rgba(31,63,195,0.45);}
+.step h3{margin-bottom:9px;}
+.step p{font-size:14px;color:var(--muted);line-height:1.6;}
+.live-pill{margin:clamp(2rem,4vw,3rem) auto 0;display:flex;width:max-content;align-items:center;gap:9px;background:rgba(31,63,195,0.08);border:1px solid rgba(31,63,195,0.16);color:var(--accent-deep);padding:12px 22px;border-radius:var(--r-pill);font-weight:600;font-size:15px;font-family:'Geist',sans-serif;}
+
+/* ════ PROOF: ROI CALCULATOR (V2.1) ════ */
+.roi-calc{
+  max-width:720px;margin:clamp(2.5rem,5vw,3.5rem) auto 0;
+  padding:clamp(24px,4vw,36px);
+  display:flex;flex-direction:column;gap:18px;
+}
+.roi-row{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding-bottom:18px;border-bottom:1px solid var(--warm-line);
+}
+.roi-label{font-family:'Geist',sans-serif;font-weight:600;font-size:14px;color:var(--ink);}
+.roi-select-wrap{position:relative;}
+.roi-select{
+  appearance:none;
+  background:rgba(255,255,255,0.85);
+  border:1px solid var(--warm-line-2);
+  border-radius:var(--r-pill);
+  padding:9px 38px 9px 16px;
+  font-family:'Geist',sans-serif;font-size:14px;font-weight:500;
+  color:var(--ink);cursor:pointer;outline:none;
+  transition:border-color .15s ease,box-shadow .15s ease;
+}
+.roi-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(31,63,195,0.1);}
+.roi-select-wrap::after{
+  content:'';position:absolute;right:16px;top:50%;
+  width:6px;height:6px;
+  border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);
+  transform:translateY(-70%) rotate(45deg);
+  pointer-events:none;
+}
+
+.roi-slider-row{display:flex;flex-direction:column;gap:10px;}
+.roi-slider-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;}
+.roi-slider-label{font-family:'Geist',sans-serif;font-size:14px;font-weight:500;color:var(--ink);}
+.roi-slider-val{font-family:'Geist Mono',monospace;font-weight:600;font-size:16px;color:var(--accent-deep);letter-spacing:-0.02em;}
+
+input[type="range"].roi-slider{
+  -webkit-appearance:none;appearance:none;
+  width:100%;height:4px;background:rgba(0,0,0,0.08);
+  border-radius:99px;outline:none;cursor:pointer;
+  background-image:linear-gradient(var(--accent),var(--accent));
+  background-size:50% 100%;background-repeat:no-repeat;
+}
+input[type="range"].roi-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:20px;height:20px;border-radius:50%;
+  background:#fff;border:2px solid var(--accent);
+  box-shadow:0 4px 12px -2px rgba(31,63,195,0.35);
+  cursor:pointer;transition:transform .15s ease;
+}
+input[type="range"].roi-slider::-webkit-slider-thumb:hover{transform:scale(1.12);}
+input[type="range"].roi-slider:active::-webkit-slider-thumb{transform:scale(1.18);}
+input[type="range"].roi-slider::-moz-range-thumb{
+  width:20px;height:20px;border-radius:50%;
+  background:#fff;border:2px solid var(--accent);
+  box-shadow:0 4px 12px -2px rgba(31,63,195,0.35);
+  cursor:pointer;
+}
+
+.roi-result{
+  margin-top:8px;padding-top:22px;
+  border-top:1px solid var(--warm-line);
+  text-align:center;display:flex;flex-direction:column;gap:8px;
+}
+.roi-cap{font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);}
+.roi-big{
+  font-family:'Geist Mono',monospace;
+  font-weight:600;font-size:clamp(2.6rem,5vw,3.4rem);
+  line-height:1;letter-spacing:-0.03em;color:var(--ink);
+  transition:color .3s ease;
+}
+.roi-meta{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;font-size:13px;color:var(--muted);font-family:'Geist',sans-serif;margin-top:4px;}
+.roi-mult{
+  margin-top:8px;font-family:'Geist Mono',monospace;
+  font-weight:600;font-size:1.2rem;letter-spacing:-0.02em;
+  color:var(--ink);transition:color .3s ease;
+  display:inline-flex;align-items:center;gap:6px;justify-content:center;
+}
+.roi-mult.low{color:var(--warn);}
+.roi-mult.mid{color:var(--ink);}
+.roi-mult.high{color:var(--accent);}
+.roi-mult.epic{color:var(--accent);position:relative;padding:4px 12px;border-radius:99px;background:rgba(31,63,195,0.08);}
+.roi-mult.epic::before{content:'';position:absolute;inset:-2px;border-radius:99px;border:2px solid var(--accent);opacity:0.6;animation:ring-pulse 2s ease-out infinite;}
+@keyframes ring-pulse{0%{transform:scale(1);opacity:0.6;}100%{transform:scale(1.4);opacity:0;}}
+.roi-cta{margin-top:18px;}
+
+/* waveform section divider */
+.wave-divider{display:flex;align-items:flex-end;justify-content:center;gap:3px;height:28px;margin:clamp(2rem,4vw,3.5rem) auto;opacity:0.22;max-width:320px;pointer-events:none;}
+.wave-divider span{display:block;width:3px;background:var(--accent);border-radius:2px;}
+
+.quote-block{margin:0 auto;max-width:720px;padding:36px 40px;position:relative;overflow:hidden;}
+.qmark{font-family:'Instrument Serif',Georgia,serif;font-size:72px;line-height:0.65;color:var(--accent);opacity:0.2;margin-bottom:8px;}
+.quote-block blockquote{font-family:'Instrument Serif',Georgia,serif;font-size:clamp(1.2rem,2.4vw,1.5rem);font-style:italic;font-weight:400;line-height:1.45;letter-spacing:-0.01em;color:var(--ink);}
+.quote-foot{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:22px;}
+.quote-who{font-size:14px;color:var(--muted);font-weight:500;font-family:'Geist',sans-serif;}
+.audio-btn{display:inline-flex;align-items:center;gap:8px;background:var(--ink);color:#fff;border:none;cursor:pointer;font-family:'Geist',sans-serif;font-weight:600;font-size:13px;padding:10px 18px;border-radius:99px;margin-left:auto;transition:transform .15s ease,opacity .15s ease;}
+.audio-btn:hover{opacity:.85;transform:translateY(-1px);}
+
+/* ════ INDUSTRIES ════ */
+.chips{display:flex;flex-wrap:wrap;gap:11px;justify-content:center;max-width:740px;margin:clamp(2.5rem,5vw,3.5rem) auto 0;}
+.ichip{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:var(--r-pill);background:var(--surface);border:1px solid var(--warm-line);font-family:'Geist',sans-serif;font-weight:500;font-size:14.5px;cursor:pointer;transition:transform .2s var(--ease-settle),box-shadow .2s ease;white-space:nowrap;}
+.ichip:hover{transform:translateY(-1px);box-shadow:var(--shadow-soft);}
+.ichip .lead-ic{font-size:16px;color:var(--accent-light);flex-shrink:0;}
+.ichip.live{background:var(--accent);color:#fff;border-color:var(--accent);}
+.ichip.live .lead-ic{color:rgba(255,255,255,0.85);}
+.badge{font-size:10px;font-weight:700;letter-spacing:0.06em;padding:3px 8px;border-radius:99px;font-family:'Geist',sans-serif;}
+.badge.live{background:rgba(255,255,255,0.18);color:#fff;}
+.badge.soon{background:rgba(0,0,0,0.06);color:var(--muted);}
+
+.chip-wave{display:flex;align-items:flex-end;gap:2px;height:14px;flex-shrink:0;}
+.chip-wave span{display:block;width:2px;border-radius:1px 1px 0 0;background:rgba(255,255,255,0.75);transform-origin:bottom;animation:chip-breathe 1.5s ease-in-out infinite alternate;}
+.chip-wave span:nth-child(1){height:5px;animation-delay:0s;animation-duration:1.3s;}
+.chip-wave span:nth-child(2){height:11px;animation-delay:.18s;animation-duration:1.7s;}
+.chip-wave span:nth-child(3){height:14px;animation-delay:.07s;animation-duration:1.5s;}
+.chip-wave span:nth-child(4){height:9px;animation-delay:.28s;animation-duration:1.9s;}
+.chip-wave span:nth-child(5){height:6px;animation-delay:.12s;animation-duration:1.4s;}
+@keyframes chip-breathe{from{transform:scaleY(.35);}to{transform:scaleY(1);}}
+
+.ichip .notify{display:none;align-items:center;gap:6px;margin-left:4px;}
+.ichip.open .notify{display:flex;}
+.ichip.open .badge.soon{display:none;}
+.ichip .notify input{border:1px solid var(--warm-line-2);background:#fff;border-radius:var(--r-pill);padding:7px 13px;font-family:'Geist',sans-serif;font-size:13px;width:168px;outline:none;color:var(--ink);}
+.ichip .notify input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(31,63,195,0.1);}
+.ichip .notify button{background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:7px 13px;font-family:'Geist',sans-serif;font-weight:600;font-size:12px;cursor:pointer;}
+.ichip.done{background:rgba(34,160,107,0.09);border-color:rgba(34,160,107,0.22);color:#1c7a52;}
+
+/* ════ PRICING ════ */
+.prices{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;align-items:start;margin-top:clamp(3rem,6vw,4.5rem);}
+.price{padding:30px 26px;display:flex;flex-direction:column;}
+.price.pro{border:2px solid var(--accent);box-shadow:0 24px 60px -20px rgba(31,63,195,0.3);position:relative;transform:translateY(-12px);}
+.price.bespoke{border-style:dashed;background:transparent;box-shadow:none;}
+.price-pop{position:absolute;top:-14px;left:50%;transform:translateX(-50%);display:inline-flex;align-items:center;gap:5px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;letter-spacing:0.05em;font-family:'Geist',sans-serif;padding:6px 14px;border-radius:var(--r-pill);}
+.price-name{font-weight:700;font-size:1.05rem;letter-spacing:-0.02em;font-family:'Geist',sans-serif;}
+.price-tagline{font-size:13px;color:var(--muted);margin-top:5px;min-height:36px;line-height:1.45;font-family:'Geist',sans-serif;}
+.price-amt{display:flex;align-items:baseline;gap:5px;margin:18px 0 22px;}
+.price-amt .num{font-family:'Geist Mono',monospace;font-weight:600;font-size:2.5rem;letter-spacing:-0.03em;line-height:1;}
+.price-amt .per{font-size:14px;color:var(--muted);font-family:'Geist',sans-serif;}
+.price ul{list-style:none;display:flex;flex-direction:column;gap:10px;margin-bottom:24px;flex:1;}
+.price li{display:flex;gap:9px;font-size:14px;color:var(--ink);font-family:'Geist',sans-serif;}
+.price li i{color:var(--accent);font-size:15px;flex-shrink:0;transform:translateY(1px);}
+.price li.note{color:var(--muted);font-size:12.5px;}
+.price .btn{width:100%;}
+.price-assure{display:flex;flex-wrap:wrap;justify-content:center;gap:20px;margin-top:28px;}
+.price-assure span{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);font-family:'Geist',sans-serif;}
+.price-assure i{color:var(--accent);}
+.price-foot{max-width:600px;margin:16px auto 0;text-align:center;font-size:12px;color:var(--muted-soft);line-height:1.6;font-family:'Geist Mono',monospace;}
+
+/* ════ SIGNUP ════ */
+.signup-card{max-width:560px;margin:0 auto;padding:clamp(28px,5vw,42px) clamp(22px,5vw,36px);}
+.signup-card h2{font-size:clamp(1.9rem,3.8vw,2.5rem);text-align:center;}
+.signup-card .desc{font-size:14px;color:var(--muted);margin:14px 0 28px;line-height:1.55;text-align:center;font-family:'Geist',sans-serif;}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+.field{position:relative;}
+.field input,.field select{width:100%;padding:13px 18px;border-radius:var(--r-pill);background:rgba(255,255,255,0.85);border:1px solid var(--warm-line);font-family:'Geist',sans-serif;font-size:14px;color:var(--ink);outline:none;transition:border-color .15s ease,box-shadow .15s ease;appearance:none;}
+.field input::placeholder{color:var(--muted-soft);}
+.field input:focus,.field select:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(31,63,195,0.12);}
+.field.full{margin-bottom:12px;}
+.field select{color:var(--ink);cursor:pointer;}
+.field .chev{position:absolute;right:18px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--muted);font-size:13px;}
+.signup-card .btn-accent{width:100%;margin-top:8px;font-size:15px;padding:15px;}
+.signup-assure{display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin-top:18px;}
+.signup-assure span{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);font-family:'Geist',sans-serif;}
+.signup-assure i{color:var(--accent);}
+.terms{text-align:center;font-size:11px;color:var(--muted-soft);margin-top:16px;line-height:1.5;font-family:'Geist',sans-serif;}
+.terms a{color:var(--muted);text-decoration:underline;}
+.form-error{
+  display:none;margin-top:12px;padding:10px 14px;
+  background:rgba(193,68,68,0.08);border:1px solid rgba(193,68,68,0.2);
+  border-radius:12px;font-size:13px;color:var(--warn);
+  font-family:'Geist',sans-serif;
+}
+.form-error.show{display:block;}
+
+/* ════ FOOTER ════ */
+footer{border-top:1px solid var(--warm-line);position:relative;z-index:2;}
+.foot-wrap{max-width:1160px;margin:0 auto;padding:28px clamp(1.25rem,5vw,2.25rem);display:flex;align-items:center;gap:22px;flex-wrap:wrap;}
+.foot-brand .tagline{font-size:13px;color:var(--muted);font-style:italic;margin-top:5px;font-family:'Geist',sans-serif;}
+.foot-wave{display:flex;align-items:flex-end;gap:2px;height:12px;opacity:0.18;margin-top:6px;}
+.foot-wave span{display:block;width:2.5px;background:var(--accent);border-radius:1px;}
+.foot-links{display:flex;gap:20px;margin-left:auto;}
+.foot-links a{font-size:14px;color:var(--muted);font-weight:500;font-family:'Geist',sans-serif;text-decoration:none;}
+.foot-links a:hover{color:var(--ink);}
+.foot-copy{width:100%;font-size:11px;color:var(--muted-soft);font-family:'Geist Mono',monospace;}
+
+/* ════ RESPONSIVE ════ */
+@media(max-width:900px){
+  .steps,.prices{grid-template-columns:1fr;}
+  .steps-line{display:none;}
+  .price.pro{transform:none;order:-1;}
+  .call-zone{padding:22px 20px 18px;}
+  .roi-row{flex-direction:column;align-items:stretch;}
+}
+@media(max-width:640px){
+  nav .nav-signin,.nav .lang{display:none;}
+  .brand-by{display:none;}
+  .form-row{grid-template-columns:1fr;}
+  .quote-block{padding:24px;}
+  .audio-btn{margin-left:0;}
+  .call-input-row{flex-direction:column;}
+  .call-input-row .btn{width:100%;}
+}
+@media(prefers-reduced-motion:reduce){
+  .bar,.chip-wave span,.dot-live::after{animation:none;}
+  .rv{transition:none;}
+  .orb{animation:none !important;}
+  .roi-mult.epic::before{animation:none;}
+  html{scroll-behavior:auto;}
+}
+</style>
 </head>
 <body>
 
-<!-- Fixed backdrop -->
-<div class="page-backdrop">
-  <div class="v2-backdrop" style="position: absolute;"></div>
-  <div class="orb-accent" style="top: -150px; right: -120px; opacity: 0.32; width: 520px; height: 520px;"></div>
-  <div class="orb-cream"  style="top: 60vh; left: -120px; opacity: 0.7; width: 360px; height: 360px;"></div>
-</div>
-
-<!-- Nav -->
-<nav class="site-nav">
-  <a href="/" class="nav-logo"><span class="sparkle">✦</span> Concierge</a>
-  <div class="nav-links">
-    <a href="#how">How it works</a>
-    <a href="#features">Features</a>
-    <a href="#industries">Industries</a>
+<!-- NAV -->
+<nav id="nav">
+  <a class="brand" href="#top">
+    <span class="brand-mark">✦</span>
+    <span class="brand-name">Concierge</span>
+    <span class="brand-by">by HaloBits</span>
+  </a>
+  <div class="nav-right">
+    <div class="lang" id="lang">
+      <button data-set="en" class="on">EN</button>
+      <button data-set="es">ES</button>
+    </div>
+    <a class="nav-signin" href="{% url 'portal_login' %}" data-en="Sign in" data-es="Entrar">Sign in</a>
+    <a class="btn btn-accent btn-sm" href="#signup" data-en="Get started →" data-es="Empezar →">Get started →</a>
   </div>
-  <a href="#demo" class="btn btn-accent">Request a Demo</a>
 </nav>
 
-<!-- Hero -->
-<section id="hero">
-  <div class="container hero-content">
-    <div class="hero-badge">
-      <span class="hero-badge-dot"></span>
-      Now live — AI voice agents for business
+<span id="top"></span>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="orb orb-accent" style="width:440px;height:440px;top:-100px;right:-80px;opacity:0.17;animation:float-orb 9s ease-in-out infinite alternate;"></div>
+  <div class="hero-inner">
+    <div class="hero-badge rv">
+      <span class="dot-live"></span>
+      <span data-en="Live — AI receptionist for Miami businesses" data-es="En vivo — Recepcionista de IA para negocios en Miami">Live — AI receptionist for Miami businesses</span>
     </div>
-    <h1 class="hero-title">
-      Every call answered.<br>
-      <span class="accent">Every customer remembered.</span>
+
+    <h1 class="rv"
+        data-en="Every call <i>answered.</i><br>Every guest <em class='ac'>remembered.</em>"
+        data-es="Cada llamada <i>contestada.</i><br>Cada cliente <em class='ac'>recordado.</em>">
+      Every call <i>answered.</i><br>Every guest <em class="ac">remembered.</em>
     </h1>
-    <p class="hero-sub">
-      AI voice agents that handle your inbound calls, build customer profiles automatically,
-      and integrate with your business tools — 24/7, in any language.
+
+    <p class="lead rv"
+       data-en="The AI receptionist for Miami businesses. Bilingual, always on, and built to grow with you."
+       data-es="El recepcionista de IA para negocios en Miami. Bilingüe, siempre disponible, listo para crecer contigo.">
+      The AI receptionist for Miami businesses. Bilingual, always on, and built to grow with you.
     </p>
-    <div class="hero-actions">
-      <a href="#demo" class="btn btn-accent btn-lg">
-        <i class="bi bi-calendar-check"></i> Request a Demo
-      </a>
-      <a href="#how" class="btn btn-lg">
-        <i class="bi bi-play-circle"></i> See how it works
-      </a>
+
+    <!-- Real call trigger zone (V2.1) -->
+    <div class="call-zone rv" id="callZone">
+      <div class="call-zone-head">
+        <i class="bi bi-soundwave cz-ic" id="czIc"></i>
+        <span class="cz-label" id="czLabel"
+              data-en="Hear it on your phone"
+              data-es="Escúchalo en tu teléfono">Hear it on your phone</span>
+      </div>
+      <div class="wave-bars-wrap">
+        <div class="wave-bars" id="waveBars"></div>
+      </div>
+
+      <form class="call-form" id="callForm" autocomplete="off">
+        {% csrf_token %}
+        <div class="call-input-row">
+          <input type="tel" id="callPhone" name="phone"
+                 placeholder="+1 (305) 555-0000"
+                 data-en-placeholder="+1 (305) 555-0000"
+                 data-es-placeholder="+1 (305) 555-0000"
+                 maxlength="20" required />
+          <button type="submit" class="btn btn-accent" id="callBtn">
+            <i class="bi bi-telephone-fill"></i>
+            <span data-en="Call me now →" data-es="Llámame ahora →">Call me now →</span>
+          </button>
+        </div>
+        <div class="call-status" id="callStatus"></div>
+      </form>
+
+      <div class="cz-divider"><span data-en="or" data-es="o">or</span></div>
+
+      <button class="play-sample" id="playSampleBtn">
+        <i class="bi bi-play-fill"></i>
+        <span data-en="Play a recorded sample · 47 sec" data-es="Escuchar grabación · 47 seg">Play a recorded sample · 47 sec</span>
+      </button>
+    </div>
+
+    <div class="wave-after rv" id="waveAfter">
+      <span data-en="Sounds good?" data-es="¿Suena bien?">Sounds good?</span>
+      <a class="btn btn-accent btn-sm" href="#signup"
+         data-en="Create your account →"
+         data-es="Crear tu cuenta →">Create your account →</a>
+    </div>
+
+    <a class="hero-secondary rv" href="#demo">
+      <span data-en="Or: watch the dashboard" data-es="O: ver el panel">Or: watch the dashboard</span>
+      <i class="bi bi-arrow-right"></i>
+    </a>
+  </div>
+</section>
+
+<!-- DEMO: single full-width video (V2.1) -->
+<section id="demo" class="sec-alt">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="tag rv"><i class="bi bi-display"></i> <span data-en="See it in action" data-es="Míralo en acción">See it in action</span></span>
+      <h2 class="rv" data-en="See what happens after a call" data-es="Mira qué pasa después de una llamada">See what happens after a call</h2>
+      <p class="lead rv" data-en="Dashboard, guest profile, alerts — all in 90 seconds." data-es="Panel, perfil del cliente, alertas — todo en 90 segundos.">Dashboard, guest profile, alerts — all in 90 seconds.</p>
+    </div>
+    <div class="demo-video-wrap rv">
+      <div class="demo-video" id="demoVideo" role="button" tabindex="0" aria-label="Play dashboard walkthrough">
+        <img src="{% static 'img/portal_thumbnail.jpg' %}" alt="" onerror="this.style.display='none'" />
+        <div class="demo-play"><i class="bi bi-play-fill"></i></div>
+        <div class="demo-caption">portal_demo.mp4 · 90 sec</div>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- Stats -->
-<section id="stats">
-  <div class="stats-strip glass">
-    <div class="stat-item">
-      <div class="stat-number">24<span class="accent">/7</span></div>
-      <div class="stat-label">Always available</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-number">&lt;<span class="accent">1s</span></div>
-      <div class="stat-label">Response time</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-number">10<span class="accent">+</span></div>
-      <div class="stat-label">Languages supported</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-number">0</div>
-      <div class="stat-label">Missed calls</div>
-    </div>
+<!-- Lightbox modal for video -->
+<div class="lightbox" id="videoLightbox" role="dialog" aria-modal="true" aria-label="Dashboard walkthrough">
+  <div class="lightbox-content">
+    <button class="lightbox-close" id="lightboxClose" aria-label="Close"><i class="bi bi-x"></i></button>
+    <video id="lightboxVideo" controls preload="none" playsinline>
+      <source src="{% static 'video/portal_demo.mp4' %}" type="video/mp4" />
+    </video>
   </div>
-</section>
+</div>
 
-<!-- Problem -->
-<section id="problem">
-  <div class="container">
-    <span class="section-label">The problem</span>
-    <h2 class="section-title">Your phone is costing you customers</h2>
-    <p class="section-sub">Every unanswered call is a lost opportunity. Your team is busy — and callers don't wait.</p>
-    <div class="problem-grid">
-      <div class="problem-card paper">
-        <div class="problem-icon"><i class="bi bi-telephone-x"></i></div>
-        <h3>Missed calls = missed revenue</h3>
-        <p>62% of callers won't leave a voicemail. If no one picks up, they call your competitor.</p>
-      </div>
-      <div class="problem-card paper">
-        <div class="problem-icon"><i class="bi bi-arrow-repeat"></i></div>
-        <h3>Repetitive questions drain your team</h3>
-        <p>Hours go to answering the same questions about hours, availability, and pricing — every single day.</p>
-      </div>
-      <div class="problem-card paper">
-        <div class="problem-icon"><i class="bi bi-person-x"></i></div>
-        <h3>No memory of returning customers</h3>
-        <p>Every call starts from zero. Your team doesn't know who's calling, what they want, or what they've ordered before.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- How it works -->
+<!-- HOW IT WORKS -->
 <section id="how">
-  <div class="container">
-    <span class="section-label">How it works</span>
-    <h2 class="section-title">Up and running in minutes</h2>
-    <p class="section-sub">No technical setup. No training your staff. Just connect and go live.</p>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="tag rv"><i class="bi bi-lightning-fill"></i> <span data-en="Setup" data-es="Configuración">Setup</span></span>
+      <h2 class="rv" data-en="Live in 24 hours" data-es="Activo en 24 horas">Live in 24 hours</h2>
+      <p class="lead rv" data-en="No IT team. No staff training. Just sign up and forward your calls." data-es="Sin equipo de IT. Sin capacitar al personal. Solo regístrate y redirige tus llamadas.">No IT team. No staff training. Just sign up and forward your calls.</p>
+    </div>
     <div class="steps">
-      <div class="step">
-        <div class="step-num">1</div>
-        <div>
-          <h3>Set up your agent</h3>
-          <p>Fill in your business info — hours, services, FAQs — through a simple portal. Your agent learns everything it needs.</p>
+      <div class="steps-line"></div>
+      <div class="step paper rv">
+        <div class="step-n">1</div>
+        <h3 data-en="Create your account" data-es="Crea tu cuenta">Create your account</h3>
+        <p data-en="Fill in your business profile — hours, services, FAQs. About 10 minutes." data-es="Completa el perfil de tu negocio — horarios, servicios, preguntas frecuentes. Unos 10 minutos.">Fill in your business profile — hours, services, FAQs. About 10 minutes.</p>
+      </div>
+      <div class="step paper rv">
+        <div class="step-n">2</div>
+        <h3 data-en="Forward your calls" data-es="Redirige tus llamadas">Forward your calls</h3>
+        <p data-en="We send simple forwarding instructions — three taps on your phone. That's it." data-es="Te enviamos instrucciones simples de redirección — tres toques en tu teléfono.">We send simple forwarding instructions — three taps on your phone. That's it.</p>
+      </div>
+      <div class="step paper rv">
+        <div class="step-n">3</div>
+        <h3 data-en="We activate your agent" data-es="Activamos tu agente">We activate your agent</h3>
+        <p data-en="Within 24 hours your agent takes its first call — bilingual, on-brand, always on." data-es="En menos de 24 horas tu agente toma su primera llamada — bilingüe, con tu marca.">Within 24 hours your agent takes its first call — bilingual, on-brand, always on.</p>
+      </div>
+    </div>
+    <div class="live-pill rv"><i class="bi bi-arrow-repeat"></i> <span data-en="Your agent is live within 24 hours" data-es="Tu agente está activo en 24 horas">Your agent is live within 24 hours</span></div>
+  </div>
+</section>
+
+<!-- PROOF: ROI Calculator + Quote (V2.1) -->
+<section id="proof" class="sec-alt">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="tag rv"><i class="bi bi-calculator"></i> <span data-en="See your numbers" data-es="Ve tus números">See your numbers</span></span>
+      <h2 class="rv" data-en="Your math, your business" data-es="Tu negocio, tus números">Your math, your business</h2>
+      <p class="lead rv" data-en="Adjust the sliders to see what Concierge would recover for you." data-es="Mueve los controles para ver lo que Concierge recuperaría para ti.">Adjust the sliders to see what Concierge would recover for you.</p>
+    </div>
+
+    <div class="roi-calc card rv">
+      <div class="roi-row">
+        <span class="roi-label" data-en="I run a" data-es="Soy">I run a</span>
+        <div class="roi-select-wrap">
+          <select class="roi-select" id="roiIndustry">
+            <option value="restaurant" data-en="Restaurant / Bar" data-es="Restaurante / Bar">Restaurant / Bar</option>
+            <option value="home_services" data-en="Home Services" data-es="Servicios del Hogar">Home Services</option>
+            <option value="medical" data-en="Medical / Clinic" data-es="Médico / Clínica">Medical / Clinic</option>
+            <option value="real_estate" data-en="Real Estate" data-es="Bienes Raíces">Real Estate</option>
+            <option value="beauty" data-en="Beauty & Wellness" data-es="Belleza y Bienestar">Beauty &amp; Wellness</option>
+            <option value="hotel" data-en="Hotel / Hospitality" data-es="Hotel / Hospitalidad">Hotel / Hospitality</option>
+          </select>
         </div>
       </div>
-      <div class="step">
-        <div class="step-num">2</div>
-        <div>
-          <h3>Forward your calls</h3>
-          <p>Point your business number to the agent. It answers instantly, handles questions, takes messages, and transfers when needed.</p>
+
+      <div class="roi-slider-row">
+        <div class="roi-slider-head">
+          <span class="roi-slider-label" data-en="Calls I miss per week" data-es="Llamadas perdidas por semana">Calls I miss per week</span>
+          <span class="roi-slider-val mono" id="roiCallsVal">5</span>
         </div>
+        <input type="range" class="roi-slider" id="roiCalls" min="0" max="30" step="1" value="5" />
       </div>
-      <div class="step">
-        <div class="step-num">3</div>
-        <div>
-          <h3>Review and improve</h3>
-          <p>Every call is logged. Read summaries, listen to recordings, manage your customer CRM — all in one dashboard.</p>
+
+      <div class="roi-slider-row">
+        <div class="roi-slider-head">
+          <span class="roi-slider-label" data-en="Average value per call" data-es="Valor promedio por llamada">Average value per call</span>
+          <span class="roi-slider-val mono" id="roiValueVal">$60</span>
         </div>
+        <input type="range" class="roi-slider" id="roiValue" min="20" max="2000" step="10" value="60" />
+      </div>
+
+      <div class="roi-slider-row">
+        <div class="roi-slider-head">
+          <span class="roi-slider-label" data-en="Conversion rate" data-es="Tasa de conversión">Conversion rate</span>
+          <span class="roi-slider-val mono" id="roiConvVal">40%</span>
+        </div>
+        <input type="range" class="roi-slider" id="roiConv" min="0" max="100" step="5" value="40" />
+      </div>
+
+      <div class="roi-result">
+        <div class="roi-cap" data-en="Recovered revenue / month" data-es="Ingresos recuperados / mes">Recovered revenue / month</div>
+        <div class="roi-big mono" id="roiBig">$520</div>
+        <div class="roi-meta">
+          <span data-en="Concierge Pro: $369/mo" data-es="Concierge Pro: $369/mes">Concierge Pro: $369/mo</span>
+          <span id="roiNet" data-en-prefix="Your net gain:" data-es-prefix="Ganancia neta:">Your net gain: $151/mo</span>
+        </div>
+        <div class="roi-mult mono" id="roiMult">1.4× ROI</div>
+        <a class="btn btn-accent roi-cta" href="#signup" data-en="Start free trial →" data-es="Empieza gratis →">Start free trial →</a>
+      </div>
+    </div>
+
+    <div class="wave-divider rv" aria-hidden="true" id="waveDiv"></div>
+
+    <div class="quote-block card rv">
+      <div class="qmark">"</div>
+      <blockquote data-en="In our first week, Concierge handled 40 calls that would have gone to voicemail." data-es="En nuestra primera semana, Concierge atendió 40 llamadas que habrían ido al buzón de voz.">In our first week, Concierge handled 40 calls that would have gone to voicemail.</blockquote>
+      <div class="quote-foot">
+        <span class="quote-who">— Calle Dragones, Miami</span>
+        <button class="audio-btn" id="quoteAudioBtn"><i class="bi bi-play-fill"></i> <span data-en="Listen (47 sec)" data-es="Escuchar (47 seg)">Listen (47 sec)</span></button>
       </div>
     </div>
   </div>
 </section>
 
-<!-- Features -->
-<section id="features">
-  <div class="container">
-    <span class="section-label">Features</span>
-    <h2 class="section-title">Everything your front desk needs</h2>
-    <p class="section-sub">Built for real businesses, not just demos.</p>
-    <div class="features-grid">
-      <div class="feature-card glass-deep">
-        <div class="feature-icon"><i class="bi bi-mic-fill"></i></div>
-        <h3>Natural voice conversations</h3>
-        <p>Human-like AI that understands context, handles interruptions, and speaks your brand's tone — in any language.</p>
-      </div>
-      <div class="feature-card glass-deep">
-        <div class="feature-icon"><i class="bi bi-people-fill"></i></div>
-        <h3>Automatic customer CRM</h3>
-        <p>Every caller gets a profile built automatically — call history, preferences, notes. Know who's calling before they say a word.</p>
-      </div>
-      <div class="feature-card glass-deep">
-        <div class="feature-icon"><i class="bi bi-clock-history"></i></div>
-        <h3>Full call history</h3>
-        <p>Every call logged with AI summary, reason, and outcome. Search, filter, and act on your call data instantly.</p>
-      </div>
-      <div class="feature-card glass-deep">
-        <div class="feature-icon"><i class="bi bi-arrow-left-right"></i></div>
-        <h3>Smart call routing</h3>
-        <p>The agent handles what it can, and transfers to a human when conditions are met — no more blind transfers.</p>
-      </div>
-      <div class="feature-card glass-deep">
-        <div class="feature-icon"><i class="bi bi-chat-dots-fill"></i></div>
-        <h3>SMS follow-ups</h3>
-        <p>Send menus, links, and confirmations by text during the call — automatically, without human involvement.</p>
-      </div>
-      <div class="feature-card glass-deep">
-        <div class="feature-icon"><i class="bi bi-plug-fill"></i></div>
-        <h3>Integrations</h3>
-        <p>Connects with your existing tools — reservations, scheduling, CRM — so the agent has the right data, always.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- Industries -->
+<!-- INDUSTRIES -->
 <section id="industries">
-  <div class="container">
-    <span class="section-label">Industries</span>
-    <h2 class="section-title">Built for your sector</h2>
-    <p class="section-sub">Starting with hospitality, expanding across every business that relies on the phone.</p>
-    <div class="industries-grid">
-      <div class="industry-chip active">
-        <i class="bi bi-shop"></i> Restaurants &amp; Bars
-        <span class="chip-badge">Live</span>
-      </div>
-      <div class="industry-chip soon">
-        <i class="bi bi-heart-pulse"></i> Medical &amp; Clinics
-        <span class="chip-badge">Soon</span>
-      </div>
-      <div class="industry-chip soon">
-        <i class="bi bi-house-door"></i> Real Estate
-        <span class="chip-badge">Soon</span>
-      </div>
-      <div class="industry-chip soon">
-        <i class="bi bi-scissors"></i> Beauty &amp; Wellness
-        <span class="chip-badge">Soon</span>
-      </div>
-      <div class="industry-chip soon">
-        <i class="bi bi-briefcase"></i> Professional Services
-        <span class="chip-badge">Soon</span>
-      </div>
-      <div class="industry-chip soon">
-        <i class="bi bi-building"></i> Hospitality &amp; Hotels
-        <span class="chip-badge">Soon</span>
-      </div>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="tag rv"><i class="bi bi-geo-alt-fill"></i> <span data-en="Miami businesses" data-es="Negocios de Miami">Miami businesses</span></span>
+      <h2 class="rv" data-en="Built for your industry" data-es="Hecho para tu industria">Built for your industry</h2>
+      <p class="lead rv" data-en="Restaurants are live. More coming soon — join the waitlist." data-es="Los restaurantes ya están activos. Más en camino — únete a la lista.">Restaurants are live. More coming soon — join the waitlist.</p>
+    </div>
+    <div class="chips" id="chips">
+      <div class="ichip live" data-live data-title-en="Live now — try the demo" data-title-es="En vivo — prueba el demo"><i class="bi bi-shop lead-ic"></i><span data-en="Restaurants & Bars" data-es="Restaurantes y Bares">Restaurants &amp; Bars</span><div class="chip-wave"><span></span><span></span><span></span><span></span><span></span></div><span class="badge live">LIVE</span></div>
+      <div class="ichip" data-soon data-vertical="home_services" data-title-en="Click for waitlist" data-title-es="Únete a la lista"><i class="bi bi-tools lead-ic"></i><span data-en="Home Services" data-es="Servicios del Hogar">Home Services</span><span class="badge soon">SOON</span><span class="notify"><input type="email" placeholder="email@ejemplo.com" /><button data-en="Notify me" data-es="Avísame">Notify me</button></span></div>
+      <div class="ichip" data-soon data-vertical="medical" data-title-en="Click for waitlist" data-title-es="Únete a la lista"><i class="bi bi-heart-pulse lead-ic"></i><span data-en="Medical & Clinics" data-es="Médicos y Clínicas">Medical &amp; Clinics</span><span class="badge soon">SOON</span><span class="notify"><input type="email" placeholder="email@ejemplo.com" /><button data-en="Notify me" data-es="Avísame">Notify me</button></span></div>
+      <div class="ichip" data-soon data-vertical="real_estate" data-title-en="Click for waitlist" data-title-es="Únete a la lista"><i class="bi bi-house-door lead-ic"></i><span data-en="Real Estate" data-es="Bienes Raíces">Real Estate</span><span class="badge soon">SOON</span><span class="notify"><input type="email" placeholder="email@ejemplo.com" /><button data-en="Notify me" data-es="Avísame">Notify me</button></span></div>
+      <div class="ichip" data-soon data-vertical="beauty" data-title-en="Click for waitlist" data-title-es="Únete a la lista"><i class="bi bi-scissors lead-ic"></i><span data-en="Beauty & Wellness" data-es="Belleza y Bienestar">Beauty &amp; Wellness</span><span class="badge soon">SOON</span><span class="notify"><input type="email" placeholder="email@ejemplo.com" /><button data-en="Notify me" data-es="Avísame">Notify me</button></span></div>
+      <div class="ichip" data-soon data-vertical="hotel" data-title-en="Click for waitlist" data-title-es="Únete a la lista"><i class="bi bi-building lead-ic"></i><span data-en="Hotels & Hospitality" data-es="Hoteles y Hospitalidad">Hotels &amp; Hospitality</span><span class="badge soon">SOON</span><span class="notify"><input type="email" placeholder="email@ejemplo.com" /><button data-en="Notify me" data-es="Avísame">Notify me</button></span></div>
     </div>
   </div>
 </section>
 
-<!-- Demo CTA -->
-<section id="demo">
-  <div class="orb-accent" style="top: -100px; left: -120px; opacity: 0.25; width: 420px; height: 420px;"></div>
-  <div class="container">
-    <div class="demo-box glass-deep">
-      <h2>See it live in your business</h2>
-      <p>Tell us about your business and we'll set up a personalized demo — usually within 24 hours.</p>
-      <form class="demo-form" method="post" action="/portal/demo-request/">
+<!-- PRICING -->
+<section id="pricing" class="sec-alt">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="tag rv"><i class="bi bi-tag"></i> <span data-en="Pricing" data-es="Precios">Pricing</span></span>
+      <h2 class="rv" data-en="Simple, transparent pricing" data-es="Precios simples y transparentes">Simple, transparent pricing</h2>
+      <p class="lead rv" data-en="Start free for 14 days. No credit card required." data-es="Empieza gratis por 14 días. Sin tarjeta de crédito.">Start free for 14 days. No credit card required.</p>
+    </div>
+    <div class="prices">
+      <div class="price paper rv">
+        <div class="price-name">Starter</div>
+        <div class="price-tagline" data-en="Start answering every call." data-es="Empieza a contestar cada llamada.">Start answering every call.</div>
+        <div class="price-amt"><span class="num">$199</span><span class="per" data-en="/mo" data-es="/mes">/mo</span></div>
+        <ul>
+          <li><i class="bi bi-check-lg"></i><span data-en="AI agent, 24/7" data-es="Agente de IA, 24/7">AI agent, 24/7</span></li>
+          <li><i class="bi bi-check-lg"></i><span data-en="English + Spanish" data-es="Inglés + Español">English + Spanish</span></li>
+          <li><i class="bi bi-check-lg"></i><span data-en="Guest CRM" data-es="CRM de clientes">Guest CRM</span></li>
+          <li><i class="bi bi-check-lg"></i><span data-en="Email alerts" data-es="Alertas por email">Email alerts</span></li>
+          <li class="note"><i class="bi bi-clock"></i><span data-en="200 minutes / month" data-es="200 minutos / mes">200 minutes / month</span></li>
+        </ul>
+        <a class="btn btn-light" href="#signup" data-en="Start free" data-es="Empieza gratis">Start free</a>
+      </div>
+      <div class="price paper pro rv">
+        <div class="price-pop"><i class="bi bi-star-fill"></i> <span data-en="Most popular" data-es="Más popular">Most popular</span></div>
+        <div class="price-name">Pro</div>
+        <div class="price-tagline" data-en="Run your business with data." data-es="Gestiona tu negocio con datos.">Run your business with data.</div>
+        <div class="price-amt"><span class="num">$369</span><span class="per" data-en="/mo" data-es="/mes">/mo</span></div>
+        <ul>
+          <li><i class="bi bi-check-lg"></i><span data-en="Everything in Starter" data-es="Todo lo de Starter">Everything in Starter</span></li>
+          <li><i class="bi bi-check-lg"></i><span data-en="SMS follow-ups" data-es="Seguimiento por SMS">SMS follow-ups</span></li>
+          <li><i class="bi bi-check-lg"></i><span data-en="Weekly report" data-es="Reporte semanal">Weekly report</span></li>
+          <li><i class="bi bi-check-lg"></i><span data-en="Analytics dashboard" data-es="Panel de analíticas">Analytics dashboard</span></li>
+          <li><i class="bi bi-check-lg"></i><span data-en="Custom voice" data-es="Voz personalizada">Custom voice</span></li>
+          <li><i class="bi bi-check-lg"></i><span>WhatsApp</span></li>
+          <li class="note"><i class="bi bi-clock"></i><span data-en="700 minutes / month" data-es="700 minutos / mes">700 minutes / month</span></li>
+        </ul>
+        <a class="btn btn-accent" href="#signup" data-en="Start free" data-es="Empieza gratis">Start free</a>
+      </div>
+      <div class="price paper bespoke rv">
+        <div class="price-name">Bespoke</div>
+        <div class="price-tagline" data-en="A product built around you." data-es="Un producto hecho para ti.">A product built around you.</div>
+        <div class="price-amt"><span class="num" data-en="Custom" data-es="A medida">Custom</span></div>
+        <ul>
+          <li><i class="bi bi-check-lg"></i><span data-en="Custom interface" data-es="Interfaz personalizada">Custom interface</span></li>
+          <li><i class="bi bi-check-lg"></i><span data-en="Custom features" data-es="Funciones a medida">Custom features</span></li>
+          <li><i class="bi bi-check-lg"></i><span data-en="Dedicated support" data-es="Soporte dedicado">Dedicated support</span></li>
+          <li class="note"><span data-en="“Built around you.”" data-es="“Hecho para ti.”">“Built around you.”</span></li>
+        </ul>
+        <a class="btn btn-ghost" href="mailto:hello@halobits.com?subject=Concierge%20Bespoke" data-en="Talk to us" data-es="Hablemos">Talk to us</a>
+      </div>
+    </div>
+    <div class="price-assure rv">
+      <span><i class="bi bi-check-lg"></i><span data-en="14-day free trial" data-es="14 días gratis">14-day free trial</span></span>
+      <span><i class="bi bi-check-lg"></i><span data-en="No credit card" data-es="Sin tarjeta">No credit card</span></span>
+      <span><i class="bi bi-check-lg"></i><span data-en="Cancel anytime" data-es="Cancela cuando quieras">Cancel anytime</span></span>
+    </div>
+    <p class="price-foot rv" data-en="* Starter: 200 min/mo, overages $0.30/min. Pro: 700 min/mo, above 700 min $0.20/min." data-es="* Starter: 200 min/mes, excedente $0.30/min. Pro: 700 min/mes, sobre 700 min $0.20/min.">* Starter: 200 min/mo, overages $0.30/min. Pro: 700 min/mo, above 700 min $0.20/min.</p>
+  </div>
+</section>
+
+<!-- SIGNUP -->
+<section id="signup" style="position:relative;overflow:hidden;">
+  <div class="orb orb-accent" style="width:500px;height:500px;top:50%;left:50%;transform:translate(-50%,-50%);opacity:0.14;"></div>
+  <div class="wrap">
+    <div class="signup-card card rv">
+      <h2 data-en="Ready to start?" data-es="¿Listo para empezar?">Ready to start?</h2>
+      <p class="desc" data-en="Create your account. Agent live in 24 hours." data-es="Crea tu cuenta. Tu agente estará listo en 24 horas.">Create your account. Agent live in 24 hours.</p>
+      <form method="post" action="{% url 'portal_signup' %}" id="signupForm">
         {% csrf_token %}
         <div class="form-row">
-          <input type="text" name="first_name" placeholder="First name" required>
-          <input type="text" name="last_name" placeholder="Last name" required>
+          <div class="field"><input type="text" name="first_name" placeholder="First name" data-en-placeholder="First name" data-es-placeholder="Nombre" required /></div>
+          <div class="field"><input type="text" name="last_name" placeholder="Last name" data-en-placeholder="Last name" data-es-placeholder="Apellido" required /></div>
         </div>
-        <input type="email" name="email" placeholder="Work email" required>
-        <input type="tel" name="phone" placeholder="Phone number">
-        <input type="text" name="business_name" placeholder="Business name" required>
-        <select name="industry" required>
-          <option value="" disabled selected>Industry</option>
-          <option>Restaurant / Bar</option>
-          <option>Medical / Clinic</option>
-          <option>Real Estate</option>
-          <option>Beauty / Wellness</option>
-          <option>Professional Services</option>
-          <option>Hotel / Hospitality</option>
-          <option>Other</option>
-        </select>
-        <button type="submit">Request a Demo <i class="bi bi-arrow-right"></i></button>
-        <p class="form-note">No commitment. We'll reach out within 24 hours.</p>
+        <div class="field full"><input type="email" name="email" placeholder="Work email" data-en-placeholder="Work email" data-es-placeholder="Correo de trabajo" required /></div>
+        <div class="field full"><input type="text" name="business_name" placeholder="Business name" data-en-placeholder="Business name" data-es-placeholder="Nombre del negocio" required /></div>
+        <div class="field full">
+          <select name="vertical" required>
+            <option value="" disabled selected data-en="Industry" data-es="Industria">Industry</option>
+            <option value="restaurant" data-en="Restaurants & Bars" data-es="Restaurantes y Bares">Restaurants &amp; Bars</option>
+            <option value="home_services" data-en="Home Services" data-es="Servicios del Hogar">Home Services</option>
+            <option value="medical" data-en="Medical & Clinics" data-es="Médicos y Clínicas">Medical &amp; Clinics</option>
+            <option value="real_estate" data-en="Real Estate" data-es="Bienes Raíces">Real Estate</option>
+            <option value="beauty" data-en="Beauty & Wellness" data-es="Belleza y Bienestar">Beauty &amp; Wellness</option>
+            <option value="hotel" data-en="Hotels & Hospitality" data-es="Hoteles y Hospitalidad">Hotels &amp; Hospitality</option>
+            <option value="other" data-en="Other" data-es="Otro">Other</option>
+          </select>
+          <i class="bi bi-chevron-down chev"></i>
+        </div>
+        <button type="submit" class="btn btn-accent" data-en="Create account — it's free →" data-es="Crear cuenta — es gratis →">Create account — it's free →</button>
+        <div class="form-error" id="signupError"></div>
       </form>
+      <div class="signup-assure">
+        <span><i class="bi bi-check-lg"></i><span data-en="Free 14 days" data-es="14 días gratis">Free 14 days</span></span>
+        <span><i class="bi bi-check-lg"></i><span data-en="No card" data-es="Sin tarjeta">No card</span></span>
+        <span><i class="bi bi-check-lg"></i><span data-en="Cancel anytime" data-es="Cancela cuando quieras">Cancel anytime</span></span>
+      </div>
+      <p class="terms" data-en="By signing up you agree to our <a href='#'>Terms of Service</a> and <a href='#'>Privacy Policy</a>." data-es="Al registrarte aceptas nuestros <a href='#'>Términos de Servicio</a> y <a href='#'>Política de Privacidad</a>.">By signing up you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.</p>
     </div>
   </div>
 </section>
 
-<!-- Footer -->
-<footer class="site-footer">
-  <div class="logo"><span class="sparkle">✦</span> Concierge</div>
-  <p>© 2026 · Built for the businesses that never stop.</p>
-  <div style="display:flex;gap:1.5rem">
-    <a href="/portal/login/">Sign in</a>
+<!-- FOOTER -->
+<footer>
+  <div class="foot-wrap">
+    <div class="foot-brand">
+      <a class="brand" href="#top"><span class="brand-mark">✦</span><span class="brand-name">Concierge</span><span class="brand-by">by HaloBits</span></a>
+      <div class="tagline" data-en="Not a service. A partner." data-es="No es un servicio. Es un socio.">Not a service. A partner.</div>
+      <div class="foot-wave" id="footWave" aria-hidden="true"></div>
+    </div>
+    <div class="foot-links">
+      <a href="{% url 'portal_login' %}" data-en="Sign in" data-es="Entrar">Sign in</a>
+      <a href="#" data-en="Privacy" data-es="Privacidad">Privacy</a>
+      <a href="mailto:hello@halobits.com" data-en="Contact" data-es="Contacto">Contact</a>
+    </div>
+    <div class="lang" id="langFoot">
+      <button data-set="en">EN</button>
+      <button data-set="es">ES</button>
+    </div>
+    <div class="foot-copy">© 2026 HaloBits · Miami, FL</div>
   </div>
 </footer>
 
+<!-- Hidden audio element for "Play a recorded sample" fallback -->
+<audio id="sampleAudio" src="{% static 'audio/demo_call.wav' %}" preload="none"></audio>
+
+<script>
+/* ══ Language ══ */
+const LANG_KEY = 'concierge_lang';
+function setLang(lang) {
+  document.documentElement.setAttribute('data-lang', lang);
+  // text content
+  document.querySelectorAll('[data-en]').forEach(el => {
+    const v = el.getAttribute('data-' + lang) || el.getAttribute('data-en');
+    if (!v) return;
+    if (el.tagName === 'OPTION') { el.textContent = v; return; }
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return;
+    el.innerHTML = v;
+  });
+  // placeholders
+  document.querySelectorAll('[data-en-placeholder]').forEach(el => {
+    const v = el.getAttribute('data-' + lang + '-placeholder') || el.getAttribute('data-en-placeholder');
+    if (v) el.setAttribute('placeholder', v);
+  });
+  // titles
+  document.querySelectorAll('[data-title-en]').forEach(el => {
+    const v = el.getAttribute('data-title-' + lang) || el.getAttribute('data-title-en');
+    if (v) el.setAttribute('title', v);
+  });
+  // language switcher state
+  document.querySelectorAll('.lang button, #langFoot button').forEach(b => {
+    b.classList.toggle('on', b.dataset.set === lang);
+  });
+  // active lang for downstream JS
+  window.__lang = lang;
+  // re-render ROI calculator strings that depend on lang
+  if (window.__roiRender) window.__roiRender();
+  try { localStorage.setItem(LANG_KEY, lang); } catch(e) {}
+}
+function initLang() {
+  let saved; try { saved = localStorage.getItem(LANG_KEY); } catch(e) {}
+  if (saved === 'en' || saved === 'es') { setLang(saved); return; }
+  const br = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
+  setLang(br.startsWith('es') ? 'es' : 'en');
+}
+document.querySelectorAll('.lang button, #langFoot button').forEach(b => {
+  b.addEventListener('click', () => setLang(b.dataset.set));
+});
+
+/* ══ Nav scroll shadow ══ */
+const nav = document.getElementById('nav');
+window.addEventListener('scroll', () => nav.classList.toggle('scrolled', window.scrollY > 50), {passive:true});
+
+/* ══ Scroll reveal ══ */
+const revealIO = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('in');
+      revealIO.unobserve(e.target);
+    }
+  });
+}, {threshold: 0.1, rootMargin: '0px 0px -32px 0px'});
+document.querySelectorAll('.rv').forEach((el) => {
+  const sibs = [...el.parentElement.children].filter(c => c.classList.contains('rv'));
+  el.style.transitionDelay = (sibs.indexOf(el) * 75) + 'ms';
+  revealIO.observe(el);
+});
+
+/* ══ Build waveform bars (visual only — breathing) ══ */
+const waveBarsEl = document.getElementById('waveBars');
+const N_BARS = 32;
+const bars = [];
+for (let i = 0; i < N_BARS; i++) {
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  const t = i / N_BARS;
+  const phase = t * Math.PI * 2.2;
+  const minS = 0.12 + Math.abs(Math.sin(phase * 0.6)) * 0.18;
+  const maxS = 0.45 + Math.abs(Math.sin(phase)) * 1.1;
+  bar.style.setProperty('--min', minS.toFixed(3));
+  bar.style.setProperty('--max', maxS.toFixed(3));
+  bar.style.animationDelay = -(t * 4).toFixed(2) + 's';
+  bar.style.animationDuration = (2.8 + Math.sin(i * 1.3) * 0.9).toFixed(2) + 's';
+  bars.push(bar);
+  waveBarsEl.appendChild(bar);
+}
+
+/* ══ Build section divider waveform ══ */
+const waveDivEl = document.getElementById('waveDiv');
+const divHeights = [4,7,12,18,24,20,14,9,5,8,16,22,28,22,16,8,5,9,14,20,24,18,12,7];
+divHeights.forEach(h => {
+  const s = document.createElement('span');
+  s.style.height = h + 'px';
+  waveDivEl.appendChild(s);
+});
+
+/* ══ Build footer waveform ══ */
+const footWaveEl = document.getElementById('footWave');
+const footH = [3,5,8,10,12,9,6,4,3,5,9,12];
+footH.forEach(h => {
+  const s = document.createElement('span');
+  s.style.height = h + 'px';
+  footWaveEl.appendChild(s);
+});
+
+/* ══ V2.1: Real call trigger ══ */
+const callForm = document.getElementById('callForm');
+const callPhone = document.getElementById('callPhone');
+const callBtn = document.getElementById('callBtn');
+const callStatus = document.getElementById('callStatus');
+const waveAfter = document.getElementById('waveAfter');
+const czIc = document.getElementById('czIc');
+
+const STATUS_TXT = {
+  en: {
+    calling: 'Calling your phone...',
+    connected: 'Connected — answer your phone',
+    invalid: 'Please enter a valid US phone number (305, 786, 954, 561, 754, 689).',
+    rate_phone: 'This number was just called. Try again in an hour.',
+    rate_ip: 'Demo limit reached for today. Try again tomorrow or sign up.',
+    error: 'Something went wrong. Try the recorded sample below.',
+    success: 'How was it?'
+  },
+  es: {
+    calling: 'Llamando a tu teléfono...',
+    connected: 'Conectado — contesta tu teléfono',
+    invalid: 'Ingresa un número válido de EE.UU. (305, 786, 954, 561, 754, 689).',
+    rate_phone: 'Este número acaba de ser llamado. Intenta en una hora.',
+    rate_ip: 'Límite de demos por hoy. Intenta mañana o regístrate.',
+    error: 'Algo salió mal. Prueba la grabación de abajo.',
+    success: '¿Qué tal?'
+  }
+};
+function txt(key) {
+  return STATUS_TXT[window.__lang || 'en'][key] || STATUS_TXT.en[key];
+}
+
+function setStatus(msg, type) {
+  callStatus.className = 'call-status show';
+  if (type === 'ok') callStatus.classList.add('ok');
+  if (type === 'err') callStatus.classList.add('err');
+  callStatus.innerHTML = type === 'ok'
+    ? '<span class="live-dot pulse"></span><span>' + msg + '</span>'
+    : '<span>' + msg + '</span>';
+}
+
+function clearStatus() {
+  callStatus.className = 'call-status';
+  callStatus.innerHTML = '';
+}
+
+// Format phone input as user types: +1 (305) 555-0000
+callPhone.addEventListener('input', e => {
+  let v = e.target.value.replace(/\D/g, '');
+  if (v.startsWith('1')) v = v.slice(1);
+  v = v.slice(0, 10);
+  let out = '';
+  if (v.length) out = '+1 ';
+  if (v.length >= 1) out += '(' + v.slice(0, 3);
+  if (v.length >= 4) out += ') ' + v.slice(3, 6);
+  if (v.length >= 7) out += '-' + v.slice(6, 10);
+  e.target.value = out;
+});
+
+callForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  // Extract digits
+  const digits = callPhone.value.replace(/\D/g, '');
+  if (digits.length !== 10 && !(digits.length === 11 && digits.startsWith('1'))) {
+    setStatus(txt('invalid'), 'err');
+    return;
+  }
+  const e164 = '+1' + (digits.length === 11 ? digits.slice(1) : digits);
+  const area = e164.slice(2, 5);
+  const VALID_AREAS = ['305','786','954','561','754','689'];
+  if (!VALID_AREAS.includes(area)) {
+    setStatus(txt('invalid'), 'err');
+    return;
+  }
+
+  // Disable form and show loading
+  callBtn.disabled = true;
+  callPhone.disabled = true;
+  callBtn.innerHTML = '<span class="spinner"></span><span>' + txt('calling') + '</span>';
+  setStatus(txt('calling'), 'ok');
+
+  try {
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const resp = await fetch('/api/demo/trigger-call/', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf},
+      body: JSON.stringify({phone: e164, lang: window.__lang || 'en'})
+    });
+    const data = await resp.json();
+    if (resp.ok && data.status === 'calling') {
+      setStatus(txt('connected'), 'ok');
+      czIc.classList.remove('bi-soundwave');
+      czIc.classList.add('bi-volume-up-fill');
+      // After ~60s show post-call CTA
+      setTimeout(() => {
+        waveAfter.classList.add('show');
+        callBtn.disabled = false;
+        callPhone.disabled = false;
+        callBtn.innerHTML = '<i class="bi bi-telephone-fill"></i><span>' + (window.__lang === 'es' ? 'Llámame de nuevo →' : 'Call me again →') + '</span>';
+        setStatus(txt('success'), 'ok');
+      }, 60000);
+    } else {
+      const reason = data.reason || 'error';
+      setStatus(txt(reason) || txt('error'), 'err');
+      callBtn.disabled = false;
+      callPhone.disabled = false;
+      callBtn.innerHTML = '<i class="bi bi-telephone-fill"></i><span data-en="Call me now →" data-es="Llámame ahora →">' + (window.__lang === 'es' ? 'Llámame ahora →' : 'Call me now →') + '</span>';
+    }
+  } catch (err) {
+    setStatus(txt('error'), 'err');
+    callBtn.disabled = false;
+    callPhone.disabled = false;
+    callBtn.innerHTML = '<i class="bi bi-telephone-fill"></i><span>' + (window.__lang === 'es' ? 'Llámame ahora →' : 'Call me now →') + '</span>';
+  }
+});
+
+/* ══ Play recorded sample (fallback) ══ */
+const sampleAudio = document.getElementById('sampleAudio');
+const playSampleBtn = document.getElementById('playSampleBtn');
+playSampleBtn.addEventListener('click', () => {
+  if (sampleAudio.paused) {
+    sampleAudio.play();
+    playSampleBtn.classList.add('playing');
+    playSampleBtn.querySelector('i').className = 'bi bi-pause-fill';
+  } else {
+    sampleAudio.pause();
+    playSampleBtn.classList.remove('playing');
+    playSampleBtn.querySelector('i').className = 'bi bi-play-fill';
+  }
+});
+sampleAudio.addEventListener('ended', () => {
+  playSampleBtn.classList.remove('playing');
+  playSampleBtn.querySelector('i').className = 'bi bi-play-fill';
+  waveAfter.classList.add('show');
+});
+
+/* Quote audio button also plays sample */
+document.getElementById('quoteAudioBtn').addEventListener('click', () => {
+  sampleAudio.currentTime = 0;
+  sampleAudio.play();
+});
+
+/* ══ Video lightbox ══ */
+const demoVideo = document.getElementById('demoVideo');
+const lightbox = document.getElementById('videoLightbox');
+const lightboxVideo = document.getElementById('lightboxVideo');
+const lightboxClose = document.getElementById('lightboxClose');
+
+function openLightbox() {
+  lightbox.classList.add('show');
+  lightboxVideo.play().catch(() => {});
+}
+function closeLightbox() {
+  lightbox.classList.remove('show');
+  lightboxVideo.pause();
+  lightboxVideo.currentTime = 0;
+}
+demoVideo.addEventListener('click', openLightbox);
+demoVideo.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLightbox(); } });
+lightboxClose.addEventListener('click', closeLightbox);
+lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightbox(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && lightbox.classList.contains('show')) closeLightbox(); });
+
+/* ══ V2.1: ROI Calculator ══ */
+const ROI_DEFAULTS = {
+  restaurant:    {calls: 5, value: 60,   conv: 40, label_en: 'call', label_es: 'llamada'},
+  home_services: {calls: 8, value: 400,  conv: 50, label_en: 'job',  label_es: 'trabajo'},
+  medical:       {calls: 6, value: 150,  conv: 60, label_en: 'appointment', label_es: 'cita'},
+  real_estate:   {calls: 3, value: 1500, conv: 20, label_en: 'lead', label_es: 'prospecto'},
+  beauty:        {calls: 5, value: 80,   conv: 45, label_en: 'booking', label_es: 'reserva'},
+  hotel:         {calls: 4, value: 200,  conv: 35, label_en: 'booking', label_es: 'reserva'},
+};
+const CONCIERGE_PRICE = 369; // Pro
+
+const roiIndustry = document.getElementById('roiIndustry');
+const roiCalls = document.getElementById('roiCalls');
+const roiValue = document.getElementById('roiValue');
+const roiConv = document.getElementById('roiConv');
+const roiCallsVal = document.getElementById('roiCallsVal');
+const roiValueVal = document.getElementById('roiValueVal');
+const roiConvVal = document.getElementById('roiConvVal');
+const roiBig = document.getElementById('roiBig');
+const roiNet = document.getElementById('roiNet');
+const roiMult = document.getElementById('roiMult');
+
+function fillSliderTrack(slider) {
+  const min = +slider.min || 0;
+  const max = +slider.max || 100;
+  const pct = ((slider.value - min) / (max - min)) * 100;
+  slider.style.backgroundSize = pct + '% 100%';
+}
+
+function recalcROI() {
+  const calls = +roiCalls.value;
+  const value = +roiValue.value;
+  const conv = +roiConv.value / 100;
+  const weekly = calls * value * conv;
+  const monthly = Math.round(weekly * 4.33);
+  const net = monthly - CONCIERGE_PRICE;
+  const ratio = monthly / CONCIERGE_PRICE;
+
+  // update displays
+  roiCallsVal.textContent = calls;
+  roiValueVal.textContent = '$' + value.toLocaleString();
+  roiConvVal.textContent = conv * 100 + '%';
+  roiBig.textContent = '$' + monthly.toLocaleString();
+
+  const lang = window.__lang || 'en';
+  const netLabel = lang === 'es' ? 'Ganancia neta:' : 'Your net gain:';
+  const netSign = net >= 0 ? '' : '-';
+  roiNet.textContent = netLabel + ' ' + netSign + '$' + Math.abs(net).toLocaleString() + (lang === 'es' ? '/mes' : '/mo');
+
+  roiMult.textContent = ratio.toFixed(1) + '× ROI';
+  roiMult.className = 'roi-mult mono';
+  if (ratio < 1) roiMult.classList.add('low');
+  else if (ratio < 3) roiMult.classList.add('mid');
+  else if (ratio < 10) roiMult.classList.add('high');
+  else roiMult.classList.add('epic');
+
+  fillSliderTrack(roiCalls);
+  fillSliderTrack(roiValue);
+  fillSliderTrack(roiConv);
+}
+
+function applyDefaultsFor(vertical) {
+  const d = ROI_DEFAULTS[vertical] || ROI_DEFAULTS.restaurant;
+  roiCalls.value = d.calls;
+  roiValue.value = d.value;
+  roiConv.value = d.conv;
+  recalcROI();
+}
+
+roiIndustry.addEventListener('change', () => applyDefaultsFor(roiIndustry.value));
+[roiCalls, roiValue, roiConv].forEach(s => s.addEventListener('input', recalcROI));
+
+window.__roiRender = recalcROI;
+applyDefaultsFor('restaurant');
+
+/* ══ Industries chips ══ */
+async function submitWaitlist(chip, email) {
+  const vertical = chip.getAttribute('data-vertical');
+  const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+  try {
+    const resp = await fetch('/api/waitlist/', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf},
+      body: JSON.stringify({email, vertical, lang: window.__lang || 'en'})
+    });
+    return resp.ok;
+  } catch (e) { return false; }
+}
+
+document.querySelectorAll('.ichip[data-soon]').forEach(chip => {
+  chip.addEventListener('click', async e => {
+    if (chip.classList.contains('done')) return;
+    if (e.target.tagName === 'INPUT') return;
+    if (e.target.tagName === 'BUTTON') {
+      const inp = chip.querySelector('input');
+      const email = inp.value.trim();
+      if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        inp.focus();
+        inp.style.borderColor = 'var(--warn)';
+        setTimeout(() => inp.style.borderColor = '', 1200);
+        return;
+      }
+      await submitWaitlist(chip, email);
+      chip.classList.remove('open');
+      chip.classList.add('done');
+      chip.querySelector('.notify').style.display = 'none';
+      const lang = window.__lang || 'en';
+      const ok = document.createElement('span');
+      ok.className = 'badge';
+      ok.style.cssText = 'background:rgba(34,160,107,0.18);color:#1c7a52;';
+      ok.textContent = lang === 'es' ? '✓ TE AVISAMOS' : '✓ NOTED';
+      chip.appendChild(ok);
+      return;
+    }
+    chip.classList.toggle('open');
+    const inp = chip.querySelector('input');
+    if (chip.classList.contains('open') && inp) setTimeout(() => inp.focus(), 60);
+  });
+});
+const liveChip = document.querySelector('.ichip[data-live]');
+if (liveChip) {
+  liveChip.addEventListener('click', () => {
+    const demo = document.getElementById('demo');
+    const y = demo.getBoundingClientRect().top + window.scrollY - 64;
+    window.scrollTo({top: y, behavior: 'smooth'});
+  });
+}
+
+/* ══ Init ══ */
+initLang();
+</script>
 </body>
 </html>

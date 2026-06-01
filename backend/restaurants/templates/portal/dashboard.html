@@ -6,6 +6,21 @@
 
 {% block content %}
 
+{# ── Pending provisioning banner (new signups, pre-Retell) ─────── #}
+{% if not restaurant.is_provisioned %}
+  <div class="v2-alert" style="margin-bottom: 18px; display:flex; gap:14px; align-items:flex-start;">
+    <i class="bi bi-hourglass-split" style="font-size:20px; color:var(--accent); flex-shrink:0; margin-top:2px;"></i>
+    <div style="flex:1;">
+      <strong style="display:block; font-size:14px; margin-bottom:4px;">Your agent is being activated</strong>
+      <span style="font-size:13px; color:var(--muted-strong);">
+        We&rsquo;ll email you within 24 hours when it&rsquo;s ready to take calls.
+        Meanwhile, head to <a href="{% url 'portal_kb' restaurant.slug %}" style="color:var(--accent-deep); font-weight:600;">Knowledge Base</a>
+        and fill in your business details so we can train the agent.
+      </span>
+    </div>
+  </div>
+{% endif %}
+
 {# ── Page head ─────────────────────────────────────────────────── #}
 <div class="v2-page-head">
   <div class="v2-page-head-title">
