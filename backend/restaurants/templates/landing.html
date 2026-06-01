@@ -1022,7 +1022,9 @@ footer{border-top:1px solid var(--warm-line);position:relative;z-index:2;}
     </div>
     <div class="foot-links">
       <a href="{% url 'portal_login' %}" data-en="Sign in" data-es="Entrar">Sign in</a>
-      <a href="#" data-en="Privacy" data-es="Privacidad">Privacy</a>
+      <a href="{% url 'privacy' %}" data-en="Privacy" data-es="Privacidad">Privacy</a>
+      <a href="{% url 'terms' %}" data-en="Terms" data-es="Términos">Terms</a>
+      <a href="{% url 'cookies' %}" data-en="Cookies" data-es="Cookies">Cookies</a>
       <a href="mailto:hello@halobits.com" data-en="Contact" data-es="Contacto">Contact</a>
     </div>
     <div class="lang" id="langFoot">
@@ -1032,6 +1034,47 @@ footer{border-top:1px solid var(--warm-line);position:relative;z-index:2;}
     <div class="foot-copy">© 2026 HaloBits · Miami, FL</div>
   </div>
 </footer>
+
+<!-- Cookie notice -->
+<div id="cookieNotice" class="cookie-notice" role="dialog" aria-live="polite" aria-label="Cookie notice" hidden>
+  <p>
+    <span data-en="We use cookies to keep you signed in and to understand how the site is used. See our " data-es="Usamos cookies para mantener tu sesión y entender cómo se usa el sitio. Consulta nuestra ">We use cookies to keep you signed in and to understand how the site is used. See our </span><a href="{% url 'cookies' %}" data-en="Cookie Policy" data-es="Política de Cookies">Cookie Policy</a>.
+  </p>
+  <button type="button" id="cookieOk" data-en="OK" data-es="OK">OK</button>
+</div>
+<style>
+.cookie-notice{
+  position:fixed;left:16px;right:16px;bottom:16px;z-index:9999;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  max-width:680px;margin:0 auto;
+  background:rgba(255,252,248,0.96);backdrop-filter:blur(10px);
+  border:1px solid var(--warm-line);border-radius:14px;
+  box-shadow:0 14px 50px -16px rgba(56,36,12,0.25);
+  padding:14px 18px;font-size:13.5px;color:var(--ink);line-height:1.5;
+}
+.cookie-notice p{flex:1;min-width:220px;margin:0;font-weight:300;}
+.cookie-notice a{color:var(--accent);text-decoration:underline;text-underline-offset:2px;}
+.cookie-notice button{
+  background:var(--accent);color:#fff;border:0;border-radius:99px;
+  padding:8px 22px;font-family:'Geist',sans-serif;font-size:13px;font-weight:600;
+  cursor:pointer;letter-spacing:-0.01em;
+}
+.cookie-notice button:hover{background:var(--accent-deep);}
+@media (max-width:520px){.cookie-notice{left:8px;right:8px;bottom:8px;padding:12px 14px;}}
+</style>
+<script>
+(function(){
+  var KEY='concierge_cookie_ok';
+  try{ if(localStorage.getItem(KEY)==='1') return; }catch(e){}
+  var el=document.getElementById('cookieNotice');
+  if(!el) return;
+  el.hidden=false;
+  document.getElementById('cookieOk').addEventListener('click',function(){
+    el.hidden=true;
+    try{ localStorage.setItem(KEY,'1'); }catch(e){}
+  });
+})();
+</script>
 
 <!-- Hidden audio element for "Play a recorded sample" fallback -->
 <audio id="sampleAudio" src="{% static 'audio/demo_call.wav' %}" preload="none"></audio>

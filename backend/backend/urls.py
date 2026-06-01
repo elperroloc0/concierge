@@ -38,4 +38,7 @@ urlpatterns = [
     path('portal/', include('restaurants.portal_urls')),
     path('demo/', restaurant_views.demo_call, name='demo_call'),
     path('help/cancel-forwarding/', restaurant_views.help_cancel_forwarding, name='help_cancel_forwarding'),
+    path('privacy/', restaurant_views.privacy, name='privacy'),
+    path('terms/', restaurant_views.terms, name='terms'),
+    path('cookies/', restaurant_views.cookies, name='cookies'),
 ]

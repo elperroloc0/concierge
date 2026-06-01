@@ -104,6 +104,18 @@ def help_cancel_forwarding(request):
     })
 
 
+def privacy(request):
+    return render(request, "privacy.html")
+
+
+def terms(request):
+    return render(request, "terms.html")
+
+
+def cookies(request):
+    return render(request, "cookies.html")
+
+
 # ─── Retell Webhook Helpers ───────────────────────────────────────────────────
 
 def _friendly_url(url: str) -> str:
