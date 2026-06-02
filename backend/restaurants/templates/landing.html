@@ -1036,11 +1036,24 @@ footer{border-top:1px solid var(--warm-line);position:relative;z-index:2;}
 </footer>
 
 <!-- Cookie notice -->
-<div id="cookieNotice" class="cookie-notice" role="dialog" aria-live="polite" aria-label="Cookie notice" hidden>
-  <p>
-    <span data-en="We use cookies to keep you signed in and to understand how the site is used. See our " data-es="Usamos cookies para mantener tu sesión y entender cómo se usa el sitio. Consulta nuestra ">We use cookies to keep you signed in and to understand how the site is used. See our </span><a href="{% url 'cookies' %}" data-en="Cookie Policy" data-es="Política de Cookies">Cookie Policy</a>.
-  </p>
-  <button type="button" id="cookieOk" data-en="OK" data-es="OK">OK</button>
+<div id="cookieNotice" class="cookie-notice is-hidden" role="dialog" aria-live="polite" aria-label="Cookie notice">
+  <div id="cookieStep1" class="cookie-step">
+    <p>
+      <span data-en="We use cookies to keep you signed in and to understand how the site is used. See our " data-es="Usamos cookies para mantener tu sesión y entender cómo se usa el sitio. Consulta nuestra ">We use cookies to keep you signed in and to understand how the site is used. See our </span><a href="{% url 'cookies' %}" data-en="Cookie Policy" data-es="Política de Cookies">Cookie Policy</a>.
+    </p>
+    <div class="cookie-actions">
+      <button type="button" id="cookieReject" class="cookie-btn cookie-btn-ghost" data-en="Reject" data-es="Rechazar">Reject</button>
+      <button type="button" id="cookieAccept" class="cookie-btn cookie-btn-primary" data-en="Accept" data-es="Aceptar">Accept</button>
+    </div>
+  </div>
+  <div id="cookieStep2" class="cookie-step is-hidden">
+    <p>
+      <span data-en="No problem — this site only uses essential cookies required for the Service to work (your session and CSRF token). We don't run analytics, advertising, or cross-site tracking." data-es="Sin problema — este sitio solo usa cookies esenciales necesarias para que el Servicio funcione (tu sesión y token CSRF). No usamos analítica, publicidad ni seguimiento entre sitios.">No problem — this site only uses essential cookies required for the Service to work (your session and CSRF token). We don't run analytics, advertising, or cross-site tracking.</span>
+    </p>
+    <div class="cookie-actions">
+      <button type="button" id="cookieAck" class="cookie-btn cookie-btn-primary" data-en="Got it" data-es="Entendido">Got it</button>
+    </div>
+  </div>
 </div>
 <style>
 .cookie-notice{
@@ -1052,27 +1065,46 @@ footer{border-top:1px solid var(--warm-line);position:relative;z-index:2;}
   box-shadow:0 14px 50px -16px rgba(56,36,12,0.25);
   padding:14px 18px;font-size:13.5px;color:var(--ink);line-height:1.5;
 }
+.cookie-notice.is-hidden{display:none;}
+.cookie-step{display:flex;align-items:center;gap:14px;flex-wrap:wrap;width:100%;}
+.cookie-step.is-hidden{display:none;}
 .cookie-notice p{flex:1;min-width:220px;margin:0;font-weight:300;}
 .cookie-notice a{color:var(--accent);text-decoration:underline;text-underline-offset:2px;}
-.cookie-notice button{
-  background:var(--accent);color:#fff;border:0;border-radius:99px;
-  padding:8px 22px;font-family:'Geist',sans-serif;font-size:13px;font-weight:600;
+.cookie-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.cookie-btn{
+  border-radius:99px;padding:8px 18px;
+  font-family:'Geist',sans-serif;font-size:13px;font-weight:600;
   cursor:pointer;letter-spacing:-0.01em;
 }
-.cookie-notice button:hover{background:var(--accent-deep);}
-@media (max-width:520px){.cookie-notice{left:8px;right:8px;bottom:8px;padding:12px 14px;}}
+.cookie-btn-primary{background:var(--accent);color:#fff;border:0;}
+.cookie-btn-primary:hover{background:var(--accent-deep);}
+.cookie-btn-ghost{background:transparent;color:var(--ink);border:1px solid var(--warm-line-2,rgba(0,0,0,0.12));}
+.cookie-btn-ghost:hover{background:rgba(0,0,0,0.04);}
+@media (max-width:520px){
+  .cookie-notice{left:8px;right:8px;bottom:8px;padding:12px 14px;}
+  .cookie-actions{width:100%;}
+  .cookie-btn{flex:1;}
+}
 </style>
 <script>
 (function(){
-  var KEY='concierge_cookie_ok';
-  try{ if(localStorage.getItem(KEY)==='1') return; }catch(e){}
+  var KEY='concierge_cookie_consent';
+  try{ if(localStorage.getItem(KEY)) return; }catch(e){}
   var el=document.getElementById('cookieNotice');
   if(!el) return;
-  el.hidden=false;
-  document.getElementById('cookieOk').addEventListener('click',function(){
-    el.hidden=true;
-    try{ localStorage.setItem(KEY,'1'); }catch(e){}
+  var step1=document.getElementById('cookieStep1');
+  var step2=document.getElementById('cookieStep2');
+  el.classList.remove('is-hidden');
+  function close(value){
+    el.classList.add('is-hidden');
+    try{ localStorage.setItem(KEY,value); }catch(e){}
+  }
+  document.getElementById('cookieAccept').addEventListener('click',function(){ close('accepted'); });
+  document.getElementById('cookieReject').addEventListener('click',function(){
+    step1.classList.add('is-hidden');
+    step2.classList.remove('is-hidden');
   });
+  document.getElementById('cookieAck').addEventListener('click',function(){ close('rejected'); });
 })();
 </script>
 
