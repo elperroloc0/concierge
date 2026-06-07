@@ -78,21 +78,23 @@
 
             {% with q=m.call_quality %}
               {% if q %}
-                {% with total=q.excellent|default:0|add:q.good|default:0|add:q.poor|default:0 %}
+                {% with qe=q.excellent|default:0 qg=q.good|default:0 qp=q.poor|default:0 %}
+                {% with total=qe|add:qg|add:qp %}
                   <div class="v2-report-row-quality">
                     {% if total %}
                       <div class="v2-qbar">
-                        <div class="seg-good" style="width: {% widthratio q.excellent|default:0|add:q.good|default:0 total 100 %}%;"></div>
-                        <div class="seg-poor" style="width: {% widthratio q.poor|default:0 total 100 %}%;"></div>
+                        <div class="seg-good" style="width: {% widthratio qe|add:qg total 100 %}%;"></div>
+                        <div class="seg-poor" style="width: {% widthratio qp total 100 %}%;"></div>
                       </div>
                       <div class="legend">
-                        <span class="ok">{{ q.excellent|default:0|add:q.good|default:0 }} good</span>
-                        <span class="bad">{{ q.poor|default:0 }} poor</span>
+                        <span class="ok">{{ qe|add:qg }} good</span>
+                        <span class="bad">{{ qp }} poor</span>
                       </div>
                     {% else %}
                       <div style="font: 300 11.5px 'Geist',sans-serif; color: var(--muted);">No quality data</div>
                     {% endif %}
                   </div>
+                {% endwith %}
                 {% endwith %}
               {% else %}
                 <div></div>
