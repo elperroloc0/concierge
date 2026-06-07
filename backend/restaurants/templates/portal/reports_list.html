@@ -78,15 +78,15 @@
 
             {% with q=m.call_quality %}
               {% if q %}
-                {% with total=q.excellent|add:q.good|add:q.poor %}
+                {% with total=q.excellent|default:0|add:q.good|default:0|add:q.poor|default:0 %}
                   <div class="v2-report-row-quality">
                     {% if total %}
                       <div class="v2-qbar">
-                        <div class="seg-good" style="width: {% widthratio q.excellent|add:q.good total 100 %}%;"></div>
-                        <div class="seg-poor" style="width: {% widthratio q.poor total 100 %}%;"></div>
+                        <div class="seg-good" style="width: {% widthratio q.excellent|default:0|add:q.good|default:0 total 100 %}%;"></div>
+                        <div class="seg-poor" style="width: {% widthratio q.poor|default:0 total 100 %}%;"></div>
                       </div>
                       <div class="legend">
-                        <span class="ok">{{ q.excellent|add:q.good }} good</span>
+                        <span class="ok">{{ q.excellent|default:0|add:q.good|default:0 }} good</span>
                         <span class="bad">{{ q.poor|default:0 }} poor</span>
                       </div>
                     {% else %}
