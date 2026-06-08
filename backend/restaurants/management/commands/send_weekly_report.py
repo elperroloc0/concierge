@@ -221,7 +221,7 @@ def aggregate_metrics(restaurant: Restaurant, week_start: date, week_end: date) 
         "follow_ups":     sum(1 for d in real if d.follow_up_needed),
         "reason_breakdown":    reason_breakdown,
         "sentiment_breakdown": sentiment_breakdown,
-        "call_quality":        dict(quality_counts),
+        "call_quality":        {"excellent": quality_counts["excellent"], "good": quality_counts["good"], "poor": quality_counts["poor"]},
         "agent_failures": {
             "total":    len(agent_failures),
             "examples": agent_failures[:10],

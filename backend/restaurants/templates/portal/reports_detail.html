@@ -145,7 +145,8 @@
 
 {# ── Quality + Avg call + Sentiment row ──────────────────────── #}
 {% with q=report.metrics.call_quality %}
-{% if q.excellent or q.good or q.poor or avg_call_label %}
+{% with qe=q.excellent|default:0 qg=q.good|default:0 qp=q.poor|default:0 %}
+{% if qe or qg or qp or avg_call_label %}
   <div class="v2-report-quality glass">
     <div>
       <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
@@ -153,25 +154,25 @@
           Agent quality this week
         </span>
         <span class="mono" style="font: 500 11px 'Geist Mono',monospace; color: var(--muted);">
-          {{ q.excellent|add:q.good|add:q.poor }} rated
+          {{ qe|add:qg|add:qp }} rated
         </span>
       </div>
-      {% with total=q.excellent|add:q.good|add:q.poor %}
+      {% with total=qe|add:qg|add:qp %}
         {% if total %}
           <div class="v2-qbar">
-            <div class="seg-good" style="width: {% widthratio q.excellent|add:q.good total 100 %}%;"></div>
-            <div class="seg-poor" style="width: {% widthratio q.poor total 100 %}%;"></div>
+            <div class="seg-good" style="width: {% widthratio qe|add:qg total 100 %}%;"></div>
+            <div class="seg-poor" style="width: {% widthratio qp total 100 %}%;"></div>
           </div>
         {% endif %}
         <div class="v2-qbar-legend">
           <span style="display:inline-flex; align-items:center; gap:6px;">
             <span class="dot" style="background:#2e7d3a;"></span>
-            <strong style="color:#2e7d3a;">{{ q.excellent|add:q.good|default:0 }}</strong>
+            <strong style="color:#2e7d3a;">{{ qe|add:qg }}</strong>
             <span style="color:var(--muted-strong);">excellent / good</span>
           </span>
           <span style="display:inline-flex; align-items:center; gap:6px;">
             <span class="dot" style="background:#b91c1c;"></span>
-            <strong style="color:#b91c1c;">{{ q.poor|default:0 }}</strong>
+            <strong style="color:#b91c1c;">{{ qp }}</strong>
             <span style="color:var(--muted-strong);">poor</span>
           </span>
         </div>
@@ -200,6 +201,7 @@
     {% endif %}
   </div>
 {% endif %}
+{% endwith %}
 {% endwith %}
 
 {# ── Two-column: Weekly analysis + KB updates ─────────────── #}
