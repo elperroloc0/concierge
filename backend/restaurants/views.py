@@ -4942,11 +4942,15 @@ def portal_guest_detail(request, slug, memory_pk):
     )
     call_history = list(call_history_qs)
 
-    # ── SMS history for this guest (any SMS attached to their calls) ──────────
+    # ── SMS history for this guest ───────────────────────────────────────────
+    # Query by phone number directly so we catch SMS sent during a call when
+    # call_event was null (race condition at call start) or when CallDetail was
+    # never created (abandoned calls, etc.).
     sms_history = list(
         SmsLog.objects.filter(
-            call_event__restaurant=restaurant,
-            call_event__detail__caller_phone=memory.phone,
+            restaurant=restaurant,
+        ).filter(
+            Q(to_number=memory.phone) | Q(from_number=memory.phone)
         ).select_related("call_event").order_by("created_at")
     )
 
