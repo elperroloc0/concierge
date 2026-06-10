@@ -551,6 +551,20 @@ class RestaurantKnowledgeBase(models.Model):
     reservation_grace_min  = models.PositiveSmallIntegerField(null=True, blank=True)
     no_show_fee            = models.CharField(max_length=128, blank=True, default="")
     large_party_min_guests = models.PositiveSmallIntegerField(null=True, blank=True)
+    # Reservation handling (behavior config — per restaurant, selectable from portal)
+    _RESERVATION_MODES = [
+        ("capture",    "Capture details — the team confirms"),
+        ("self_serve", "Self-serve — text the caller a pre-filled OpenTable booking link"),
+    ]
+    reservation_mode = models.CharField(
+        max_length=16, default="capture", choices=_RESERVATION_MODES,
+        help_text="How the agent handles reservations. 'capture' = collect details, team confirms. "
+                  "'self_serve' = text the caller a pre-filled OpenTable booking link.",
+    )
+    opentable_rid = models.CharField(
+        max_length=32, blank=True, default="",
+        help_text="OpenTable Restaurant ID (rid), e.g. 1274317 — builds the pre-filled booking link for self-serve mode.",
+    )
 
     # ── Private Events ────────────────────────────────────────────────────
     has_private_dining       = models.BooleanField(default=False)

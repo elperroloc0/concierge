@@ -2451,13 +2451,45 @@ def _determine_caller_lang(call_detail, restaurant, *, default_to_primary: bool 
     return "en"
 
 
-def _build_sms_message(sms_type: str, restaurant, kb, custom_message: str = "", lang: str = "en") -> str | None:
+def _build_opentable_reservation_url(rid, covers=None, dt=None) -> str:
+    """Pre-filled OpenTable booking link from the restaurant's rid + optional party size + ISO datetime.
+    e.g. https://www.opentable.com/restref/client/?rid=1274317&covers=2&datetime=2026-06-10T19:00
+    """
+    rid = (str(rid) if rid else "").strip()
+    if not rid:
+        return ""
+    params = {"rid": rid}
+    if covers:
+        params["covers"] = str(covers)
+    if dt:
+        params["datetime"] = str(dt)
+    return "https://www.opentable.com/restref/client/?" + urllib.parse.urlencode(params, safe=":")
+
+
+def _build_sms_message(sms_type: str, restaurant, kb, custom_message: str = "", lang: str = "en",
+                       *, covers=None, dt=None, detail=None) -> str | None:
     """Build an SMS message from DB data based on the requested type.
 
     `lang` is set by the caller via `_determine_caller_lang(call_detail, restaurant)`.
     Defaults to English; falls back to ES templates when explicitly requested.
+    For `reservation_link`, covers/dt come from explicit args, else `detail` (CallDetail), else a base rid link.
     """
     name = restaurant.name if restaurant else ""
+
+    if sms_type == "reservation_link":
+        rid = (kb.opentable_rid if kb else "").strip()
+        if not rid:
+            return None
+        c, d = covers, dt
+        if detail is not None:
+            if not c and getattr(detail, "party_size", None):
+                c = detail.party_size
+            if not d and getattr(detail, "reservation_date", None) and getattr(detail, "reservation_time", None):
+                d = f"{detail.reservation_date.isoformat()}T{detail.reservation_time.strftime('%H:%M')}"
+        link = _build_opentable_reservation_url(rid, c, d)
+        prefix = f"Reserva en {name}: " if lang == "es" else f"Book at {name}: "
+        msg = prefix + link
+        return msg if len(msg) <= 160 else link
 
     if sms_type == "menu_link":
         url = (kb.food_menu_url if kb else "") or (restaurant.website if restaurant else "")
@@ -2556,6 +2588,8 @@ def retell_tool_send_sms(request):
     to_retell = call.get("to_number", "").strip()     # our Retell number → identify restaurant
     sms_type       = data.get("args", {}).get("sms_type", "").strip()
     custom_message = data.get("args", {}).get("message", "").strip()
+    covers         = data.get("args", {}).get("covers")
+    res_datetime   = data.get("args", {}).get("datetime")
 
     if not to_number or not sms_type:
         return JsonResponse({"result": "error: missing to_number or sms_type"})
@@ -2579,7 +2613,8 @@ def retell_tool_send_sms(request):
     detail     = getattr(call_event, "detail", None) if call_event else None
     lang       = _determine_caller_lang(detail, restaurant)
 
-    message = _build_sms_message(sms_type, restaurant, kb, custom_message, lang=lang)
+    message = _build_sms_message(sms_type, restaurant, kb, custom_message, lang=lang,
+                                 covers=covers, dt=res_datetime, detail=detail)
     if not message:
         return JsonResponse({"result": f"error: no content available for sms_type '{sms_type}'"})
 
@@ -4634,7 +4669,7 @@ def portal_send_sms(request, slug, event_pk):
 
     kb      = getattr(restaurant, "knowledge_base", None)
     lang    = _determine_caller_lang(detail, restaurant, default_to_primary=True)
-    message = _build_sms_message(sms_type, restaurant, kb, custom_message, lang=lang)
+    message = _build_sms_message(sms_type, restaurant, kb, custom_message, lang=lang, detail=detail)
 
     if not message:
         return JsonResponse({"error": f"No content available for type '{sms_type}'. Check that the relevant URL or info is filled in."}, status=400)

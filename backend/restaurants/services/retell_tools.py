@@ -21,7 +21,8 @@ def _sms_tool_definition(base_url: str, lang: str = "en") -> dict:
                     "type": "string",
                     "enum": [
                         "menu_link", "bar_menu_link", "hours", "music", "valet",
-                        "social_media", "address", "event_inquiry", "website", "custom",
+                        "social_media", "address", "event_inquiry", "website",
+                        "reservation_link", "custom",
                     ],
                     "description": (
                         "What to send: "
@@ -34,12 +35,21 @@ def _sms_tool_definition(base_url: str, lang: str = "en") -> dict:
                         "address = physical address; "
                         "event_inquiry = private events contact; "
                         "website = general website; "
+                        "reservation_link = pre-filled OpenTable booking link (pass covers + datetime from what the caller asked); "
                         "custom = free-form message you compose (requires message field)."
                     ),
                 },
                 "message": {
                     "type": "string",
                     "description": "Required when sms_type is 'custom'. Your composed message, under 160 characters.",
+                },
+                "covers": {
+                    "type": "string",
+                    "description": "Party size for reservation_link, e.g. '2'. Optional.",
+                },
+                "datetime": {
+                    "type": "string",
+                    "description": "Reservation date/time for reservation_link in ISO form, e.g. '2026-06-10T19:00'. Optional.",
                 },
             },
             "required": ["sms_type"],
@@ -132,7 +142,7 @@ def _escalation_tool_definition(transfer_number: str) -> dict:
             "agent_detection_timeout_ms": 8000,
             "enable_bridge_audio_cue": True,
             "on_hold_music": "ringtone",
-            "transfer_ring_duration_ms": 18000,
+            "transfer_ring_duration_ms": 9000,
             "private_handoff_option": {
                 "type": "prompt",
                 "prompt": (

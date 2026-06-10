@@ -654,6 +654,21 @@
             <p class="kb-hint">Minimum guests to be treated as a large group.</p>
           </div>
         </div>
+
+        <!-- Reservation handling (behavior config — moves to the Behavior zone in the future KB redesign) -->
+        <p class="kb-section-title" style="margin-top:1.5rem;">Reservation handling</p>
+        <div class="row g-3">
+          <div class="col-md-5">
+            <label class="kb-label">Reservation mode</label>
+            {{ kb_form.reservation_mode }}
+            <p class="kb-hint">Capture = agent collects details and the team confirms. Self-serve = agent texts a pre-filled OpenTable booking link.</p>
+          </div>
+          <div class="col-md-4">
+            <label class="kb-label">OpenTable Restaurant ID (rid)</label>
+            {{ kb_form.opentable_rid }}
+            <p class="kb-hint">Numeric OpenTable rid (e.g. 1274317). Required for self-serve booking links.</p>
+          </div>
+        </div>
       </div>
     </div>
 

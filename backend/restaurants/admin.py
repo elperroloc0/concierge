@@ -36,7 +36,7 @@ AGENT_SYSTEM_PROMPT = """{{account_status_directive}}
 ## SPEECH
 - Language: default {{primary_lang}}; match caller after their first full sentence (single words like "ok/hello/bye" don't count).
 - Tone: {{conversation_tone}}. {{brand_voice_notes}}
-- Answer → stop. Vary phrases. First name ≤1×/turn. Never read raw URLs.
+- Answer → stop. Vary phrases. Use the caller's first name sparingly — greeting, then rarely; never every turn (overusing it sounds robotic/unnatural). Don't re-ask info you already have. Never read raw URLs.
 - Times: no colons. EN: "8 15 PM", "7 PM". ES: "8 y 15 de la tarde", "7 de la noche/tarde/mañana" — never AM/PM.
 - Website — ES: {{website_domain_spoken_es}} | EN: {{website_domain_spoken_en}}
 - Email — ES: {{contact_email_spoken_es}} | EN: {{contact_email_spoken_en}} — always match conversation language.
@@ -82,15 +82,7 @@ AGENT_SYSTEM_PROMPT = """{{account_status_directive}}
 2. **ANSWER CHECK — CRITICAL!!!** Have the exact detail? → give it. Don't have it (vague/missing)? → offer to connect someone who can confirm → transfer or [4]. Never end on "I don't have that."
 3. SMS enabled: after answering, offer once to text the info. Yes → `send_sms` with matching type: menu → `menu_link` | bar/cocktails → `bar_menu_link` | hours → `hours` | music → `music` | valet/parking → `valet` | social media → `social_media` | location → `address` | events → `event_inquiry` | other → `custom`.
 
-**[3] RESERVATION**
-Intent unclear → one clarifying question first.
-Collect in order (skip if already known): Date → Time → Party Size → Name (Rule 3) → Phone (Rule 4) → Special Requests.
-- Resolve date (Rule 2). Check hours via `get_info("hours")` (schedule ≠ availability).
-- ≥{{large_party_min_guests}} guests → [5].
-- Walk-in: name + ETA, tell caller the team expects them.
-- Modify/cancel/existing: you cannot look up or change directly. Collect name + date + describe change → tell team will verify → WRAP UP.
-- Prior reservation interest → revisit once after questions (not after each). If declined, drop.
-- All info collected → confirm back (date, time, party size, name) → tell caller: reservation will be processed, confirmation text will come from OpenTable → WRAP UP. No more questions.
+%%RESERVATION_FLOW%%
 
 **[4] MESSAGES**
 Collect contact (Rule 4). Confirm a team member will call back.
@@ -308,9 +300,51 @@ Steps:
 """
 
 
+# Reservation flow variants — swapped into the prompt per restaurant at the
+# `%%RESERVATION_FLOW%%` marker. `capture` (default) reproduces the original [3]
+# block byte-for-byte; `self_serve` texts a pre-filled OpenTable booking link.
+_RESERVATION_CAPTURE = """**[3] RESERVATION**
+Intent unclear → one clarifying question first.
+Collect in order (skip if already known): Date → Time → Party Size → Name (Rule 3) → Phone (Rule 4) → Special Requests.
+- Resolve date (Rule 2). Check hours via `get_info("hours")` (schedule ≠ availability).
+- ≥{{large_party_min_guests}} guests → [5].
+- Walk-in: name + ETA, tell caller the team expects them.
+- Modify/cancel/existing: you cannot look up or change directly. Collect name + date + describe change → tell team will verify → WRAP UP.
+- Prior reservation interest → revisit once after questions (not after each). If declined, drop.
+- All info collected → confirm back (date, time, party size, name) → tell caller: reservation will be processed, confirmation text will come from OpenTable → WRAP UP. No more questions."""
+
+_RESERVATION_SELF_SERVE = """**[3] RESERVATION** (self-serve)
+Intent unclear → one clarifying question first.
+- New booking: collect Date → Time → Party Size → Name (if a returning caller,
+  get_caller_profile and CONFIRM the known name: "¿a nombre de [name]?"; else ask).
+  Read back. Phone = caller's number (Rule 4), don't re-ask.
+- Offer the booking link → yes: `send_sms(sms_type="reservation_link")`, confirm sent. Done.
+- ≥{{large_party_min_guests}} guests → [5].
+- Doesn't want to self-serve (graceful ladder, no dead ends):
+  1. Hesitant/declines link → capture the lead (date/time/party + name/phone; reuse
+     what's already known, don't re-ask) → team will confirm and follow up.
+  2. Insists on a person → transfer if available.
+  3. Transfer unavailable / no answer → "No one's available right now; I've noted your
+     reservation and the team will contact you" → take a message [4].
+- Modify/cancel/existing: ask if they've tried OpenTable (their email has Modify/Cancel);
+  not yet → invite; tried-and-failed or resist → message [4] / transfer if available.
+- Walk-in: name + ETA, team expects them.
+- Never promise a confirmation from us for the link; OpenTable confirms only after they finish."""
+
+
 def _build_agent_prompt(restaurant: Restaurant) -> str:
-    """Build the system prompt, injecting escalation rule only when enabled."""
+    """Build the system prompt: per-restaurant reservation flow + escalation rule when enabled."""
     prompt = AGENT_SYSTEM_PROMPT
+
+    # Per-restaurant reservation flow (capture default; self_serve texts a booking link)
+    try:
+        reservation_mode = restaurant.knowledge_base.reservation_mode
+    except Exception:
+        reservation_mode = "capture"
+    prompt = prompt.replace(
+        "%%RESERVATION_FLOW%%",
+        _RESERVATION_SELF_SERVE if reservation_mode == "self_serve" else _RESERVATION_CAPTURE,
+    )
 
     # Inject ABSOLUTE RULE only when escalation is active.
     # When OFF, zero mention of transfer_to_human appears in the prompt.

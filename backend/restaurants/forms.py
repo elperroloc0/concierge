@@ -99,6 +99,7 @@ class KnowledgeBaseForm(forms.ModelForm):
             "auto_gratuity", "service_charge_pct", "service_charge_scope", "max_cards_to_split", "corkage_policy",
             # Reservations
             "reservation_grace_min", "no_show_fee", "large_party_min_guests",
+            "reservation_mode", "opentable_rid",
             # Private events
             "has_private_dining", "private_dining_min_spend",
             "allows_decorations", "decoration_cleaning_fee",
@@ -152,6 +153,8 @@ class KnowledgeBaseForm(forms.ModelForm):
             "reservation_grace_min":  forms.NumberInput(attrs=_TEXT),
             "no_show_fee":            forms.TextInput(attrs=_TEXT),
             "large_party_min_guests": forms.NumberInput(attrs=_TEXT),
+            "reservation_mode":       forms.Select(attrs=_SEL),
+            "opentable_rid":          forms.TextInput(attrs=_TEXT),
             # Private events
             "has_private_dining":       forms.CheckboxInput(attrs=_CHECK),
             "private_dining_min_spend": forms.TextInput(attrs=_TEXT),
