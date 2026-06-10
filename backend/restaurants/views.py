@@ -557,11 +557,28 @@ def _resolve_relative_date(text: str, today: date):
     # Strip ordinal suffixes: "5th" → "5", "3rd" → "3", "1st" → "1"
     tl = re.sub(r'\b(\d+)(st|nd|rd|th)\b', r'\1', tl)
 
-    if tl in ("today", "hoy", "hoy mismo", "ahora", "ahora mismo", "ahorita", "now", "right now"):
+    # Day-after-tomorrow (check before tomorrow — these phrases also contain "mañana"/"tomorrow")
+    if any(p in tl for p in ("pasado manana", "day after tomorrow")):
+        return today + timedelta(days=2), None
+
+    # Today — including "tonight" / "this morning|afternoon|evening" / "esta noche|tarde|mañana"
+    if (re.search(r"\b(hoy|today|ahora|ahorita|now)\b", tl)
+            or "tonight" in tl
+            or re.search(r"\besta\s+(noche|tarde|manana)\b", tl)
+            or re.search(r"\bthis\s+(morning|afternoon|evening|night)\b", tl)):
         return today, None
 
-    if tl in ("tomorrow", "manana", "el dia de manana"):
+    # Tomorrow — "mañana" = tomorrow, but "(de/por/en/a) la mañana" = morning (time of day), not a date.
+    # Strip the morning-time phrases, then see if a date-word "mañana"/"tomorrow" remains.
+    _date_part = re.sub(r"\b(de|por|en|a)\s+la\s+manana\b", " ", tl)
+    _date_part = re.sub(r"\bla\s+manana\b", " ", _date_part)
+    if "tomorrow" in tl or re.search(r"\bmanana\b", _date_part):
         return today + timedelta(days=1), None
+
+    # "in N days" / "en N días"
+    _ndays = re.search(r"\b(?:in|en)\s+(\d{1,2})\s+(?:days?|d[ií]as?)\b", tl)
+    if _ndays:
+        return today + timedelta(days=int(_ndays.group(1))), None
 
     if any(p in tl for p in ("next week", "proxima semana", "semana que viene", "semana proxima")):
         return None, "Which day next week? Ask: '¿Qué día de la próxima semana?'"
