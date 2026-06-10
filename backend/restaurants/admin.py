@@ -302,9 +302,7 @@ Before transferring, always:
 Steps:
 1. Tell the caller you are connecting them.
 2. Call `transfer_to_human`.
-3. If transfer fails: inform the caller, offer to retry or leave a message.
-   - Retry → go to step 2.
-   - Leave message → collect name and reason, confirm a team member will call back.
+3. If transfer fails (no answer): do NOT retry. Immediately take a message — reuse the name + reason already in context (ask only if missing), confirm a team member will call back — then wrap up warmly.
 
 ---
 """
