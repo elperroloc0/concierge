@@ -24,6 +24,7 @@ from .services.retell_tools import (
     _resolve_date_tool_definition,
     _sms_tool_definition,
     build_tool_list,
+    transfer_tool_specs,
 )
 
 LANG_MAP = {"es": "multi", "en": "en-US", "other": "multi"}
@@ -52,7 +53,7 @@ AGENT_SYSTEM_PROMPT = """{{account_status_directive}}
 ## HARD RULES
 1. **Facts:** `get_info(topic)` before answering. Multiple topics → multiple calls. Not found → try `get_info("additional")`. Basic amenities = no lookup needed.
 2. **Dates:** `resolve_date` for any non-exact date. Read back `spoken_es`/`spoken_en` exactly. `is_past=true` → tell caller. `ambiguity` → clarify. Unresolvable → tell caller a team member will confirm and follow up.
-3. **Names:** Name alone = request, not intro. "I'm [name]"/"my name is" = intro. Use {{team_members}} to check if the requested person is listed. Always repeat back the name the caller said to confirm it was understood correctly before acting on it.
+3. **Names & privacy:** Name alone = request, not intro. "I'm [name]"/"my name is" = intro. Repeat back the name the caller said to confirm before acting. NEVER reveal, confirm, or guess staff names or who's working — {{team_members}} is only for silently recognizing a caller's reference; never speak it and never use it to decide a transfer.
 4. **Phone:** Caller's number = {{caller_from_number}} — ask if best to reach them; use theirs if different. Don't re-ask known info.
 5. **Memory:** Prior visit reference → `get_caller_profile()`. Use naturally; don't state name before confirmed.
 6. **Scope:** Only {{restaurant_name}} topics. You are the AI assistant. Emergency → 911 → `end_call`. Abuse → `end_call`.
@@ -68,12 +69,12 @@ AGENT_SYSTEM_PROMPT = """{{account_status_directive}}
 **[1] GREETING**
 "{{welcome_phrase}}" already said — don't repeat.
 - Non-customer (vendor/press/sales/robocall): NON-CUSTOMER rules
-- Wants a person/staff: ask name + reason once if unknown → check {{team_members}} — if person not listed or list empty → [4]; if listed and conditions met → TRANSFER
+- Wants a person / "talk to someone": help first — offer to assist, ask what they need. Only if genuinely needed → follow CALL TRANSFER (else take a message [4]). Never confirm staff names.
 - Leave a message: [4]
 - Question (non-reservation): [2]
 - Asks about a special event (cover, tickets, seating, show time, event details): [4b]
 - Mentions reservation (any kind): [3]
-- Name alone / asking for someone: ask name + reason once if unknown → check {{team_members}} — if person not listed or list empty → [4]; if listed and conditions met → TRANSFER
+- Name alone / asking for someone: treat as above — help first, don't confirm whether they work here; only if truly needed → CALL TRANSFER or message [4].
 - Unclear: one brief open question
 
 **[2] QUESTIONS**
@@ -328,6 +329,35 @@ Intent unclear → one clarifying question first.
 - Never promise a confirmation from us for the link; OpenTable confirms only after they finish."""
 
 
+_MULTI_TRANSFER_BLOCK = """
+## CALL TRANSFER
+Transferring is a LAST RESORT — resolve the call yourself first. A generic request for "someone / a person / a human" is NOT an automatic transfer: say you can help, and ask what they need.
+Transfer only when the situation truly matches one of these, using the matching tool:
+{routing}
+Before transferring, get the caller's name + reason (one short question if unknown).
+If a transfer doesn't connect (no answer): do NOT redial the same person — try the next destination above whose situations also fit (a different person); if none fits or all fail, take a message [4] and tell them the team will follow up.
+
+---
+"""
+
+
+def _render_transfer_block(kb) -> str:
+    """Transfer block for the prompt: multi-destination routing if configured, else legacy, else ''."""
+    if kb is None:
+        return ""
+    specs = transfer_tool_specs(getattr(kb, "transfer_destinations", None) or [])
+    if specs:
+        sit_labels = dict(RestaurantKnowledgeBase.TRANSFER_SITUATIONS)
+        lines = []
+        for name, _label, _phone, sits in specs:
+            sit_txt = "; ".join(str(sit_labels.get(s, s)) for s in sits) or "a human is genuinely needed"
+            lines.append(f"- {sit_txt} → `{name}`")
+        return _MULTI_TRANSFER_BLOCK.format(routing="\n".join(lines))
+    if getattr(kb, "escalation_enabled", False):
+        return _ESCALATION_RULE_BLOCK
+    return ""
+
+
 def _build_agent_prompt(restaurant: Restaurant) -> str:
     """Build the system prompt: per-restaurant reservation flow + escalation rule when enabled."""
     prompt = AGENT_SYSTEM_PROMPT
@@ -342,17 +372,12 @@ def _build_agent_prompt(restaurant: Restaurant) -> str:
         _RESERVATION_SELF_SERVE if reservation_mode == "self_serve" else _RESERVATION_CAPTURE,
     )
 
-    # Inject ABSOLUTE RULE only when escalation is active.
-    # When OFF, zero mention of transfer_to_human appears in the prompt.
-    try:
-        escalation_enabled = restaurant.knowledge_base.escalation_enabled
-    except Exception:
-        escalation_enabled = False
-
-    if escalation_enabled:
-        # Insert escalation block right after the first line (account_status_directive)
+    # Inject the transfer block: multi-destination routing if configured, else legacy escalation,
+    # else nothing (zero mention of transfer appears in the prompt).
+    transfer_block = _render_transfer_block(getattr(restaurant, "knowledge_base", None))
+    if transfer_block:
         first_newline = prompt.index("\n")
-        prompt = prompt[:first_newline] + "\n" + _ESCALATION_RULE_BLOCK + prompt[first_newline + 1:]
+        prompt = prompt[:first_newline] + "\n" + transfer_block + prompt[first_newline + 1:]
 
     if not restaurant.enable_sms:
         # Remove SMS offer sentences from the prompt

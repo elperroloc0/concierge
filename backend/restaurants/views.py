@@ -4342,6 +4342,7 @@ def _do_retell_sync(restaurant_pk: int) -> None:
         escalation_number=escalation_number,
         enable_sms=restaurant.enable_sms,
         lang=restaurant.primary_lang,
+        transfer_destinations=getattr(kb, "transfer_destinations", None),
     )
 
     try:

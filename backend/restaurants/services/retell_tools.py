@@ -1,6 +1,7 @@
 """
 Retell LLM tool definitions — shared between admin actions and the portal view.
 """
+import re
 
 
 def _sms_tool_definition(base_url: str, lang: str = "en") -> dict:
@@ -126,11 +127,12 @@ def _get_info_tool_definition(base_url: str) -> dict:
     }
 
 
-def _escalation_tool_definition(transfer_number: str) -> dict:
+def _escalation_tool_definition(transfer_number: str, name: str = "transfer_to_human",
+                                description: str = "Transfer the caller to a human agent.") -> dict:
     return {
         "type": "transfer_call",
-        "name": "transfer_to_human",
-        "description": "Transfer the caller to a human agent.",
+        "name": name,
+        "description": description,
         "transfer_destination": {
             "type": "predefined",
             "number": transfer_number,
@@ -179,12 +181,35 @@ def _get_caller_profile_tool_definition(base_url: str) -> dict:
     }
 
 
-def build_tool_list(base_url: str, escalation_number: str | None = None, enable_sms: bool = False, lang: str = "en") -> list:
+def transfer_tool_specs(transfer_destinations):
+    """[(tool_name, label, phone, situations)] for each valid destination; names are unique.
+    Shared by build_tool_list (to build the tools) and the prompt builder (to render routing)."""
+    specs, used = [], set()
+    for d in transfer_destinations or []:
+        if not isinstance(d, dict):
+            continue
+        phone = (d.get("phone") or "").strip()
+        if not phone:
+            continue
+        label = (d.get("label") or "team").strip()
+        slug = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_") or "team"
+        name, base, i = f"transfer_to_{slug}", f"transfer_to_{slug}", 2
+        while name in used:
+            name = f"{base}_{i}"
+            i += 1
+        used.add(name)
+        specs.append((name, label, phone, d.get("situations") or []))
+    return specs
+
+
+def build_tool_list(base_url: str, escalation_number: str | None = None, enable_sms: bool = False,
+                    lang: str = "en", transfer_destinations=None) -> list:
     """
     Build the full Retell general_tools list.
-    end_call is always included.
-    transfer_to_human is included only when escalation_number is provided.
-    send_sms is included only when enable_sms is True.
+    end_call is always included. send_sms only when enable_sms is True.
+    Transfer: one transfer_call tool per destination when transfer_destinations is set
+    (multi-destination routing); otherwise a single transfer_to_human when escalation_number
+    is provided (legacy).
     """
     tools = [
         _get_info_tool_definition(base_url),
@@ -194,6 +219,10 @@ def build_tool_list(base_url: str, escalation_number: str | None = None, enable_
     ]
     if enable_sms:
         tools.append(_sms_tool_definition(base_url, lang=lang))
-    if escalation_number:
+    specs = transfer_tool_specs(transfer_destinations)
+    if specs:
+        for name, label, phone, _sits in specs:
+            tools.append(_escalation_tool_definition(phone, name=name, description=f"Transfer the caller to {label}."))
+    elif escalation_number:
         tools.append(_escalation_tool_definition(escalation_number))
     return tools
