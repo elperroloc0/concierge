@@ -4426,6 +4426,41 @@ def _parse_regular_hours_from_post(post):
     return out
 
 
+_TRANSFER_SLOTS = 4  # fixed destination slots in the portal (enough for host/events/manager/…)
+
+
+def _build_transfer_dest_rows(kb, n=_TRANSFER_SLOTS):
+    """Slot rows for the transfer-destinations editor, from kb.transfer_destinations."""
+    dests = kb.transfer_destinations if isinstance(kb.transfer_destinations, list) else []
+    vocab = RestaurantKnowledgeBase.TRANSFER_SITUATIONS
+    rows = []
+    for i in range(n):
+        d = dests[i] if i < len(dests) and isinstance(dests[i], dict) else {}
+        chosen = set(d.get("situations") or [])
+        rows.append({
+            "idx": i,
+            "label": d.get("label", ""),
+            "phone": d.get("phone", ""),
+            "situations": [{"key": k, "label": lbl, "checked": k in chosen} for k, lbl in vocab],
+        })
+    return rows
+
+
+def _parse_transfer_destinations_from_post(post, n=_TRANSFER_SLOTS):
+    """Build transfer_destinations from the per-slot inputs. Slots without a phone are dropped."""
+    valid = {k for k, _ in RestaurantKnowledgeBase.TRANSFER_SITUATIONS}
+    out = []
+    getlist = getattr(post, "getlist", lambda k: [post[k]] if k in post else [])
+    for i in range(n):
+        phone = (post.get(f"dest_{i}_phone") or "").strip()
+        if not phone:
+            continue
+        label = (post.get(f"dest_{i}_label") or "").strip() or "Team"
+        sits = [s for s in getlist(f"dest_{i}_sit") if s in valid]
+        out.append({"label": label, "phone": phone, "situations": sits})
+    return out
+
+
 @portal_view()
 def portal_knowledge_base(request, slug):
     restaurant = request.restaurant
@@ -4450,7 +4485,8 @@ def portal_knowledge_base(request, slug):
 
             # Structured weekly hours (per-day inputs, not part of the ModelForm)
             kb.regular_hours = _parse_regular_hours_from_post(request.POST)
-            kb.save(update_fields=["regular_hours"])
+            kb.transfer_destinations = _parse_transfer_destinations_from_post(request.POST)
+            kb.save(update_fields=["regular_hours", "transfer_destinations"])
 
             _sync_retell_tools(request, restaurant, kb)
 
@@ -4468,6 +4504,7 @@ def portal_knowledge_base(request, slug):
         "lint": lint,
         "can_edit_kb": can_edit,
         "hours_rows": _build_hours_rows(kb),
+        "transfer_dest_rows": _build_transfer_dest_rows(kb),
     })
 
 

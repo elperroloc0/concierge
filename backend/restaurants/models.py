@@ -710,6 +710,20 @@ class RestaurantKnowledgeBase(models.Model):
         max_length=30, blank=True, default="",
         help_text="Phone number to transfer to (E.164 format, e.g. +17865551234). Leave blank to take a message instead of transferring."
     )
+    # Multi-destination transfer routing (OPT-IN). When non-empty, supersedes the single
+    # escalation_transfer_number above: the agent transfers to the destination whose situations
+    # match, and on no-answer falls through to the NEXT matching destination, then a message.
+    # Empty list ⇒ legacy behavior (escalation_enabled + escalation_transfer_number).
+    # Shape: [{"label": "Events", "phone": "+1305...", "situations": ["large_party", ...]}, ...]
+    TRANSFER_SITUATIONS = [
+        ("insist_person",       "Caller insists on a person"),
+        ("confirm_reservation", "Confirm / modify a reservation"),
+        ("large_party",         "Large party"),
+        ("private_event",       "Private event / buyout"),
+        ("complaint",           "Complaint"),
+        ("vendor_business",     "Vendor / business call"),
+    ]
+    transfer_destinations = models.JSONField(default=list, blank=True)
 
     def __str__(self):
         return f"KB: {self.restaurant.name}"
