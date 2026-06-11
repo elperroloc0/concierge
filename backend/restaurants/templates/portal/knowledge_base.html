@@ -379,14 +379,35 @@
     <div class="tab-pane fade" id="tab-hours">
       <div class="kb-card">
 
+        <!-- Structured weekly hours (per-day; not a ModelForm field — parsed in the view) -->
+        <p class="kb-section-title">Weekly hours</p>
+        <p class="kb-hint" style="margin-top:-.4rem;">Set each day's open/close. If a day closes after midnight (e.g. 1:00 AM), just enter that close time — the agent treats it as the next morning.</p>
+        <div class="kb-group">
+          {% for d in hours_rows %}
+          <div class="d-flex align-items-center gap-2" style="padding:.3rem 0; flex-wrap:wrap;">
+            <div style="width:100px; font-size:.875rem; font-weight:500; color:#374151;">{{ d.label }}</div>
+            <div class="kb-toggle" style="width:fit-content;">
+              <input type="checkbox" class="form-check-input" id="hours_{{ d.key }}_closed" name="hours_{{ d.key }}_closed" {% if d.closed %}checked{% endif %}
+                     onchange="document.getElementById('hours_{{ d.key }}_times').style.display=this.checked?'none':'flex';">
+              <label class="form-check-label" for="hours_{{ d.key }}_closed" style="font-size:.8rem; color:#6b7280; cursor:pointer;">Closed</label>
+            </div>
+            <div id="hours_{{ d.key }}_times" class="d-flex align-items-center gap-1" style="{% if d.closed %}display:none;{% endif %}">
+              <input type="time" class="form-control" name="hours_{{ d.key }}_open" value="{{ d.open }}" style="width:130px;">
+              <span style="color:#9ca3af;">–</span>
+              <input type="time" class="form-control" name="hours_{{ d.key }}_close" value="{{ d.close }}" style="width:130px;">
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
         <div class="kb-group">
           <label class="kb-label">
-            {{ kb_form.hours_of_operation.label }}
+            Special closures / exceptions
             <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
           </label>
           <div class="char-counter" id="ctr-hours_of_operation"></div>
           {{ kb_form.hours_of_operation }}
-          <p class="kb-hint">The agent uses this to answer "are you open?" and similar questions.</p>
+          <p class="kb-hint">Date-specific changes that <strong>override</strong> the weekly hours above — include the reason. Example: <em>"Closed June 21 for a private event."</em> (If you leave the weekly hours empty, this text is used as your hours instead.)</p>
         </div>
 
         <div class="kb-group">

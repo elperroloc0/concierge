@@ -481,6 +481,13 @@ class RestaurantKnowledgeBase(models.Model):
     )
 
     # ── Hours & Availability ──────────────────────────────────────────────
+    # Structured weekly schedule (single range per day). Keys: mon..sun.
+    # Value: None/absent = closed; ["HH:MM","HH:MM"] = open/close (24h).
+    # close < open  ⇒  closes after midnight (next day), e.g. ["17:00","01:00"].
+    regular_hours          = models.JSONField(default=dict, blank=True)
+    # Free-text: when regular_hours is set, this is the special-closures / exceptions
+    # note (overrides the schedule for specific dates + reason). When regular_hours is
+    # empty, it falls back to being the schedule itself (legacy / backward-compat).
     hours_of_operation     = models.TextField(blank=True, default="")
     kitchen_closing_time   = models.CharField(max_length=128, blank=True, default="")
     closes_on_holidays     = models.BooleanField(default=False)

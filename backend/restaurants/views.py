@@ -2169,6 +2169,62 @@ def retell_events_webhook(request):
 
 # ─── get_info Tool ────────────────────────────────────────────────────────────
 
+def _hours_fmt12(hhmm: str) -> str:
+    """'17:00' → '5:00 PM', '01:00' → '1:00 AM'."""
+    h, m = int(hhmm[:2]), int(hhmm[3:5])
+    return f"{h % 12 or 12}:{m:02d} {'AM' if h < 12 else 'PM'}"
+
+
+def _render_hours(kb) -> str:
+    """Structured `regular_hours` → clean, unambiguous text for the agent.
+    Returns '' when there's no structured schedule (caller falls back to free text)."""
+    rh = kb.regular_hours if isinstance(kb.regular_hours, dict) else {}
+    open_days, closed = [], []
+    for key, label in _HOURS_DAY_KEYS:
+        v = rh.get(key)
+        if isinstance(v, (list, tuple)) and len(v) == 2 and all(v):
+            o, c = v
+            note = " (closes after midnight, into the next morning)" if c < o else ""
+            open_days.append(f"{label[:3]}: {_hours_fmt12(o)} – {_hours_fmt12(c)}{note}")
+        else:
+            closed.append(label[:3])
+    if not open_days:
+        return ""
+    if closed:
+        open_days.append("Closed: " + ", ".join(closed))
+    return "\n".join(open_days)
+
+
+def is_open_at(kb, dt):
+    """Deterministic open/closed at datetime `dt`, handling after-midnight close.
+    Returns (True/False, close_time_str) or (None, None) when no structured hours."""
+    rh = kb.regular_hours if isinstance(kb.regular_hours, dict) else {}
+    if not rh:
+        return None, None
+
+    def _mins(s):
+        return int(s[:2]) * 60 + int(s[3:5])
+
+    def _rng(key):
+        v = rh.get(key)
+        if isinstance(v, (list, tuple)) and len(v) == 2 and all(v):
+            return _mins(v[0]), _mins(v[1]), v[1]
+        return None
+
+    minute = dt.hour * 60 + dt.minute
+    r = _rng(_HOURS_DAY_KEYS[dt.weekday()][0])
+    if r:
+        o, c, cstr = r
+        if (c > o and o <= minute < c) or (c < o and minute >= o):
+            return True, cstr
+    ry = _rng(_HOURS_DAY_KEYS[(dt.weekday() - 1) % 7][0])  # yesterday's after-midnight spill
+    if ry:
+        o, c, cstr = ry
+        if c < o and minute < c:
+            return True, cstr
+    return False, None
+
+
 def _format_kb_topic(kb, topic: str, restaurant=None, lang: str = "en") -> str:
     """Return a clean text block for a given KB topic. Empty fields are omitted."""
     lines = []
@@ -2179,7 +2235,24 @@ def _format_kb_topic(kb, topic: str, restaurant=None, lang: str = "en") -> str:
             lines.append(f"{label}: {v}")
 
     if topic == "hours":
-        add("Hours of operation", kb.hours_of_operation)
+        structured = _render_hours(kb)
+        if structured:
+            # "Open right now" — computed deterministically in the restaurant's timezone
+            if restaurant is not None:
+                try:
+                    _tz = ZoneInfo(restaurant.timezone or "UTC")
+                except Exception:
+                    _tz = ZoneInfo("UTC")
+                _open, _close = is_open_at(kb, datetime.now(tz=_tz))
+                if _open is True:
+                    lines.append(f"Open right now: YES — until {_hours_fmt12(_close)}.")
+                elif _open is False:
+                    lines.append("Open right now: NO — closed at this moment.")
+            lines.append("Weekly hours:\n" + structured)
+            if kb.hours_of_operation.strip():
+                lines.append("Exceptions/overrides (these take precedence for the dates they mention): " + kb.hours_of_operation.strip())
+        else:
+            add("Hours of operation", kb.hours_of_operation)  # legacy: free-text is the schedule
         add("Kitchen closes", kb.kitchen_closing_time)
         add("Holiday closures", kb.holiday_closure_notes or ("Closed on major holidays" if kb.closes_on_holidays else ""))
         add("Operational closures & date-specific changes", kb.private_event_closures)
@@ -4318,6 +4391,41 @@ def _sync_retell_tools(request, restaurant: Restaurant, kb: RestaurantKnowledgeB
 
 
 
+_HOURS_DAY_KEYS = [
+    ("mon", "Monday"), ("tue", "Tuesday"), ("wed", "Wednesday"), ("thu", "Thursday"),
+    ("fri", "Friday"), ("sat", "Saturday"), ("sun", "Sunday"),
+]
+
+
+def _build_hours_rows(kb):
+    """Per-day rows for the structured Hours editor, from kb.regular_hours."""
+    rh = kb.regular_hours if isinstance(kb.regular_hours, dict) else {}
+    rows = []
+    for key, label in _HOURS_DAY_KEYS:
+        val = rh.get(key)
+        is_open = isinstance(val, (list, tuple)) and len(val) == 2 and all(val)
+        rows.append({
+            "key": key, "label": label,
+            "closed": not is_open,
+            "open": val[0] if is_open else "",
+            "close": val[1] if is_open else "",
+        })
+    return rows
+
+
+def _parse_regular_hours_from_post(post):
+    """Build the regular_hours dict from the per-day form inputs (None = closed)."""
+    out = {}
+    for key, _label in _HOURS_DAY_KEYS:
+        if post.get(f"hours_{key}_closed"):
+            out[key] = None
+            continue
+        o = (post.get(f"hours_{key}_open") or "").strip()
+        c = (post.get(f"hours_{key}_close") or "").strip()
+        out[key] = [o, c] if o and c else None
+    return out
+
+
 @portal_view()
 def portal_knowledge_base(request, slug):
     restaurant = request.restaurant
@@ -4340,6 +4448,10 @@ def portal_knowledge_base(request, slug):
             kb_form.save()
             kb.refresh_from_db()
 
+            # Structured weekly hours (per-day inputs, not part of the ModelForm)
+            kb.regular_hours = _parse_regular_hours_from_post(request.POST)
+            kb.save(update_fields=["regular_hours"])
+
             _sync_retell_tools(request, restaurant, kb)
 
             messages.success(request, "Knowledge base updated successfully.")
@@ -4355,6 +4467,7 @@ def portal_knowledge_base(request, slug):
         "kb_form": kb_form,
         "lint": lint,
         "can_edit_kb": can_edit,
+        "hours_rows": _build_hours_rows(kb),
     })
 
 
