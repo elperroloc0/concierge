@@ -2225,6 +2225,79 @@ def is_open_at(kb, dt):
     return False, None
 
 
+def _kb_now(restaurant):
+    """Current datetime in the restaurant's timezone (UTC fallback)."""
+    try:
+        tz = ZoneInfo(restaurant.timezone or "UTC") if restaurant else ZoneInfo("UTC")
+    except Exception:
+        tz = ZoneInfo("UTC")
+    return datetime.now(tz=tz)
+
+
+def _render_entertainment_week(kb) -> str:
+    """Structured recurring `entertainment_schedule` → clean weekly text.
+    Returns '' when there's no structured schedule (caller falls back to free text)."""
+    es = kb.entertainment_schedule if isinstance(kb.entertainment_schedule, dict) else {}
+    if not es:
+        return ""
+    rows = []
+    for key, label in _HOURS_DAY_KEYS:
+        desc = (es.get(key) or "").strip()
+        if desc:
+            rows.append(f"{label[:3]}: {desc}")
+    return "\n".join(rows)
+
+
+def _entertainment_tonight(kb, restaurant) -> str:
+    """Today's entertainment line, computed from the current weekday. '' when not structured."""
+    es = kb.entertainment_schedule if isinstance(kb.entertainment_schedule, dict) else {}
+    if not es or restaurant is None:
+        return ""
+    label = _HOURS_DAY_KEYS[_kb_now(restaurant).weekday()][1]
+    key = _HOURS_DAY_KEYS[_kb_now(restaurant).weekday()][0]
+    desc = (es.get(key) or "").strip()
+    if desc:
+        return f"Tonight ({label}): {desc}"
+    return f"Tonight ({label}): no live entertainment scheduled."
+
+
+def _upcoming_special_events(kb, restaurant, *, limit=5, horizon_days=90):
+    """Future-dated structured events, sorted ascending, bounded. Past events excluded."""
+    raw = kb.special_events if isinstance(kb.special_events, list) else []
+    if not raw:
+        return []
+    today = (_kb_now(restaurant).date() if restaurant else date.today())
+    out = []
+    for e in raw:
+        if not isinstance(e, dict):
+            continue
+        ds = (e.get("date") or "").strip()
+        desc = (e.get("description") or "").strip()
+        if not ds or not desc:
+            continue
+        try:
+            d = date.fromisoformat(ds)
+        except ValueError:
+            continue
+        if d < today or (horizon_days and (d - today).days > horizon_days):
+            continue
+        out.append((d, desc))
+    out.sort(key=lambda x: x[0])
+    return out[:limit]
+
+
+def _render_special_events(kb, restaurant) -> str:
+    """Upcoming structured events (hygiene: past filtered out) → text.
+    Falls back to free-text special_events_info only when no structured list is set."""
+    events = _upcoming_special_events(kb, restaurant)
+    if events:
+        return "\n".join(f"{d.strftime('%b %-d')}: {desc}" for d, desc in events)
+    # Structured list exists but nothing is upcoming → authoritative "nothing", no free-text fallback.
+    if isinstance(kb.special_events, list) and kb.special_events:
+        return ""
+    return (kb.special_events_info or "").strip()
+
+
 def _format_kb_topic(kb, topic: str, restaurant=None, lang: str = "en") -> str:
     """Return a clean text block for a given KB topic. Empty fields are omitted."""
     lines = []
@@ -2322,12 +2395,21 @@ def _format_kb_topic(kb, topic: str, restaurant=None, lang: str = "en") -> str:
         add("Additional info", kb.additional_info)
 
     elif topic == "ambience":
-        if kb.has_live_music:
+        week = _render_entertainment_week(kb)
+        if week:
+            tonight = _entertainment_tonight(kb, restaurant)
+            if tonight:
+                lines.append(tonight)
+            lines.append("This week:\n" + week)
+            add("Cover / show charge", kb.cover_charge)
+        elif kb.has_live_music:
             add("Live music", kb.live_music_details)
             add("Party vibe starts", kb.party_vibe_start_time)
         add("Noise level", kb.get_noise_level_display() if kb.noise_level else None)
         add("Dress code", kb.dress_code)
-        add("Special events & entertainment", kb.special_events_info)
+        ev = _render_special_events(kb, restaurant)
+        if ev:
+            lines.append("Upcoming special events:\n" + ev)
 
     elif topic == "facilities":
         if restaurant and restaurant.location_reference:
@@ -2337,8 +2419,10 @@ def _format_kb_topic(kb, topic: str, restaurant=None, lang: str = "en") -> str:
         lines.append(f"Stroller-friendly: {'Yes' if kb.stroller_friendly else 'No'}")
 
     elif topic == "special_events":
-        add("Special events & entertainment", kb.special_events_info)
-        if not lines:
+        ev = _render_special_events(kb, restaurant)
+        if ev:
+            lines.append(ev)
+        else:
             lines.append("No specific event details are available right now.")
 
     elif topic == "additional":

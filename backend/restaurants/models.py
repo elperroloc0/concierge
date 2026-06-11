@@ -587,10 +587,17 @@ class RestaurantKnowledgeBase(models.Model):
             "The AI agent will use this to inform callers about what's coming up."
         )
     )
+    # Structured one-off dated events: [{"date": "YYYY-MM-DD", "description": "..."}].
+    # Past-dated events are filtered out at render time (never served to the agent).
+    # Opt-in; falls back to special_events_info (free text) when empty.
+    special_events = models.JSONField(default=list, blank=True)
 
     # ── Ambience & Experience ─────────────────────────────────────────────
     has_live_music        = models.BooleanField(default=False)
     live_music_details    = models.TextField(blank=True, default="")
+    # Structured recurring weekly entertainment: {mon..sun: "description"} ("" = nothing that day).
+    # Opt-in; falls back to live_music_details (free text) when empty.
+    entertainment_schedule = models.JSONField(default=dict, blank=True)
     party_vibe_start_time = models.CharField(max_length=64, blank=True, default="")
     noise_level           = models.CharField(
         max_length=16, blank=True, default="",
