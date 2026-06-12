@@ -211,13 +211,11 @@ class KnowledgeBaseForm(forms.ModelForm):
 
     def clean_escalation_transfer_number(self):
         number = self.cleaned_data.get("escalation_transfer_number", "").strip()
-        if number:
-            number = re.sub(r"[\s().\-]", "", number)   # tolerate common formatting
-            if not re.fullmatch(r"\+[1-9]\d{7,14}", number):
-                raise forms.ValidationError(
-                    "Enter a valid E.164 phone number (e.g. +17865551234). "
-                    "Must start with + followed by 8–15 digits."
-                )
+        if number and not re.fullmatch(r"\+[1-9]\d{7,14}", number):
+            raise forms.ValidationError(
+                "Enter a valid E.164 phone number (e.g. +17865551234). "
+                "Must start with + followed by 8–15 digits."
+            )
         return number
 
 
