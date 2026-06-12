@@ -4809,6 +4809,26 @@ def portal_knowledge_base(request, slug):
 
             messages.success(request, "Knowledge base updated successfully.")
             return redirect("portal_kb", slug=restaurant.slug)
+
+        # Invalid POST (the valid branch returns above). Surface why nothing saved —
+        # the error is often on a field in another tab, so a silent re-render looked
+        # like the hours editor "resetting".
+        err_bits = [f"{fld.replace('_', ' ')}: {errs[0]}"
+                    for frm in (basic_form, kb_form)
+                    for fld, errs in frm.errors.items()]
+        messages.error(
+            request,
+            ("Couldn't save — " + " · ".join(err_bits[:4])) if err_bits
+            else "Couldn't save — please review the highlighted fields.",
+        )
+        # Preserve the structured-editor values the user just entered (don't revert to
+        # the saved KB) so a validation error elsewhere never wipes them on re-render.
+        kb.regular_hours          = _parse_regular_hours_from_post(request.POST)
+        kb.transfer_destinations  = _parse_transfer_destinations_from_post(request.POST)
+        kb.entertainment_schedule = _parse_entertainment_schedule_from_post(request.POST)
+        kb.special_events         = _parse_special_events_from_post(request.POST)
+        kb.sms_templates_enabled  = "sms_templates_enabled" in request.POST
+        kb.sms_templates          = _parse_sms_templates_from_post(request.POST)
     else:
         basic_form = RestaurantBasicForm(instance=restaurant)
         kb_form = KnowledgeBaseForm(instance=kb)
