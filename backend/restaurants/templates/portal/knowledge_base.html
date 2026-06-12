@@ -757,8 +757,24 @@
               <label class="form-check-label" style="font-size:.875rem; font-weight:500; color:#374151; cursor:pointer;">{{ kb_form.has_live_music.label }}</label>
             </div>
           </div>
+
+          <!-- Structured recurring weekly entertainment (per-day; parsed in the view) -->
           <div class="col-12">
-            <label class="kb-label">{{ kb_form.live_music_details.label }}</label>
+            <p class="kb-section-title" style="font-size:.95rem;">Weekly entertainment schedule</p>
+            <p class="kb-hint" style="margin-top:-.4rem;">What plays each day — act/artist + time, e.g. <em>"DJ 5–7:30 PM, Casa band 7:30–11 PM"</em>. Leave a day blank for none. The agent reads today's line plus the weekly grid.</p>
+            <div class="kb-group">
+              {% for d in entertainment_rows %}
+              <div class="d-flex align-items-center gap-2" style="padding:.25rem 0; flex-wrap:wrap;">
+                <div style="width:100px; font-size:.875rem; font-weight:500; color:#374151;">{{ d.label }}</div>
+                <input type="text" class="form-control" name="ent_{{ d.key }}" value="{{ d.desc }}" placeholder="e.g. Boleros Inmersos 9 PM" style="flex:1; min-width:220px;">
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="col-12">
+            <label class="kb-label">{{ kb_form.live_music_details.label }} <span class="text-muted" style="font-weight:400;">(fallback)</span></label>
+            <p class="kb-hint mb-1">Used only when the weekly schedule above is empty.</p>
             <div class="char-counter" id="ctr-live_music_details"></div>
             {{ kb_form.live_music_details }}
           </div>
@@ -781,13 +797,24 @@
         </div>
 
         <p class="kb-section-title">Special Events</p>
-        <div class="row g-3">
+        <p class="kb-hint" style="margin-top:-.4rem;">One-off dated events (concerts, themed nights, holiday dinners). <strong>Past dates are hidden from the agent automatically</strong> — rows marked <em>Past</em> stay here for your reference but are never told to callers. Keep this list fresh.</p>
+        <div class="kb-group">
+          {% for e in special_event_rows %}
+          <div class="d-flex align-items-center gap-2" style="padding:.25rem 0; flex-wrap:wrap;{% if e.expired %}opacity:.5;{% endif %}">
+            <input type="date" class="form-control" name="sev_{{ e.idx }}_date" value="{{ e.date }}" style="width:160px;">
+            {% if e.expired %}<span class="badge" style="background:#f3f4f6; color:#9ca3af; font-weight:500;">Past</span>{% endif %}
+            <input type="text" class="form-control" name="sev_{{ e.idx }}_desc" value="{{ e.description }}" placeholder="What's happening that day" style="flex:1; min-width:240px;">
+          </div>
+          {% endfor %}
+        </div>
+
+        <div class="row g-3" style="margin-top:.5rem;">
           <div class="col-12">
             <label class="kb-label">
-              {{ kb_form.special_events_info.label }}
+              {{ kb_form.special_events_info.label }} <span class="text-muted" style="font-weight:400;">(fallback)</span>
               <span class="voice-badge"><i class="bi bi-mic-fill"></i> Voice</span>
             </label>
-            <p class="kb-hint mb-1">{{ kb_form.special_events_info.field.help_text }}</p>
+            <p class="kb-hint mb-1">Used only when no dated events above are set. {{ kb_form.special_events_info.field.help_text }}</p>
             <div class="char-counter" id="ctr-special_events_info"></div>
             {{ kb_form.special_events_info }}
           </div>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Update entertainment &amp; events — {{ restaurant_name }}</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;">
+  <tr><td align="center">
+  <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+
+    <!-- Header -->
+    <tr>
+      <td style="background:#1e1b4b;padding:20px 28px;">
+        <span style="color:#ffffff;font-size:17px;font-weight:700;letter-spacing:-.3px;">&#127925; Concierge</span>
+        <span style="color:#a5b4fc;font-size:13px;margin-left:10px;">{{ restaurant_name }}</span>
+      </td>
+    </tr>
+
+    <!-- Title -->
+    <tr>
+      <td style="padding:24px 28px 0;">
+        <p style="margin:0 0 2px;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;">Weekly reminder</p>
+        <p style="margin:0 0 16px;font-size:22px;font-weight:700;color:#111827;line-height:1.2;">Update your entertainment &amp; events</p>
+      </td>
+    </tr>
+
+    <!-- Body -->
+    <tr>
+      <td style="padding:0 28px;">
+        <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.55;">{{ body }}</p>
+        <p style="margin:0 0 20px;font-size:13px;color:#6b7280;line-height:1.5;">
+          Past-dated events are hidden from the agent automatically — keeping this list current is what makes callers hear the right lineup.
+        </p>
+      </td>
+    </tr>
+
+    <!-- CTA -->
+    {% if kb_url %}
+    <tr>
+      <td style="padding:0 28px 28px;">
+        <a href="{{ kb_url }}" style="display:inline-block;background:#4f46e5;color:#ffffff;font-size:13px;font-weight:600;padding:10px 22px;border-radius:8px;text-decoration:none;letter-spacing:-.1px;">
+          Update the schedule &rarr;
+        </a>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- Footer -->
+    <tr>
+      <td style="padding:16px 28px;border-top:1px solid #e5e7eb;">
+        <p style="margin:0;font-size:11px;color:#9ca3af;line-height:1.5;">
+          You're receiving this because the entertainment-refresh reminder is enabled for {{ restaurant_name }}.
+          Manage it under Notifications in your portal.
+        </p>
+      </td>
+    </tr>
+
+  </table>
+  </td></tr>
+</table>
+</body>
+</html>

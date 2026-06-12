@@ -116,6 +116,20 @@ class Restaurant(models.Model):
         help_text="Language for the Claude-generated weekly report narrative."
     )
 
+    # entertainment / events refresh reminder (opt-in; push + email on a chosen weekday)
+    notify_event_reminder = models.BooleanField(
+        default=False,
+        help_text="Weekly push + email reminder to refresh the entertainment & events schedule."
+    )
+    event_reminder_weekday = models.IntegerField(
+        default=0,
+        choices=[
+            (0, "Monday"), (1, "Tuesday"), (2, "Wednesday"), (3, "Thursday"),
+            (4, "Friday"), (5, "Saturday"), (6, "Sunday"),
+        ],
+        help_text="Day of week the entertainment-refresh reminder is sent (restaurant timezone)."
+    )
+
     # whatsapp notifications
     notify_via_ws = models.BooleanField(default=False)
     notify_ws_numb = models.CharField(max_length=32, blank=True, default="")

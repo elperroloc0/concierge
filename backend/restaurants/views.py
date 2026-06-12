@@ -4546,6 +4546,57 @@ def _parse_transfer_destinations_from_post(post, n=_TRANSFER_SLOTS):
     return out
 
 
+def _build_entertainment_rows(kb):
+    """Per-day rows for the recurring entertainment editor, from kb.entertainment_schedule."""
+    es = kb.entertainment_schedule if isinstance(kb.entertainment_schedule, dict) else {}
+    return [{"key": key, "label": label, "desc": (es.get(key) or "")}
+            for key, label in _HOURS_DAY_KEYS]
+
+
+def _parse_entertainment_schedule_from_post(post):
+    """Build entertainment_schedule {mon..sun: description} from the per-day inputs."""
+    return {key: (post.get(f"ent_{key}") or "").strip() for key, _label in _HOURS_DAY_KEYS}
+
+
+_SPECIAL_EVENT_SLOTS = 8  # fixed dated-event slots in the portal
+
+
+def _build_special_event_rows(kb, restaurant=None, n=_SPECIAL_EVENT_SLOTS):
+    """Slot rows for the dated special-events editor, from kb.special_events.
+    Past-dated rows keep their values but are flagged `expired` (excluded from the agent)."""
+    raw = kb.special_events if isinstance(kb.special_events, list) else []
+    today = (_kb_now(restaurant).date() if restaurant else date.today())
+    rows = []
+    for i in range(n):
+        e = raw[i] if i < len(raw) and isinstance(raw[i], dict) else {}
+        ds = (e.get("date") or "").strip()
+        expired = False
+        if ds:
+            try:
+                expired = date.fromisoformat(ds) < today
+            except ValueError:
+                expired = False
+        rows.append({"idx": i, "date": ds, "description": e.get("description", ""), "expired": expired})
+    return rows
+
+
+def _parse_special_events_from_post(post, n=_SPECIAL_EVENT_SLOTS):
+    """Build special_events from the per-slot inputs. Slots missing date/description or
+    with a malformed date are dropped."""
+    out = []
+    for i in range(n):
+        ds = (post.get(f"sev_{i}_date") or "").strip()
+        desc = (post.get(f"sev_{i}_desc") or "").strip()
+        if not ds or not desc:
+            continue
+        try:
+            date.fromisoformat(ds)
+        except ValueError:
+            continue
+        out.append({"date": ds, "description": desc})
+    return out
+
+
 @portal_view()
 def portal_knowledge_base(request, slug):
     restaurant = request.restaurant
@@ -4571,7 +4622,12 @@ def portal_knowledge_base(request, slug):
             # Structured weekly hours (per-day inputs, not part of the ModelForm)
             kb.regular_hours = _parse_regular_hours_from_post(request.POST)
             kb.transfer_destinations = _parse_transfer_destinations_from_post(request.POST)
-            kb.save(update_fields=["regular_hours", "transfer_destinations"])
+            kb.entertainment_schedule = _parse_entertainment_schedule_from_post(request.POST)
+            kb.special_events = _parse_special_events_from_post(request.POST)
+            kb.save(update_fields=[
+                "regular_hours", "transfer_destinations",
+                "entertainment_schedule", "special_events",
+            ])
 
             _sync_retell_tools(request, restaurant, kb)
 
@@ -4590,6 +4646,8 @@ def portal_knowledge_base(request, slug):
         "can_edit_kb": can_edit,
         "hours_rows": _build_hours_rows(kb),
         "transfer_dest_rows": _build_transfer_dest_rows(kb),
+        "entertainment_rows": _build_entertainment_rows(kb),
+        "special_event_rows": _build_special_event_rows(kb, restaurant),
     })
 
 
@@ -5729,10 +5787,17 @@ def portal_notifications(request, slug):
         restaurant.notify_on_followup     = "notify_on_followup" in request.POST
         restaurant.notify_on_non_customer = "notify_on_non_customer" in request.POST
         restaurant.notify_daily_digest    = "notify_daily_digest" in request.POST
+        restaurant.notify_event_reminder  = "notify_event_reminder" in request.POST
+        try:
+            wd = int(request.POST.get("event_reminder_weekday", 0))
+        except (TypeError, ValueError):
+            wd = 0
+        restaurant.event_reminder_weekday = wd if 0 <= wd <= 6 else 0
         restaurant.save(update_fields=[
             "notify_via_email", "notify_email",
             "notify_on_reservation", "notify_on_complaint",
             "notify_on_followup", "notify_on_non_customer", "notify_daily_digest",
+            "notify_event_reminder", "event_reminder_weekday",
         ])
 
         if operator_membership:
@@ -5753,10 +5818,11 @@ def portal_notifications(request, slug):
                      restaurant.slug, restaurant.notify_via_email, restaurant.notify_via_push)
 
     return render(request, "portal/notifications.html", {
-        "restaurant":    restaurant,
-        "saved":         saved,
-        "operator":      operator_membership,
-        "my_membership": current_membership,
+        "restaurant":      restaurant,
+        "saved":           saved,
+        "operator":        operator_membership,
+        "my_membership":   current_membership,
+        "weekday_choices": Restaurant._meta.get_field("event_reminder_weekday").choices,
     })
 
 

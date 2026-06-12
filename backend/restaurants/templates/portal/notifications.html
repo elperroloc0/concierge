@@ -164,6 +164,39 @@
     </div>
   </div>
 
+  {# ── Scheduled reminders ─────────────────────────────────────── #}
+  <div class="v2-notif-alerts glass" style="margin-top:18px;">
+    <div class="v2-notif-alerts-head">
+      <h2>Reminders</h2>
+    </div>
+    <div class="v2-notif-alerts-sub">
+      Sent by push and email on the weekday you choose.
+    </div>
+    <div class="v2-notif-alert-list">
+      <label class="v2-notif-alert-row {% if not restaurant.notify_event_reminder %}off{% endif %}">
+        <div class="v2-notif-alert-swatch digest"><i class="bi bi-music-note-beamed"></i></div>
+        <div class="v2-notif-alert-meta">
+          <div class="v2-notif-alert-name">Update entertainment &amp; events</div>
+          <div class="v2-notif-alert-desc">Weekly nudge to refresh the live-music schedule and dated events so callers always hear what's current.</div>
+        </div>
+        <input type="checkbox" class="v2-toggle" name="notify_event_reminder"
+               {% if restaurant.notify_event_reminder %}checked{% endif %}>
+      </label>
+      <div class="v2-notif-alert-row" style="cursor:default;">
+        <div class="v2-notif-alert-swatch" style="background:rgba(0,0,0,0.04); color:#6b7280;"><i class="bi bi-calendar-week"></i></div>
+        <div class="v2-notif-alert-meta">
+          <div class="v2-notif-alert-name">Reminder day</div>
+          <div class="v2-notif-alert-desc">Which day of the week to send the reminder.</div>
+        </div>
+        <select name="event_reminder_weekday" class="form-select" style="width:auto; min-width:130px;">
+          {% for val, lbl in weekday_choices %}
+          <option value="{{ val }}" {% if restaurant.event_reminder_weekday == val %}selected{% endif %}>{{ lbl }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+
   {# ── Operator section (collapsible) ─────────────────────────── #}
   {% if is_owner %}
     <details class="v2-notif-op glass" {% if operator %}open{% endif %}>

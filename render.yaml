@@ -28,7 +28,7 @@ services:
     rootDir: backend
     buildCommand: "./build.sh"
     schedule: "0 13 * * *"
-    startCommand: "python manage.py send_trial_expiry_reminder && python manage.py expire_trials && python manage.py send_daily_digest"
+    startCommand: "python manage.py send_trial_expiry_reminder && python manage.py expire_trials && python manage.py send_daily_digest && python manage.py send_event_reminder"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
