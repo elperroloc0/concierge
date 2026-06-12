@@ -587,6 +587,13 @@ class RestaurantKnowledgeBase(models.Model):
         help_text="OpenTable Restaurant ID (rid), e.g. 1274317 — builds the pre-filled booking link for self-serve mode.",
     )
 
+    # ── SMS templates (opt-in; per restaurant, editable from the portal) ───
+    # When enabled, agent + manual SMS are built from these bilingual templates
+    # ({sms_type: {"en": "...", "es": "..."}}) instead of the hardcoded wording.
+    # Off by default → other restaurants keep the legacy builder unchanged.
+    sms_templates_enabled = models.BooleanField(default=False)
+    sms_templates = models.JSONField(default=dict, blank=True)
+
     # ── Private Events ────────────────────────────────────────────────────
     has_private_dining       = models.BooleanField(default=False)
     private_dining_min_spend = models.CharField(max_length=128, blank=True, default="")

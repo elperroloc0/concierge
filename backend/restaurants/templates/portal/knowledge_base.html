@@ -279,6 +279,7 @@
     <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-events">Private Events</button></li>
     <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-ambience">Ambience &amp; Entertainment</button></li>
     <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-facilities">Facilities</button></li>
+    <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-sms">SMS</button></li>
     <li class="nav-item">
       <button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-agent">
         Agent{% if "agent" in lint.error_tabs %}<span class="tab-dot tab-dot-error"></span>{% elif "agent" in lint.warning_tabs %}<span class="tab-dot tab-dot-warning"></span>{% endif %}
@@ -868,6 +869,43 @@
       </div>
     </div>
 
+    <!-- ── SMS TEMPLATES ──────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-sms">
+      <div class="kb-card">
+        <p class="kb-section-title">Text-message templates</p>
+        <p class="kb-hint">Wording for the texts the agent (and you, from call history) send to callers. Edit per language. Tokens are replaced automatically when sending:
+          <strong>[name]</strong> restaurant name · <strong>[link]</strong> the relevant link · <strong>[hours]</strong> current hours · <strong>[music]</strong> tonight's entertainment · <strong>[address]</strong> address · <strong>[email]</strong> contact email.
+        </p>
+
+        <div class="kb-toggle" style="width:fit-content; margin:.4rem 0 1rem;">
+          <input type="checkbox" class="form-check-input" name="sms_templates_enabled" id="sms_templates_enabled" {% if sms_templates_enabled %}checked{% endif %}>
+          <label class="form-check-label" for="sms_templates_enabled" style="font-size:.875rem; font-weight:600; color:#374151; cursor:pointer;">Use these templates for this restaurant</label>
+        </div>
+        <p class="kb-hint" style="margin-top:-.6rem;">When off, the agent uses the system's default wording. Texts longer than 160 characters are sent as multiple segments (each segment is billed; accents/ñ and emojis shorten a segment to 70 characters).</p>
+
+        {% for t in sms_template_rows %}
+        <div class="kb-group" style="border:1px solid #e5e7eb; border-radius:10px; padding:.7rem .85rem; margin-bottom:.7rem;">
+          <div style="display:flex; align-items:baseline; gap:.5rem; flex-wrap:wrap; margin-bottom:.4rem;">
+            <span style="font-size:.9rem; font-weight:600; color:#374151;">{{ t.label }}</span>
+            <span class="kb-hint" style="margin:0;">tokens: {{ t.tokens }}</span>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="kb-label" style="font-size:.78rem;">English</label>
+              <textarea class="form-control sms-tpl" name="sms_{{ t.key }}_en" rows="3" data-ctr="ctr-sms-{{ t.key }}-en">{{ t.en }}</textarea>
+              <div class="char-counter" id="ctr-sms-{{ t.key }}-en"></div>
+            </div>
+            <div class="col-md-6">
+              <label class="kb-label" style="font-size:.78rem;">Español</label>
+              <textarea class="form-control sms-tpl" name="sms_{{ t.key }}_es" rows="3" data-ctr="ctr-sms-{{ t.key }}-es">{{ t.es }}</textarea>
+              <div class="char-counter" id="ctr-sms-{{ t.key }}-es"></div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
     <!-- ── AGENT ──────────────────────────────────────────────────────── -->
     <div class="tab-pane fade" id="tab-agent">
 
@@ -1374,6 +1412,26 @@ try {
       localStorage.setItem(KB_TAB_KEY, btn.getAttribute("data-bs-target")));
   });
 } catch(e) { console.warn("Tab persistence:", e); }
+
+// ── SMS template length / segment counter ───────────────────────────────────
+function smsSegments(text) {
+  const len = text.length;
+  if (!len) return { len, seg: 0 };
+  const ucs2 = /[^\x00-\x7F]/.test(text);              // accents/ñ/emoji → UCS-2 (70/segment)
+  const single = ucs2 ? 70 : 160, multi = ucs2 ? 67 : 153;
+  return { len, seg: len <= single ? 1 : Math.ceil(len / multi) };
+}
+function updateSmsCounter(el) {
+  const target = document.getElementById(el.dataset.ctr);
+  if (!target) return;
+  const { len, seg } = smsSegments(el.value);
+  target.textContent = `${len} chars · ${seg} segment${seg === 1 ? "" : "s"}`;
+  target.className = "char-counter " + (seg >= 3 ? "warn" : "ok");
+}
+document.querySelectorAll(".sms-tpl").forEach(el => {
+  el.addEventListener("input", () => updateSmsCounter(el));
+  updateSmsCounter(el);
+});
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 try { buildExampleHints(); } catch(e) { console.error("buildExampleHints:", e); }

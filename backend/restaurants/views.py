@@ -2640,6 +2640,137 @@ def _build_opentable_reservation_url(rid, covers=None, dt=None) -> str:
     return "https://www.opentable.com/restref/client/?" + urllib.parse.urlencode(params, safe=":")
 
 
+# ── Editable SMS templates (opt-in per restaurant) ────────────────────────────
+_SMS_FOOTER_EN = "(Reply STOP to cancel, msg & data rates may apply)"
+_SMS_FOOTER_ES = "(Responde STOP para cancelar; pueden aplicar tarifas de mensajes y datos)"
+
+# Seed defaults (owner edits them in the portal). Tokens: [name] [link] [hours] [music] [email] [address].
+_DEFAULT_SMS_TEMPLATES = {
+    "reservation_link": {
+        "en": f"Thank you for choosing [name]. Reserve your table here: [link]. We look forward to welcoming you.\n{_SMS_FOOTER_EN}",
+        "es": f"Gracias por elegir [name]. Reserva tu mesa aquí: [link]. Te esperamos.\n{_SMS_FOOTER_ES}",
+    },
+    "menu_link": {
+        "en": f"View our current food menu here: [link]. We hope to welcome you soon at [name].\n{_SMS_FOOTER_EN}",
+        "es": f"Mira nuestro menú de comida aquí: [link]. Te esperamos pronto en [name].\n{_SMS_FOOTER_ES}",
+    },
+    "bar_menu_link": {
+        "en": f"View our cocktail and bar menu here: [link]. We look forward to serving you.\n{_SMS_FOOTER_EN}",
+        "es": f"Mira nuestra carta de cócteles y bar aquí: [link]. Será un placer atenderte.\n{_SMS_FOOTER_ES}",
+    },
+    "hours": {
+        "en": f"Our current hours are: [hours]. We look forward to welcoming you at [name].\n{_SMS_FOOTER_EN}",
+        "es": f"Nuestro horario actual es: [hours]. Te esperamos en [name].\n{_SMS_FOOTER_ES}",
+    },
+    "music": {
+        "en": f"Tonight at [name]: [music]. View our events here: [link].\n{_SMS_FOOTER_EN}",
+        "es": f"Esta noche en [name]: [music]. Mira nuestros eventos aquí: [link].\n{_SMS_FOOTER_ES}",
+    },
+    "social_media": {
+        "en": f"Follow [name] for upcoming events, music, and dining experiences: [link].\n{_SMS_FOOTER_EN}",
+        "es": f"Sigue a [name] para próximos eventos, música y experiencias gastronómicas: [link].\n{_SMS_FOOTER_ES}",
+    },
+    "address": {
+        "en": f"[name] is located at [address]. Directions: [link].\n{_SMS_FOOTER_EN}",
+        "es": f"[name] está en [address]. Cómo llegar: [link].\n{_SMS_FOOTER_ES}",
+    },
+    "event_inquiry": {
+        "en": f"Thank you for considering [name] for your event. View our private event options here: [link] or contact us at [email].\n{_SMS_FOOTER_EN}",
+        "es": f"Gracias por considerar [name] para tu evento. Mira nuestras opciones de eventos privados aquí: [link] o escríbenos a [email].\n{_SMS_FOOTER_ES}",
+    },
+    "website": {
+        "en": f"Visit [name] online: [link].\n{_SMS_FOOTER_EN}",
+        "es": f"Visita [name] en línea: [link].\n{_SMS_FOOTER_ES}",
+    },
+}
+
+# Display order + token legend for the portal editor.
+_SMS_TEMPLATE_TYPES = [
+    ("reservation_link", "OpenTable reservation", "[name] [link]"),
+    ("menu_link",        "Food menu",             "[name] [link]"),
+    ("bar_menu_link",    "Bar menu",              "[name] [link]"),
+    ("hours",            "Hours",                 "[name] [hours]"),
+    ("music",            "Live music & events",   "[name] [music] [link]"),
+    ("social_media",     "Social media",          "[name] [link]"),
+    ("address",          "Address & location",    "[name] [address] [link]"),
+    ("event_inquiry",    "Private events",        "[name] [link] [email]"),
+    ("website",          "Website",               "[name] [link]"),
+]
+
+# Which token must resolve to a value, else the message is skipped (don't send something broken).
+_SMS_REQUIRED_TOKEN = {
+    "reservation_link": "link", "menu_link": "link", "bar_menu_link": "link",
+    "hours": "hours", "music": "music", "social_media": "link",
+    "address": "address", "event_inquiry": "link", "website": "link",
+}
+
+
+def _sms_link_for(sms_type, restaurant, kb, covers=None, dt=None, detail=None) -> str:
+    """Resolve the [link] token for a given sms_type."""
+    web = (restaurant.website if restaurant else "") or ""
+    if sms_type == "reservation_link":
+        rid = (kb.opentable_rid if kb else "").strip()
+        if not rid:
+            return ""
+        c, d = covers, dt
+        if detail is not None:
+            if not c and getattr(detail, "party_size", None):
+                c = detail.party_size
+            if not d and getattr(detail, "reservation_date", None) and getattr(detail, "reservation_time", None):
+                d = f"{detail.reservation_date.isoformat()}T{detail.reservation_time.strftime('%H:%M')}"
+        return _build_opentable_reservation_url(rid, c, d)
+    if sms_type == "menu_link":
+        return (kb.food_menu_url if kb else "") or web
+    if sms_type == "bar_menu_link":
+        return (kb.bar_menu_url if kb else "") or web
+    if sms_type == "social_media":
+        return (restaurant.social_media_url if restaurant else "") or web
+    if sms_type == "address":
+        addr = (restaurant.address_full if restaurant else "") or ""
+        if not addr:
+            return ""
+        from urllib.parse import quote
+        return f"https://www.google.com/maps/search/?api=1&query={quote(addr)}"
+    # website, event_inquiry, music → general website
+    return web
+
+
+def _sms_music_value(kb, restaurant) -> str:
+    """Resolve the [music] token: today's structured entertainment, else free-text."""
+    if not kb:
+        return ""
+    es = kb.entertainment_schedule if isinstance(kb.entertainment_schedule, dict) else {}
+    today = ""
+    if es and restaurant is not None:
+        key = _HOURS_DAY_KEYS[_kb_now(restaurant).weekday()][0]
+        today = (es.get(key) or "").strip()
+    return today or (kb.live_music_details or "").strip()
+
+
+def _sms_tokens(sms_type, restaurant, kb, *, covers=None, dt=None, detail=None) -> dict:
+    """All substitutable tokens for a message. [hours]/[music] use structured data (gap close)."""
+    return {
+        "name":    (restaurant.name if restaurant else "") or "",
+        "link":    _sms_link_for(sms_type, restaurant, kb, covers, dt, detail),
+        "hours":   (_render_hours(kb) or (kb.hours_of_operation if kb else "") or "").strip(),
+        "music":   _sms_music_value(kb, restaurant),
+        "email":   (restaurant.contact_email if restaurant else "") or "",
+        "address": (restaurant.address_full if restaurant else "") or "",
+    }
+
+
+def _render_sms_template(body: str, tokens: dict, required_key: str | None) -> str | None:
+    """Substitute [token]s in body. Returns None when the required token is empty."""
+    if required_key and not (tokens.get(required_key) or "").strip():
+        return None
+    out = body
+    for k, v in tokens.items():
+        out = out.replace(f"[{k}]", v or "")
+    # Collapse runs of spaces per line (preserve intentional newlines, e.g. before the footer).
+    cleaned = "\n".join(" ".join(ln.split()) for ln in out.split("\n")).strip()
+    return cleaned or None
+
+
 def _build_sms_message(sms_type: str, restaurant, kb, custom_message: str = "", lang: str = "en",
                        *, covers=None, dt=None, detail=None) -> str | None:
     """Build an SMS message from DB data based on the requested type.
@@ -2647,8 +2778,24 @@ def _build_sms_message(sms_type: str, restaurant, kb, custom_message: str = "", 
     `lang` is set by the caller via `_determine_caller_lang(call_detail, restaurant)`.
     Defaults to English; falls back to ES templates when explicitly requested.
     For `reservation_link`, covers/dt come from explicit args, else `detail` (CallDetail), else a base rid link.
+
+    When the restaurant has `sms_templates_enabled`, messages are rendered from the
+    editable bilingual templates (with default templates as the final fallback);
+    otherwise the legacy hardcoded builder below is used (other restaurants unchanged).
     """
     name = restaurant.name if restaurant else ""
+
+    # ── Editable-template path (opt-in) ──
+    if sms_type != "custom" and kb is not None and getattr(kb, "sms_templates_enabled", False):
+        stored = kb.sms_templates if isinstance(kb.sms_templates, dict) else {}
+        tdef = stored.get(sms_type) or {}
+        defs = _DEFAULT_SMS_TEMPLATES.get(sms_type, {})
+        body = (tdef.get(lang) or tdef.get("en") or tdef.get("es")
+                or defs.get(lang) or defs.get("en") or defs.get("es") or "").strip()
+        if body:
+            tokens = _sms_tokens(sms_type, restaurant, kb, covers=covers, dt=dt, detail=detail)
+            return _render_sms_template(body, tokens, _SMS_REQUIRED_TOKEN.get(sms_type))
+        # No template for this type (e.g. valet) → fall through to legacy.
 
     if sms_type == "reservation_link":
         rid = (kb.opentable_rid if kb else "").strip()
@@ -2678,13 +2825,13 @@ def _build_sms_message(sms_type: str, restaurant, kb, custom_message: str = "", 
         return (f"Carta de bar de {name}: {url}" if lang == "es" else f"{name} bar menu: {url}")[:160]
 
     if sms_type == "hours":
-        hours = (kb.hours_of_operation if kb else "") or ""
+        hours = (_render_hours(kb) or (kb.hours_of_operation if kb else "") or "")
         if not hours:
             return None
         return (f"{name} — horario: {hours}" if lang == "es" else f"{name} — hours: {hours}")[:160]
 
     if sms_type == "music":
-        details = (kb.live_music_details if kb else "") or ""
+        details = _sms_music_value(kb, restaurant)
         url     = restaurant.social_media_url if restaurant else ""
         if details:
             base = f"{name} — música en vivo: {details}" if lang == "es" else f"{name} — live music: {details}"
@@ -4597,6 +4744,32 @@ def _parse_special_events_from_post(post, n=_SPECIAL_EVENT_SLOTS):
     return out
 
 
+def _build_sms_template_rows(kb):
+    """Per-type rows for the SMS template editor (pre-filled from saved values, else defaults)."""
+    saved = kb.sms_templates if isinstance(kb.sms_templates, dict) else {}
+    rows = []
+    for key, label, tokens in _SMS_TEMPLATE_TYPES:
+        d = saved.get(key) or {}
+        defs = _DEFAULT_SMS_TEMPLATES.get(key, {})
+        rows.append({
+            "key": key, "label": label, "tokens": tokens,
+            "en": d.get("en", defs.get("en", "")),
+            "es": d.get("es", defs.get("es", "")),
+        })
+    return rows
+
+
+def _parse_sms_templates_from_post(post):
+    """Build the sms_templates dict from the per-type EN/ES textareas."""
+    out = {}
+    for key, _label, _tokens in _SMS_TEMPLATE_TYPES:
+        en = (post.get(f"sms_{key}_en") or "").strip()
+        es = (post.get(f"sms_{key}_es") or "").strip()
+        if en or es:
+            out[key] = {"en": en, "es": es}
+    return out
+
+
 @portal_view()
 def portal_knowledge_base(request, slug):
     restaurant = request.restaurant
@@ -4624,9 +4797,12 @@ def portal_knowledge_base(request, slug):
             kb.transfer_destinations = _parse_transfer_destinations_from_post(request.POST)
             kb.entertainment_schedule = _parse_entertainment_schedule_from_post(request.POST)
             kb.special_events = _parse_special_events_from_post(request.POST)
+            kb.sms_templates_enabled = "sms_templates_enabled" in request.POST
+            kb.sms_templates = _parse_sms_templates_from_post(request.POST)
             kb.save(update_fields=[
                 "regular_hours", "transfer_destinations",
                 "entertainment_schedule", "special_events",
+                "sms_templates_enabled", "sms_templates",
             ])
 
             _sync_retell_tools(request, restaurant, kb)
@@ -4648,6 +4824,8 @@ def portal_knowledge_base(request, slug):
         "transfer_dest_rows": _build_transfer_dest_rows(kb),
         "entertainment_rows": _build_entertainment_rows(kb),
         "special_event_rows": _build_special_event_rows(kb, restaurant),
+        "sms_template_rows": _build_sms_template_rows(kb),
+        "sms_templates_enabled": kb.sms_templates_enabled,
     })
 
 
