@@ -215,10 +215,16 @@ def _build_non_customer_rules(kb) -> str:
         "end_call":     "END",
     }
 
+    contact_email = (kb.restaurant.contact_email or "") if hasattr(kb, "restaurant") else ""
+    decline_def = (
+        f"decline, tell caller to email {contact_email} → end_call"
+        if contact_email
+        else "decline, suggest they contact via email → end_call"
+    )
     ACTION_DEF = {
         "MSG":      "collect name + company + reason, confirm a team member will call back",
         "TRANSFER": "transfer call",
-        "DECLINE":  "decline, suggest email → end_call",
+        "DECLINE":  decline_def,
         "CONTACT":  "press contact via get_info(\"private_events\")",
         "END":      "end_call",
     }
@@ -4629,31 +4635,64 @@ _HOURS_DAY_KEYS = [
 ]
 
 
+# Short dropdown choices for the Hours editor (hour · minute · AM/PM).
+_HOUR_OPTS = [str(_h) for _h in range(1, 13)]
+_MIN_OPTS = ["00", "15", "30", "45"]
+
+
+def _split_hhmm(hhmm):
+    """'17:00' → {'h':'5','m':'00','ap':'PM'}; blank → empty parts (closed)."""
+    if not hhmm or len(hhmm) < 5:
+        return {"h": "", "m": "", "ap": ""}
+    H, M = int(hhmm[:2]), int(hhmm[3:5])
+    return {"h": str(H % 12 or 12), "m": f"{M:02d}", "ap": "AM" if H < 12 else "PM"}
+
+
+def _combine_time(h, m, ap):
+    """('5','00','PM') → '17:00'; '' when hour/AM-PM missing or invalid (= closed)."""
+    h = (h or "").strip()
+    if not h:
+        return ""
+    try:
+        hh, mm = int(h), int((m or "0").strip())
+    except ValueError:
+        return ""
+    ap = (ap or "").strip().upper()
+    if not (1 <= hh <= 12) or not (0 <= mm <= 59) or ap not in ("AM", "PM"):
+        return ""
+    if ap == "AM":
+        hh = 0 if hh == 12 else hh
+    else:
+        hh = 12 if hh == 12 else hh + 12
+    return f"{hh:02d}:{mm:02d}"
+
+
 def _build_hours_rows(kb):
-    """Per-day rows for the structured Hours editor, from kb.regular_hours."""
+    """Per-day rows for the structured Hours editor, from kb.regular_hours.
+    Each open/close is split into hour · minute · AM/PM parts for the dropdowns."""
     rh = kb.regular_hours if isinstance(kb.regular_hours, dict) else {}
     rows = []
     for key, label in _HOURS_DAY_KEYS:
         val = rh.get(key)
         is_open = isinstance(val, (list, tuple)) and len(val) == 2 and all(val)
+        o = _split_hhmm(val[0] if is_open else "")
+        c = _split_hhmm(val[1] if is_open else "")
         rows.append({
-            "key": key, "label": label,
-            "closed": not is_open,
-            "open": val[0] if is_open else "",
-            "close": val[1] if is_open else "",
+            "key": key, "label": label, "closed": not is_open,
+            "open_h": o["h"], "open_m": o["m"], "open_ap": o["ap"],
+            "close_h": c["h"], "close_m": c["m"], "close_ap": c["ap"],
         })
     return rows
 
 
 def _parse_regular_hours_from_post(post):
-    """Build the regular_hours dict from the per-day form inputs (None = closed)."""
+    """Build the regular_hours dict from the per-day hour · minute · AM/PM dropdowns.
+    The times are authoritative: a day with valid open+close is OPEN regardless of the
+    'Closed' checkbox; a day with no valid hour selected is closed."""
     out = {}
     for key, _label in _HOURS_DAY_KEYS:
-        if post.get(f"hours_{key}_closed"):
-            out[key] = None
-            continue
-        o = (post.get(f"hours_{key}_open") or "").strip()
-        c = (post.get(f"hours_{key}_close") or "").strip()
+        o = _combine_time(post.get(f"hours_{key}_open_h"), post.get(f"hours_{key}_open_m"), post.get(f"hours_{key}_open_ap"))
+        c = _combine_time(post.get(f"hours_{key}_close_h"), post.get(f"hours_{key}_close_m"), post.get(f"hours_{key}_close_ap"))
         out[key] = [o, c] if o and c else None
     return out
 
@@ -4821,6 +4860,8 @@ def portal_knowledge_base(request, slug):
         "lint": lint,
         "can_edit_kb": can_edit,
         "hours_rows": _build_hours_rows(kb),
+        "hour_options": _HOUR_OPTS,
+        "minute_options": _MIN_OPTS,
         "transfer_dest_rows": _build_transfer_dest_rows(kb),
         "entertainment_rows": _build_entertainment_rows(kb),
         "special_event_rows": _build_special_event_rows(kb, restaurant),

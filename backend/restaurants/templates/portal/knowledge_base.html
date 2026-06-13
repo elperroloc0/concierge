@@ -382,20 +382,46 @@
 
         <!-- Structured weekly hours (per-day; not a ModelForm field — parsed in the view) -->
         <p class="kb-section-title">Weekly hours</p>
-        <p class="kb-hint" style="margin-top:-.4rem;">Set each day's open/close. If a day closes after midnight (e.g. 1:00 AM), just enter that close time — the agent treats it as the next morning.</p>
+        <p class="kb-hint" style="margin-top:-.4rem;">Pick each day's open and close time. Check "Closed" (or leave both at —) for days you're closed. For an after-midnight close (e.g. 1:00 AM), just pick that time — the agent treats it as the next morning.</p>
         <div class="kb-group">
           {% for d in hours_rows %}
           <div class="d-flex align-items-center gap-2" style="padding:.3rem 0; flex-wrap:wrap;">
             <div style="width:100px; font-size:.875rem; font-weight:500; color:#374151;">{{ d.label }}</div>
             <div class="kb-toggle" style="width:fit-content;">
               <input type="checkbox" class="form-check-input" id="hours_{{ d.key }}_closed" name="hours_{{ d.key }}_closed" {% if d.closed %}checked{% endif %}
-                     onchange="document.getElementById('hours_{{ d.key }}_times').classList.toggle('d-none', this.checked);">
+                     onchange="if(this.checked){document.getElementById('hours_{{ d.key }}_open_h').value='';document.getElementById('hours_{{ d.key }}_close_h').value='';}">
               <label class="form-check-label" for="hours_{{ d.key }}_closed" style="font-size:.8rem; color:#6b7280; cursor:pointer;">Closed</label>
             </div>
-            <div id="hours_{{ d.key }}_times" class="d-flex align-items-center gap-1{% if d.closed %} d-none{% endif %}">
-              <input type="time" class="form-control" name="hours_{{ d.key }}_open" value="{{ d.open }}" style="width:130px;">
-              <span style="color:#9ca3af;">–</span>
-              <input type="time" class="form-control" name="hours_{{ d.key }}_close" value="{{ d.close }}" style="width:130px;">
+            <div class="d-flex align-items-center gap-1" style="flex-wrap:wrap;">
+              {# Open: hour · min · AM/PM #}
+              <select class="form-select" id="hours_{{ d.key }}_open_h" name="hours_{{ d.key }}_open_h" style="width:64px;"
+                      onchange="if(this.value){document.getElementById('hours_{{ d.key }}_closed').checked=false;}">
+                <option value="">—</option>
+                {% for h in hour_options %}<option value="{{ h }}"{% if h == d.open_h %} selected{% endif %}>{{ h }}</option>{% endfor %}
+              </select>
+              <span style="color:#9ca3af;">:</span>
+              <select class="form-select" name="hours_{{ d.key }}_open_m" style="width:64px;">
+                {% for m in minute_options %}<option value="{{ m }}"{% if m == d.open_m %} selected{% endif %}>{{ m }}</option>{% endfor %}
+              </select>
+              <select class="form-select" name="hours_{{ d.key }}_open_ap" style="width:64px;">
+                <option value="AM"{% if d.open_ap == "AM" %} selected{% endif %}>AM</option>
+                <option value="PM"{% if d.open_ap == "PM" %} selected{% endif %}>PM</option>
+              </select>
+              <span style="color:#9ca3af; margin:0 .25rem;">–</span>
+              {# Close: hour · min · AM/PM #}
+              <select class="form-select" id="hours_{{ d.key }}_close_h" name="hours_{{ d.key }}_close_h" style="width:64px;"
+                      onchange="if(this.value){document.getElementById('hours_{{ d.key }}_closed').checked=false;}">
+                <option value="">—</option>
+                {% for h in hour_options %}<option value="{{ h }}"{% if h == d.close_h %} selected{% endif %}>{{ h }}</option>{% endfor %}
+              </select>
+              <span style="color:#9ca3af;">:</span>
+              <select class="form-select" name="hours_{{ d.key }}_close_m" style="width:64px;">
+                {% for m in minute_options %}<option value="{{ m }}"{% if m == d.close_m %} selected{% endif %}>{{ m }}</option>{% endfor %}
+              </select>
+              <select class="form-select" name="hours_{{ d.key }}_close_ap" style="width:64px;">
+                <option value="AM"{% if d.close_ap == "AM" %} selected{% endif %}>AM</option>
+                <option value="PM"{% if d.close_ap == "PM" %} selected{% endif %}>PM</option>
+              </select>
             </div>
           </div>
           {% endfor %}
