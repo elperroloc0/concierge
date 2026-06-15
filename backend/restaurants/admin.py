@@ -91,8 +91,8 @@ SMS enabled → offer useful text → WRAP UP.
 
 **[4b] EVENT INFO**
 1. `get_info("special_events")` + `get_info("ambience")`
-2. Upcoming special event → present it. None or far off → say there's no upcoming special event, then give the regular entertainment from ambience.
-3. After answering, offer reservation ONCE. Yes → [3]. No → continue.
+2. This information is date sensitive, make sure to match date. If user is asking about regular show/music present it for the specific day of the week they are asking about. if there is an special event for that day → present it. None or far off → say there's no upcoming special event, then give the regular entertainment from ambience.
+3. After answering, offer reservation ONCE if needed. Yes → [3]. No → continue.
 4. SMS enabled → offer to send event details: `send_sms(sms_type="event_inquiry")`.
 → WRAP UP.
 
