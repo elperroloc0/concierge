@@ -42,7 +42,12 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Exists, OuterRef, Q
-from django.http import HttpResponse, HttpResponseForbidden, HttpResponseNotAllowed, JsonResponse
+from django.http import (
+    HttpResponse,
+    HttpResponseForbidden,
+    HttpResponseNotAllowed,
+    JsonResponse,
+)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -50,11 +55,28 @@ from django.views.decorators.csrf import csrf_exempt
 from retell import Retell
 
 from .decorators import portal_view
-from .forms import KnowledgeBaseForm, RestaurantBasicForm, AccountEmailForm, PasswordUpdateForm
-from .models import CallDetail, CallEvent, CallerMemory, EmailVerificationToken, PushSubscription, Restaurant, RestaurantKnowledgeBase, RestaurantMembership, SmsLog, Subscription, PendingEmailChange, WeeklyReport
+from .forms import (
+    AccountEmailForm,
+    KnowledgeBaseForm,
+    PasswordUpdateForm,
+    RestaurantBasicForm,
+)
+from .models import (
+    CallDetail,
+    CallerMemory,
+    CallEvent,
+    EmailVerificationToken,
+    PendingEmailChange,
+    PushSubscription,
+    Restaurant,
+    RestaurantKnowledgeBase,
+    RestaurantMembership,
+    SmsLog,
+    Subscription,
+    WeeklyReport,
+)
 from .services.retell_client import RetellClient
 from .services.retell_tools import build_tool_list
-
 
 # ─── Global Redirects ─────────────────────────────────────────────────────────
 
@@ -1604,8 +1626,8 @@ def _send_call_blocked_balance_email(restaurant: Restaurant) -> None:
     """Notify owner+operator when a call is blocked due to zero balance. Throttled to once per 24 h.
     Counts every blocked attempt and includes the total in the email."""
     from django.core.mail import EmailMultiAlternatives
-    from django.template.loader import render_to_string
     from django.db.models import F
+    from django.template.loader import render_to_string
 
     notify_email = restaurant.notify_email or (restaurant.user.email if restaurant.user else "")
     if not notify_email or not restaurant.notify_via_email:
@@ -2563,8 +2585,9 @@ def _send_sms_via_twilio(restaurant, to_number: str, message: str) -> str:
     Deducts sms_unit_cost from the restaurant's communication_balance only when
     using platform credentials (not when the restaurant has its own Twilio account).
     """
-    from twilio.rest import Client as TwilioClient
     from decimal import Decimal
+
+    from twilio.rest import Client as TwilioClient
 
     using_own_credentials = bool(
         restaurant and
@@ -3409,9 +3432,10 @@ def portal_signup(request):
     if request.method == "POST":
         from django.contrib.auth import get_user_model
         from django.core.cache import cache
-        from django.core.validators import validate_email
         from django.core.exceptions import ValidationError as DjangoValidationError
         from django.core.mail import send_mail
+        from django.core.validators import validate_email
+
         from .models import VERTICAL_CHOICES, EmailVerificationToken
 
         # ── Honeypot: bots fill hidden fields, humans leave them empty ─────────
@@ -3670,6 +3694,7 @@ def portal_password_reset_confirm(request, uidb64, token):
     - hmac.compare_digest for constant-time business name comparison
     """
     import hmac
+
     from django.contrib.auth import get_user_model
     from django.contrib.auth.forms import SetPasswordForm
     from django.contrib.auth.tokens import default_token_generator
@@ -5746,8 +5771,9 @@ def portal_billing(request, slug):
     sub = _get_or_create_subscription(restaurant)
 
     # ── Expense aggregation ──────────────────────────────────────────────────
-    from django.db.models import Sum
     from collections import defaultdict
+
+    from django.db.models import Sum
     now = timezone.now()
     today = now.date()
 
@@ -6048,6 +6074,7 @@ def portal_notifications(request, slug):
 @portal_view()
 def portal_reports_list(request, slug):
     from datetime import timedelta
+
     from django.utils import timezone
 
     restaurant = request.restaurant
@@ -6074,8 +6101,11 @@ def portal_reports_list(request, slug):
 def _run_generate_report_bg(report_pk, summaries, week_start, week_end):
     """Background thread: call Claude, update the WeeklyReport, close DB connection."""
     from datetime import timedelta
+
     from django.db import connection as db_connection
-    from restaurants.management.commands.send_weekly_report import generate_report as _generate_report
+    from restaurants.management.commands.send_weekly_report import (
+        generate_report as _generate_report,
+    )
     try:
         report = WeeklyReport.objects.select_related(
             "restaurant", "restaurant__knowledge_base"
@@ -6109,7 +6139,9 @@ def _run_generate_report_bg(report_pk, summaries, week_start, week_end):
 @portal_view()
 def portal_generate_report(request, slug):
     import threading
-    from datetime import timedelta, date as date_
+    from datetime import date as date_
+    from datetime import timedelta
+
     from django.contrib import messages as django_messages
     from django.utils import timezone
 
@@ -6138,7 +6170,8 @@ def portal_generate_report(request, slug):
     week_end = today + timedelta(days=1)
 
     from restaurants.management.commands.send_weekly_report import (
-        aggregate_metrics, select_relevant_summaries,
+        aggregate_metrics,
+        select_relevant_summaries,
     )
 
     metrics = aggregate_metrics(restaurant, week_start, week_end)
@@ -6288,8 +6321,9 @@ def _parse_prompt_suggestions(md_text):
 
 @portal_view()
 def portal_reports_detail(request, slug, report_id):
-    from django.http import HttpResponse
     import csv as csv_module
+
+    from django.http import HttpResponse
 
     restaurant = request.restaurant
     report = get_object_or_404(WeeklyReport, pk=report_id, restaurant=restaurant)
@@ -6686,7 +6720,8 @@ def _verify_turnstile(token: str, ip: str) -> bool:
     if not token:
         return False
     try:
-        import urllib.parse, urllib.request
+        import urllib.parse
+        import urllib.request
         body = urllib.parse.urlencode({
             "secret": secret,
             "response": token,
@@ -6712,6 +6747,7 @@ def demo_trigger_call(request):
     Rate-limited per phone (1/hour) and per IP (3/day). Miami metro area codes only.
     """
     from django.core.cache import cache
+
     from .models import DemoCallLog
 
     try:
@@ -6807,8 +6843,9 @@ def demo_trigger_call(request):
 @require_POST
 def waitlist_create(request):
     """Public endpoint: capture email for an unreleased vertical from industry chips."""
-    from .models import WaitlistEntry, VERTICAL_CHOICES
     from django.core.cache import cache
+
+    from .models import VERTICAL_CHOICES, WaitlistEntry
 
     try:
         body = json.loads(request.body.decode("utf-8") or "{}")
@@ -6851,7 +6888,6 @@ from django.views.decorators.http import require_POST
 
 from .models import CallActionToken
 from .push import send_push as _send_push
-
 
 # ─── Push helpers for alert pipeline ─────────────────────────────────────────
 
