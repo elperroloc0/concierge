@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
+import sys
 import dj_database_url
 from dotenv import load_dotenv
 
@@ -223,6 +224,13 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
+
+# Tests only: Django's default PBKDF2 hasher is deliberately slow (hundreds of
+# thousands of iterations), and every create_user/login in a test pays that
+# cost. MD5 is insecure, but test passwords are throwaway and it makes the
+# suite ~50x faster. Never applies outside `manage.py test`.
+if sys.argv[1:2] == ["test"]:
+    PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
 
 # Internationalization
