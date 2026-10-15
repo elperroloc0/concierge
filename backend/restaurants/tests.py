@@ -260,6 +260,12 @@ class InboundWebhookTest(TestCase):
         # Default valid payload matching the restaurant's phone number
         self.valid_payload = {"to_number": "+13051234567"}
 
+        # Inactive/low-balance paths auto-disconnect the number via the real
+        # Retell API; stub it so no test makes a network call.
+        disconnect = patch("restaurants.views._disconnect_retell_phone")
+        self.mock_disconnect = disconnect.start()
+        self.addCleanup(disconnect.stop)
+
     def _post(self, payload=None, headers=None):
         """
         Small helper to POST JSON to the webhook.

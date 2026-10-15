@@ -1,5 +1,7 @@
 # AI Concierge: Restaurant Phone Agent Backend
 
+[![Tests](https://github.com/elperroloc0/concierge/actions/workflows/tests.yml/badge.svg)](https://github.com/elperroloc0/concierge/actions/workflows/tests.yml)
+
 A Django backend for an AI phone concierge that answers calls for restaurants. Restaurants forward their line to a [Retell AI](https://www.retellai.com/) voice agent. This app gives that agent its knowledge (hours, menu, booking rules, who's calling), runs the tools it uses mid-call (look up info, text the caller a link), and turns every finished call into something staff can act on: an alert, a reservation request, a follow-up, a billing entry.
 
 Restaurant owners manage all of it from a web portal: the knowledge base the agent speaks from, call history with transcripts, guest profiles, notification settings, and prepaid billing through [Stripe](https://stripe.com/).
